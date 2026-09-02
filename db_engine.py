@@ -118,7 +118,13 @@ def _qmarks_after_nocase(sql: str) -> str:
         sql,
         flags=re.I,
     )
-    sql = re.sub(r"([\w.]+)\s+COLLATE\s+NOCASE", r"LOWER(\1)", sql, flags=re.I)
+    # No tocar UNIQUE/PRIMARY COLLATE en CREATE TABLE (eso no es una columna).
+    sql = re.sub(
+        r"\b(?!UNIQUE\b)(?!PRIMARY\b)([\w.]+)\s+COLLATE\s+NOCASE",
+        r"LOWER(\1)",
+        sql,
+        flags=re.I,
+    )
     return sql
 
 
