@@ -1,0 +1,12 @@
+{# Requires: lang, languages, t #}
+<nav class="lang-switcher" aria-label="{{ t('lang.label') }}">
+  {% for code, label in languages.items() %}
+  <a
+    href="/set-language/{{ code }}"
+    class="lang-switcher__btn{% if lang == code %} lang-switcher__btn--active{% endif %}"
+    hreflang="{{ code }}"
+    lang="{{ code }}"
+    {% if lang == code %}aria-current="true"{% endif %}
+  >{{ label }}</a>
+  {% endfor %}
+</nav>

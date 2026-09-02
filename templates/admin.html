@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+{% block title %}{{ t('nav.statistics') }}{% endblock %}
+{% block body %}
+<div class="layout">
+  {% include "_sidebar.html" %}
+
+  <main class="main main--scroll">
+    <div class="dashboard">
+      <div id="stats-page-root">
+      <form method="get" action="/admin" class="stats-filters" id="stats-filters-form" style="margin-bottom: 1rem">
+        <div class="field stats-filters__field stats-filter-field">
+          <span>{{ t('admin.platform') }}</span>
+          <input type="hidden" name="platform" id="stats-platform-id" value="{{ selected_platform }}" />
+          <button
+            type="button"
+            class="stats-picker__trigger has-selection"
+            id="stats-platform-open"
+            aria-haspopup="dialog"
+            aria-controls="stats-platform-modal"
+            aria-expanded="false"
+          >
+            <span class="stats-picker__value" id="stats-platform-label">
+              {% if selected_platform_icon %}
+              <span class="stats-picker__icon" id="stats-platform-label-icon" aria-hidden="true">{{ selected_platform_icon }}</span>
+              {% else %}
+              <span class="stats-picker__icon" id="stats-platform-label-icon" aria-hidden="true" hidden></span>
+              {% endif %}
+              <span class="stats-picker__text" id="stats-platform-label-text">{{ selected_platform_label }}</span>
+            </span>
+            <span class="stats-picker__chevron" aria-hidden="true">▾</span>
+          </button>
+        </div>
+        {% if show_account_filter and (user_has_admin_privileges(user) or tiktok_stat_choices) %}
+        <div class="field stats-filters__field stats-filter-field">
+          <span>{{ account_filter_label }}</span>
+          <input type="hidden" name="account" id="stats-account-id" value="{{ selected_tiktoker }}" />
+          <button
+            type="button"
+            class="stats-picker__trigger{% if selected_tiktoker %} has-selection{% endif %}"
+            id="stats-account-open"
+            aria-haspopup="dialog"
+            aria-controls="stats-account-modal"
+            aria-expanded="false"
+          >
+            <span class="stats-picker__value" id="stats-account-label">
+              <span class="stats-picker__text">{{ selected_account_name or t('admin.stats_account_pick') }}</span>
+            </span>
+            <span class="stats-picker__chevron" aria-hidden="true">▾</span>
+          </button>
+        </div>
+        {% endif %}
+      </form>
+
+      {% if not user_has_admin_privileges(user) and not tiktok_stat_choices %}
+      <p class="sub" style="margin-bottom: 1rem">
+        {{ t('admin.no_server_account_linked') }}
+      </p>
+      {% endif %}
+
+      {% if success %}
+      <div class="alert-ok">{{ success }}</div>
+      {% endif %} {% if error %}
+      <div class="alert-error">{{ error }}</div>
+      {% endif %}
+
+      {% set show_stats_dividers = selected_platform == 'all' and show_global_breakdown %}
+
+      {% if show_global_breakdown and global_summary %}
+      <section class="section dashboard-section stats-summary-section">
+        <h2 class="stats-summary__title">{{ t('admin.global_summary') }}</h2>
+        {% set stats = global_summary %}
+        {% include "_stats_grid.html" %}
+      </section>
+
+      {% if global_video_list %}
+      {% if show_stats_dividers %}
+      <div class="servers-divider stats-divider" role="separator" aria-hidden="true">
+        <span class="servers-divider__line"></span>
+        <span class="servers-divider__gem"></span>
+        <span class="servers-divider__line"></span>
+      </div>
+      {% endif %}
+      <section class="section dashboard-section">
+        <h2>{{ t('admin.published_videos') }}</h2>
+        {% set publications = global_video_list %}
+        {% include "_stats_publications_list.html" %}
+      </section>
+      {% endif %}
+
+      {% for block in platform_breakdown %}
+      {% if show_stats_dividers %}
+      <div class="servers-divider stats-divider" role="separator" aria-hidden="true">
+        <span class="servers-divider__line"></span>
+        <span class="servers-divider__gem"></span>
+        <span class="servers-divider__line"></span>
+      </div>
+      {% endif %}
+      <section class="section dashboard-section stats-per-platform stats-summary-section">
+        <h2 class="stats-summary__title">
+          <span class="stats-platform-head__icon" aria-hidden="true">{{ block.icon }}</span>
+          {{ t('admin.summary_platform', platform=block.name) }}
+        </h2>
+        {% set stats = block.stats %}
+        {% set visible_stats = block.visible_stats %}
+        {% include "_stats_grid.html" %}
+        {% if block.publications %}
+        {% set publications = block.publications %}
+        {% set hide_platform = true %}
+        <div class="stats-platform-list">
+          {% include "_stats_publications_list.html" %}
+        </div>
+        {% endif %}
+
+        {% if not selected_tiktoker and tiktoker_breakdown %}
+        <div class="stats-account-breakdown">
+          {% for acc in tiktoker_breakdown %}
+          {% set acc_block = acc.by_platform.get(block.platform_id) if acc.by_platform else none %}
+          {% if acc_block %}
+          {% if show_stats_dividers and not loop.first %}
+          <div class="servers-divider stats-divider stats-divider--nested" role="separator" aria-hidden="true">
+            <span class="servers-divider__line"></span>
+            <span class="servers-divider__gem"></span>
+            <span class="servers-divider__line"></span>
+          </div>
+          {% endif %}
+          <div class="stats-account-block">
+            <h3 class="stats-account-block__title stats-summary__title stats-summary__title--sub">{{ t('admin.summary_account', account=acc.name) }}</h3>
+            {% set stats = acc_block.stats %}
+            {% set visible_stats = block.visible_stats %}
+            {% include "_stats_grid.html" %}
+            {% if acc_block.publications %}
+            {% set publications = acc_block.publications %}
+            {% set hide_platform = true %}
+            {% include "_stats_publications_list.html" %}
+            {% endif %}
+          </div>
+          {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+      </section>
+      {% endfor %}
+
+      {% if selected_platform != 'all' and not selected_tiktoker and show_account_filter and tiktoker_breakdown %}
+      {% for acc in tiktoker_breakdown %}
+      <div class="servers-divider stats-divider" role="separator" aria-hidden="true">
+        <span class="servers-divider__line"></span>
+        <span class="servers-divider__gem"></span>
+        <span class="servers-divider__line"></span>
+      </div>
+      <section class="section dashboard-section stats-per-tiktoker stats-summary-section">
+        <h2 class="stats-summary__title">{{ t('admin.summary_account', account=acc.name) }}</h2>
+        {% set stats = acc.stats %}
+        {% include "_stats_grid.html" %}
+        {% if acc.publications %}
+        {% set publications = acc.publications %}
+        {% include "_stats_publications_list.html" %}
+        {% endif %}
+      </section>
+      {% endfor %}
+      {% endif %}
+
+      {% else %}
+      <section class="section dashboard-section stats-summary-section">
+        <h2 class="stats-summary__title">
+          {% if selected_platform != 'all' %}
+            {% for p in platform_choices %}
+              {% if p.id == selected_platform %}
+              <span class="stats-platform-head__icon" aria-hidden="true">{{ p.icon }}</span>
+              {{ t('admin.summary_platform', platform=p.name) }}
+              {% endif %}
+            {% endfor %}
+          {% else %}
+            {{ t('admin.global_summary') }}
+          {% endif %}
+        </h2>
+        {% if selected_video and video_title %}
+        <p class="sub" style="margin-top: 0.35rem">
+          {{ t('admin.single_video_metrics', title=video_title) | safe }}
+        </p>
+        {% endif %}
+        {% include "_stats_grid.html" %}
+      </section>
+
+      {% if global_video_list %}
+      <section class="section dashboard-section">
+        <h2>{{ t('admin.published_videos') }}</h2>
+        {% set publications = global_video_list %}
+        {% include "_stats_publications_list.html" %}
+      </section>
+      {% endif %}
+
+      {% if video_options and selected_tiktoker and show_account_filter %}
+      <form method="get" action="/admin" class="stats-video-filter" id="stats-video-filter-form" style="margin-bottom: 1.5rem">
+        <input type="hidden" name="platform" value="{{ selected_platform }}" />
+        <input type="hidden" name="account" value="{{ selected_tiktoker }}" />
+        <div class="field stats-filter-field">
+          <span>{{ t('admin.per_video_metrics') }}</span>
+          <input type="hidden" name="video" id="stats-video-id" value="{{ selected_video }}" />
+          <button
+            type="button"
+            class="stats-picker__trigger has-selection"
+            id="stats-video-open"
+            aria-haspopup="dialog"
+            aria-controls="stats-video-modal"
+            aria-expanded="false"
+          >
+            <span class="stats-picker__value" id="stats-video-label">
+              <span class="stats-picker__text">{{ video_title if selected_video else t('admin.all_videos_creator') }}</span>
+            </span>
+            <span class="stats-picker__chevron" aria-hidden="true">▾</span>
+          </button>
+        </div>
+      </form>
+      {% endif %}
+      {% endif %}
+      <script type="application/json" id="stats-pickers-config">
+        {
+          "platform": {
+            "selectedId": {{ selected_platform | tojson }},
+            "choices": [
+              { "id": "all", "name": {{ t('admin.all') | tojson }}, "icon": "" }{% for p in platform_choices %},
+              { "id": {{ p.id | tojson }}, "name": {{ p.name | tojson }}, "icon": {{ p.icon | tojson }} }{% endfor %}
+            ],
+            "pickLabel": {{ t('admin.stats_platform_pick') | tojson }}
+          }{% if show_account_filter and (user_has_admin_privileges(user) or tiktok_stat_choices) %},
+          "account": {
+            "selectedId": {{ selected_tiktoker | tojson }},
+            "choices": {{ tiktok_stat_choices | tojson }},
+            "pickLabel": {{ t('admin.stats_account_pick') | tojson }},
+            "kindGroup": {{ t('admin.stats_kind_group') | tojson }},
+            "kindAccount": {{ t('admin.stats_kind_account') | tojson }}
+          }{% endif %}{% if video_options and selected_tiktoker and show_account_filter %},
+          "video": {
+            "selectedId": {{ selected_video | tojson }},
+            "choices": [
+              { "id": "", "name": {{ t('admin.all_videos_creator') | tojson }} }{% for v in video_options %},
+              { "id": {{ v.id | tojson }}, "name": {{ v.title | tojson }} }{% endfor %}
+            ],
+            "pickLabel": {{ t('admin.stats_video_pick') | tojson }}
+          }{% endif %}
+        }
+      </script>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="stats-platform-modal" class="equipo-modal stats-picker-modal stats-picker-modal--compact" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-stats-picker="stats-platform-modal"></div>
+  <div class="equipo-modal__panel server-modal__panel stats-picker-modal__panel" role="dialog" aria-modal="true" aria-labelledby="stats-platform-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div><h2 id="stats-platform-modal-title">{{ t('admin.platform') }}</h2></div>
+      <button type="button" class="equipo-modal__close" data-close-stats-picker="stats-platform-modal" aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body stats-picker-modal__body">
+      <div class="equipo-search-wrap stats-picker-modal__search panel-search-wrap--highlight">
+        <input type="search" id="stats-platform-search" class="equipo-search-input panel-search-input--highlight" placeholder="{{ t('admin.stats_platform_search') }}" aria-label="{{ t('admin.stats_platform_search') }}" autocomplete="off" />
+        <button type="button" id="stats-platform-search-clear" class="equipo-search-clear" aria-label="{{ t('team.search_clear') }}" title="{{ t('team.search_clear') }}" hidden>×</button>
+      </div>
+      <p id="stats-platform-empty" class="sub stats-picker-modal__empty" hidden>{{ t('team.no_results') }}</p>
+      <ul class="stats-picker-modal__list" id="stats-platform-list" role="listbox" aria-label="{{ t('admin.platform') }}"></ul>
+    </div>
+  </div>
+</div>
+
+{% if show_account_filter and (user_has_admin_privileges(user) or tiktok_stat_choices) %}
+<div id="stats-account-modal" class="equipo-modal stats-picker-modal stats-picker-modal--compact" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-stats-picker="stats-account-modal"></div>
+  <div class="equipo-modal__panel server-modal__panel stats-picker-modal__panel" role="dialog" aria-modal="true" aria-labelledby="stats-account-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div><h2 id="stats-account-modal-title">{{ account_filter_label }}</h2></div>
+      <button type="button" class="equipo-modal__close" data-close-stats-picker="stats-account-modal" aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body stats-picker-modal__body">
+      <div class="equipo-search-wrap stats-picker-modal__search panel-search-wrap--highlight">
+        <input type="search" id="stats-account-search" class="equipo-search-input panel-search-input--highlight" placeholder="{{ t('admin.stats_account_search') }}" aria-label="{{ t('admin.stats_account_search') }}" autocomplete="off" />
+        <button type="button" id="stats-account-search-clear" class="equipo-search-clear" aria-label="{{ t('team.search_clear') }}" title="{{ t('team.search_clear') }}" hidden>×</button>
+      </div>
+      <p id="stats-account-loading" class="sub stats-picker-modal__loading" hidden>{{ t('team.loading') }}</p>
+      <p id="stats-account-empty" class="sub stats-picker-modal__empty" hidden>{{ t('team.no_results') }}</p>
+      <ul class="stats-picker-modal__list" id="stats-account-list" role="listbox" aria-label="{{ account_filter_label }}"></ul>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if video_options and selected_tiktoker and show_account_filter %}
+<div id="stats-video-modal" class="equipo-modal stats-picker-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-stats-picker="stats-video-modal"></div>
+  <div class="equipo-modal__panel server-modal__panel stats-picker-modal__panel" role="dialog" aria-modal="true" aria-labelledby="stats-video-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div><h2 id="stats-video-modal-title">{{ t('admin.per_video_metrics') }}</h2></div>
+      <button type="button" class="equipo-modal__close" data-close-stats-picker="stats-video-modal" aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body stats-picker-modal__body">
+      <div class="equipo-search-wrap stats-picker-modal__search panel-search-wrap--highlight">
+        <input type="search" id="stats-video-search" class="equipo-search-input panel-search-input--highlight" placeholder="{{ t('admin.stats_video_search') }}" aria-label="{{ t('admin.stats_video_search') }}" autocomplete="off" />
+        <button type="button" id="stats-video-search-clear" class="equipo-search-clear" aria-label="{{ t('team.search_clear') }}" title="{{ t('team.search_clear') }}" hidden>×</button>
+      </div>
+      <p id="stats-video-empty" class="sub stats-picker-modal__empty" hidden>{{ t('team.no_results') }}</p>
+      <ul class="stats-picker-modal__list" id="stats-video-list" role="listbox" aria-label="{{ t('admin.per_video_metrics') }}"></ul>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script src="/static/js/ajax-search.js?v=1"></script>
+<script src="/static/stats-pickers.js?v=11"></script>
+<script>
+  (function () {
+    function readStatsPickersConfig() {
+      var el = document.getElementById("stats-pickers-config");
+      if (!el) return null;
+      try {
+        return JSON.parse(el.textContent || "{}");
+      } catch (err) {
+        return null;
+      }
+    }
+
+    window.statsAjaxNavigate = function (form) {
+      var root = document.getElementById("stats-page-root");
+      if (!root || !form) {
+        form.submit();
+        return;
+      }
+      var params = new URLSearchParams(new FormData(form));
+      var url = (form.getAttribute("action") || "/admin") + "?" + params.toString();
+      root.classList.add("is-loading");
+      fetch(url, { credentials: "same-origin", headers: { Accept: "text/html" } })
+        .then(function (r) {
+          return r.text();
+        })
+        .then(function (html) {
+          var doc = new DOMParser().parseFromString(html, "text/html");
+          var next = doc.getElementById("stats-page-root");
+          if (!next) {
+            window.location.href = url;
+            return;
+          }
+          root.innerHTML = next.innerHTML;
+          history.pushState(null, "", url);
+          var cfg = readStatsPickersConfig();
+          if (cfg && window.initStatsPickers) window.initStatsPickers(cfg);
+        })
+        .catch(function () {
+          window.location.href = url;
+        })
+        .finally(function () {
+          root.classList.remove("is-loading");
+        });
+    };
+
+    var cfg = readStatsPickersConfig();
+    if (cfg && window.initStatsPickers) window.initStatsPickers(cfg);
+  })();
+</script>
+{% endblock %}

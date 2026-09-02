@@ -1,0 +1,869 @@
+{% extends "base.html" %}
+{% block title %}{{ t('nav.publications') }}{% endblock %}
+{% block body %}
+<div class="layout">
+  {% include "_sidebar.html" %}
+
+  <main class="main main--scroll">
+    <div class="dashboard dashboard--pub">
+      {% if success %}
+      <div class="alert-ok">{{ success }}</div>
+      {% endif %}
+      {% if error %}
+      <div class="alert-error">{{ error }}</div>
+      {% endif %}
+
+      {% if can_upload_videos %}
+      <form method="post" action="/admin/videos" enctype="multipart/form-data" class="publish-form{% if publish_unlocked %} publish-form--unlocked{% endif %}" id="publish-form">
+        <div class="pub-publish-section__header pub-publish-page-head{% if is_publish_admin %} pub-publish-section__header--admin{% endif %}">
+          <h2 class="pub-publish-section__title">{{ t('pub.publish_video') }}</h2>
+          {% if is_publish_admin %}
+          <button
+            type="button"
+            class="pub-publish-section__platforms-toggle"
+            id="pub-platforms-trigger"
+            aria-expanded="false"
+            aria-controls="pub-platforms-section"
+            aria-label="{{ t('pub.platforms_toggle') }}"
+            title="{{ t('pub.platforms_toggle') }}"
+          >
+            <span class="pub-publish-section__chevron" aria-hidden="true"></span>
+          </button>
+          {% endif %}
+        </div>
+
+        <section
+          class="section dashboard-section pub-platforms-section"
+          id="pub-platforms-section"
+          {% if is_publish_admin %}hidden{% endif %}
+        >
+          <div
+            class="pub-platforms-wrap{% if is_publish_admin %} pub-platforms-wrap--admin-collapsible{% endif %}"
+            id="pub-platforms-panel"
+          >
+            <table class="pub-platforms-table{% if is_publish_admin %} pub-platforms-table--admin{% endif %}">
+              <thead>
+                <tr>
+                  <th class="pub-platforms-table__platform-head">
+                    <span class="pub-platforms-table__platform-head-inner">
+                      {{ t('servers.col_platform') }}
+                      {% if is_publish_admin %}
+                      <button
+                        type="button"
+                        class="servers-info-btn pub-platforms-info-btn"
+                        id="open-pub-platforms-info-modal"
+                        aria-label="{{ t('pub.platforms_support_info_title') }}"
+                        title="{{ t('pub.platforms_support_info_title') }}"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h.008v.008H11.25v-.008zM12 17.25h.01M12 21a9 9 0 100-18 9 9 0 000 18z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v.008M12 11.25V16.5" />
+                        </svg>
+                      </button>
+                      {% endif %}
+                    </span>
+                  </th>
+                  <th class="pub-platforms-table__supports-col">{{ t('pub.col_supports') }}</th>
+                  <th>{{ t('pub.col_publish') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in publish_platforms %}
+                <tr data-platform-id="{{ p.id }}">
+                  <td>
+                    <span class="pub-platforms-table__name">
+                      <span class="pub-platforms-table__icon" aria-hidden="true">{{ p.icon }}</span>
+                      {{ p.name }}
+                    </span>
+                  </td>
+                  <td class="pub-platforms-table__caps pub-platforms-table__supports-col">
+                    {% if p.video != 'no' %}<span class="cap cap--{{ p.video }}">{{ t('admin.videos') }}</span>{% endif %}
+                    {% if p.photo != 'no' %}<span class="cap cap--{{ p.photo }}">{{ t('servers.col_photo') }}</span>{% endif %}
+                  </td>
+                  <td class="pub-platforms-table__check">
+                    <label class="pub-platform-check">
+                      <input type="checkbox" name="platforms" value="{{ p.id }}" />
+                      <span class="pub-platform-check__ui" aria-hidden="true"></span>
+                    </label>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      <section class="section dashboard-section pub-publish-section" id="pub-publish-section">
+        <div class="pub-publish-section__body" id="pub-publish-panel">
+          {% if show_publish_account_picker %}
+          <div class="pub-field pub-field--account pub-publish-account">
+            <div class="field stats-filters__field stats-filter-field pub-account-filter">
+              <input type="hidden" name="account_link_id" id="pub-account-id" value="" />
+              <button
+                type="button"
+                class="stats-picker__trigger"
+                id="pub-account-open"
+                aria-haspopup="dialog"
+                aria-expanded="false"
+                aria-controls="pub-account-modal"
+              >
+                <span class="stats-picker__value" id="pub-account-label">
+                  <span class="stats-picker__text">{{ pub_account_i18n.select }}</span>
+                </span>
+                <span class="stats-picker__chevron" aria-hidden="true">▾</span>
+              </button>
+              <p class="sub pub-account-filter__empty" id="pub-account-platforms-empty" hidden>{{ pub_account_i18n.empty }}</p>
+            </div>
+          </div>
+          {% elif publish_account_choices | length == 1 %}
+          <input type="hidden" name="account_link_id" id="pub-user-account-id" value="{{ publish_account_choices[0].id }}" />
+          {% elif not publish_unlocked %}
+          <div class="pub-publish-account pub-publish-account--locked">
+            <div class="publish-locked">
+              <p class="publish-locked__title">{{ t('pub.no_accounts_title') }}</p>
+              <p class="sub">{{ t('pub.no_accounts_hint', servers=t('servers.ref_servers'), team=t('nav.panel')) }}</p>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if publish_unlocked %}
+          <label class="pub-field pub-field--title">
+            <input type="text" class="pub-control pub-control--input" name="title" required placeholder="{{ t('pub.title_ph') }}" aria-label="{{ t('pub.title_ph') }}" />
+          </label>
+
+          <div class="pub-field pub-field--dropzone">
+            <div class="dropzone pub-control pub-control--dropzone" id="video-dropzone">
+              <input type="file" name="file" id="video-file" accept=".mp4,.webm,.mov,.mkv,.jpg,.jpeg,.png,.webp,.gif,video/*,image/*" required class="dropzone__input" />
+              <div class="dropzone__content">
+                <p class="dropzone__text">{{ t('pub.dropzone_text') }}</p>
+                <button type="button" class="btn btn-ghost btn-sm" id="video-browse">{{ t('pub.browse_files') }}</button>
+                <p class="dropzone__filename sub" id="video-filename" hidden></p>
+              </div>
+            </div>
+          </div>
+
+          <label class="pub-field pub-field--description">
+            <textarea class="pub-control pub-control--textarea" name="description" rows="3" required placeholder="{{ t('pub.caption_ph') }}" aria-label="{{ t('pub.caption_ph') }}"></textarea>
+          </label>
+
+          <div class="pub-schedule-block">
+            <span class="pub-field__label pub-schedule-block__label">{{ t('pub.schedule_datetime') }}</span>
+            <div class="pub-schedule-row">
+              <input
+                type="datetime-local"
+                class="pub-control pub-control--datetime"
+                name="scheduled_at"
+                id="scheduled-at"
+                step="60"
+                required
+                aria-label="{{ t('pub.schedule_datetime') }}"
+              />
+              <button type="submit" class="btn btn-accent pub-schedule-row__btn" id="publish-submit">{{ t('pub.schedule_submit_btn') }}</button>
+            </div>
+          </div>
+          <input type="hidden" name="schedule_enabled" value="1" />
+          {% endif %}
+        </div>
+      </section>
+      </form>
+
+      <div class="servers-divider pub-divider" role="separator" aria-hidden="true">
+        <span class="servers-divider__line"></span>
+        <span class="servers-divider__gem"></span>
+        <span class="servers-divider__line"></span>
+      </div>
+      <section class="section dashboard-section pub-log-section">
+        <h2 class="pub-log-section__title">{{ t('pub.failure_log') }}</h2>
+        {% if user_has_admin_privileges(user) %}
+        <div class="log-purge">
+          <label class="log-purge__field">
+            <span>{{ t('log.purge_from') }}</span>
+            <input type="date" id="pub-log-from" class="log-purge__input" />
+          </label>
+          <label class="log-purge__field">
+            <span>{{ t('log.purge_to') }}</span>
+            <input type="date" id="pub-log-to" class="log-purge__input" />
+          </label>
+          <button type="button" class="btn btn-ghost btn-sm log-purge__btn" id="pub-log-delete">{{ t('log.purge_delete') }}</button>
+        </div>
+        <p class="log-purge__msg" id="pub-log-msg" hidden></p>
+        {% endif %}
+        {% if publication_logs | length > 0 %}
+        <div class="pub-log-wrap">
+          <table class="pub-log-table">
+            <thead>
+              <tr>
+                <th>{{ t('pub.log_col_date') }}</th>
+                <th>{{ t('pub.log_col_platform') }}</th>
+                <th>{{ t('pub.log_col_status') }}</th>
+                <th>{{ t('pub.log_col_message') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in publication_logs %}
+              <tr class="pub-log-table__row pub-log-table__row--{{ row.status }}">
+                <td>{{ row.created_at[:19].replace('T', ' ') }}</td>
+                <td>{{ t('platform.' ~ row.platform_id) }}</td>
+                <td>
+                  {% if row.status == 'ok' %}
+                  <span class="pub-log-status pub-log-status--ok">{{ t('pub.log_status_ok') }}</span>
+                  {% else %}
+                  <span class="pub-log-status pub-log-status--fail">{{ t('pub.log_status_fail') }}</span>
+                  {% endif %}
+                </td>
+                <td>{{ row.message }}{% if row.video_title %} · {{ row.video_title }}{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </section>
+
+      {% if scheduled_publications | length > 0 %}
+      <section class="section dashboard-section">
+        <h2>{{ t('pub.scheduled_section') }}</h2>
+        <div class="pub-log-wrap">
+          <table class="pub-log-table pub-scheduled-table">
+            <thead>
+              <tr>
+                <th>{{ t('pub.scheduled_col_when') }}</th>
+                <th>{{ t('pub.scheduled_col_title') }}</th>
+                <th>{{ t('pub.scheduled_col_platforms') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in scheduled_publications %}
+              <tr>
+                <td>{{ format_publish_schedule(row.scheduled_at, lang) }}</td>
+                <td>{{ row.video_title or '—' }}</td>
+                <td>
+                  {% for pid in row.platforms_json | fromjson %}
+                  <span class="cap cap--yes">{{ t('platform.' ~ pid) }}</span>
+                  {% endfor %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {% endif %}
+      {% endif %}
+
+      {% if can_manage_comments %}
+      <div class="servers-divider pub-divider" role="separator" aria-hidden="true">
+        <span class="servers-divider__line"></span>
+        <span class="servers-divider__gem"></span>
+        <span class="servers-divider__line"></span>
+      </div>
+      <section class="section dashboard-section pub-accordion" id="pub-comments-accordion">
+        <button
+          type="button"
+          class="pub-accordion__trigger"
+          id="pub-comments-trigger"
+          aria-expanded="true"
+          aria-controls="pub-comments-panel"
+        >
+          <span class="pub-accordion__title">{{ t('pub.comments_section') }}</span>
+          <span class="pub-accordion__chevron" aria-hidden="true"></span>
+        </button>
+
+        <div class="pub-accordion__panel" id="pub-comments-panel">
+          <p class="sub">{{ t('pub.comments_scopes') | safe }}</p>
+          <div class="comment-filters">
+            <label class="field comment-filters__field">
+              <span>{{ t('pub.comments_filter_platform') }}</span>
+              <select id="comment-filter-platform" aria-label="{{ t('pub.comments_filter_platform') }}">
+                <option value="__all__">{{ t('admin.all') }}</option>
+                {% for p in publish_platforms %}
+                <option value="{{ p.id }}">{{ p.name }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="field comment-filters__field">
+              <span>{{ t('pub.comments_filter_user') }}</span>
+              <select id="comment-filter-user" aria-label="{{ t('pub.comments_filter_user') }}">
+                <option value="__all__">{{ t('admin.all') }}</option>
+                {% for u in comment_user_choices %}
+                <option value="{{ u.id }}">{{ u.name }}</option>
+                {% endfor %}
+              </select>
+            </label>
+          </div>
+
+          <p class="sub comment-results-loading" id="comment-results-loading" hidden>{{ t('team.loading') }}</p>
+          <p class="sub comment-results-empty" id="comment-results-empty" hidden>{{ t('pub.comments_no_results') }}</p>
+          <div class="comment-thread-list" id="comment-thread-list" hidden></div>
+        </div>
+      </section>
+      {% endif %}
+    </div>
+  </main>
+</div>
+
+{% if can_upload_videos and show_publish_account_picker %}
+<div id="pub-account-modal" class="equipo-modal stats-picker-modal stats-picker-modal--compact" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-stats-picker="pub-account-modal" tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel stats-picker-modal__panel" role="dialog" aria-modal="true" aria-labelledby="pub-account-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div><h2 id="pub-account-modal-title">{{ account_filter_label }}</h2></div>
+      <button type="button" class="equipo-modal__close" data-close-stats-picker="pub-account-modal" aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body stats-picker-modal__body">
+      <div class="equipo-search-wrap stats-picker-modal__search panel-search-wrap--highlight">
+        <input
+          type="search"
+          id="pub-account-modal-search"
+          class="equipo-search-input panel-search-input--highlight"
+          placeholder="{{ t('admin.stats_account_search') }}"
+          aria-label="{{ t('admin.stats_account_search') }}"
+          autocomplete="off"
+        />
+        <button
+          type="button"
+          id="pub-account-modal-search-clear"
+          class="equipo-search-clear"
+          aria-label="{{ t('team.search_clear') }}"
+          title="{{ t('team.search_clear') }}"
+          hidden
+        >
+          ×
+        </button>
+      </div>
+      <p id="pub-account-modal-empty" class="sub stats-picker-modal__empty" hidden>{{ t('team.no_results') }}</p>
+      <ul class="stats-picker-modal__list" id="pub-account-modal-list" role="listbox" aria-label="{{ account_filter_label }}"></ul>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if is_publish_admin %}
+<div id="pub-platforms-info-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-pub-platforms-info tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel pub-platforms-info-modal__panel" role="dialog" aria-modal="true" aria-labelledby="pub-platforms-info-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div>
+        <h2 id="pub-platforms-info-modal-title">{{ t('pub.platforms_support_info_title') }}</h2>
+      </div>
+      <button type="button" class="equipo-modal__close" data-close-pub-platforms-info aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body">
+      <p class="sub pub-platforms-info-modal__hint">{{ t('pub.platforms_support_info_hint') }}</p>
+      <div class="pub-platforms-wrap pub-platforms-wrap--modal">
+        <table class="pub-platforms-table pub-platforms-table--info">
+          <thead>
+            <tr>
+              <th>{{ t('servers.col_platform') }}</th>
+              <th>{{ t('pub.col_supports') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in publish_platforms %}
+            <tr>
+              <td>
+                <span class="pub-platforms-table__name">
+                  <span class="pub-platforms-table__icon" aria-hidden="true">{{ p.icon }}</span>
+                  {{ p.name }}
+                </span>
+              </td>
+              <td class="pub-platforms-table__caps">
+                {% if p.video != 'no' %}<span class="cap cap--{{ p.video }}">{{ t('admin.videos') }}</span>{% endif %}
+                {% if p.photo != 'no' %}<span class="cap cap--{{ p.photo }}">{{ t('servers.col_photo') }}</span>{% endif %}
+                {% if p.video == 'no' and p.photo == 'no' %}<span class="sub">—</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script>
+  (function () {
+    var zone = document.getElementById("video-dropzone");
+    var input = document.getElementById("video-file");
+    var browse = document.getElementById("video-browse");
+    var fname = document.getElementById("video-filename");
+    var form = document.getElementById("publish-form");
+    if (!zone || !input) return;
+
+    var msgFile = {{ t('pub.flash.missing_file') | tojson }};
+    var msgDesc = {{ t('pub.flash.missing_description') | tojson }};
+    var msgTitle = {{ t('pub.flash.missing_title') | tojson }};
+    var msgAccount = {{ pub_account_i18n.select_required | tojson }};
+
+    function showName(file) {
+      if (!fname || !file) return;
+      fname.textContent = file.name;
+      fname.hidden = false;
+    }
+
+    if (browse) {
+      browse.addEventListener("click", function () {
+        input.click();
+      });
+    }
+
+    input.addEventListener("change", function () {
+      if (input.files && input.files[0]) showName(input.files[0]);
+    });
+
+    zone.addEventListener("dragover", function (e) {
+      e.preventDefault();
+      zone.classList.add("dropzone--over");
+    });
+
+    zone.addEventListener("dragleave", function () {
+      zone.classList.remove("dropzone--over");
+    });
+
+    zone.addEventListener("drop", function (e) {
+      e.preventDefault();
+      zone.classList.remove("dropzone--over");
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        input.files = e.dataTransfer.files;
+        showName(e.dataTransfer.files[0]);
+      }
+    });
+
+    if (form) {
+      form.addEventListener("submit", function (e) {
+        var desc = form.querySelector('textarea[name="description"]');
+        var title = form.querySelector('input[name="title"]');
+        var scheduledAt = document.getElementById("scheduled-at");
+        var hasFile = input.files && input.files.length > 0;
+        var hasDesc = desc && (desc.value || "").trim().length > 0;
+        var hasTitle = title && (title.value || "").trim().length > 0;
+
+        if (!hasFile) {
+          e.preventDefault();
+          alert(msgFile);
+          input.focus();
+          return;
+        }
+        if (!hasDesc) {
+          e.preventDefault();
+          alert(msgDesc);
+          if (desc) desc.focus();
+          return;
+        }
+        if (!hasTitle) {
+          e.preventDefault();
+          alert(msgTitle);
+          if (title) title.focus();
+          return;
+        }
+        if (scheduledAt && !scheduledAt.value) {
+          e.preventDefault();
+          scheduledAt.focus();
+          return;
+        }
+        var accountInput = form.querySelector('input[name="account_link_id"]');
+        if (accountInput && !(accountInput.value || "").trim()) {
+          e.preventDefault();
+          alert(msgAccount);
+          var accountTrigger = document.getElementById("pub-account-open");
+          if (accountTrigger) accountTrigger.focus();
+          return;
+        }
+      });
+    }
+  })();
+
+  (function () {
+    var platformRows = Array.prototype.slice.call(
+      document.querySelectorAll(".pub-platforms-table tbody tr[data-platform-id]")
+    );
+
+    function applyPlatformFilter(platformIds, emptyHint, requireSelection) {
+      var ids = platformIds || [];
+      var hasFilter = ids.length > 0;
+      var visibleCount = 0;
+      platformRows.forEach(function (row) {
+        var pid = row.getAttribute("data-platform-id") || "";
+        var show;
+        if (requireSelection && !hasFilter) {
+          show = false;
+        } else if (hasFilter) {
+          show = ids.indexOf(pid) !== -1;
+        } else {
+          show = true;
+        }
+        row.hidden = !show;
+        var cb = row.querySelector('input[name="platforms"]');
+        if (cb) cb.checked = show;
+        if (show) visibleCount += 1;
+      });
+      if (emptyHint) emptyHint.hidden = !hasFilter || visibleCount > 0;
+    }
+
+    window.__pubApplyPlatformFilter = applyPlatformFilter;
+
+    var publishAccounts = {{ publish_account_choices | tojson }};
+    if (publishAccounts.length === 1 && !document.getElementById("pub-account-open")) {
+      applyPlatformFilter(publishAccounts[0].platform_ids || [], null, false);
+    }
+  })();
+
+  (function () {
+    var trigger = document.getElementById("pub-platforms-trigger");
+    var section = document.getElementById("pub-platforms-section");
+    if (!trigger || !section) return;
+
+    function setOpen(open) {
+      section.hidden = !open;
+      trigger.setAttribute("aria-expanded", open ? "true" : "false");
+      trigger.classList.toggle("is-open", open);
+    }
+
+    setOpen(false);
+    trigger.addEventListener("click", function () {
+      setOpen(section.hidden);
+    });
+  })();
+</script>
+<script src="/static/js/ajax-search.js?v=1"></script>
+<script src="/static/stats-pickers.js?v=11"></script>
+<script>
+  (function () {
+    if (!window.initPubAccountPicker || !document.getElementById("pub-account-open")) return;
+    var emptyHint = document.getElementById("pub-account-platforms-empty");
+    window.initPubAccountPicker({
+      modalId: "pub-account-modal",
+      openId: "pub-account-open",
+      hiddenId: "pub-account-id",
+      listId: "pub-account-modal-list",
+      searchId: "pub-account-modal-search",
+      searchClearId: "pub-account-modal-search-clear",
+      emptyId: "pub-account-modal-empty",
+      choices: {{ publish_account_choices | tojson }},
+      selectedId: "",
+      pickLabel: {{ pub_account_i18n.select | tojson }},
+      kindGroup: {{ t('admin.stats_kind_group') | tojson }},
+      kindAccount: {{ t('admin.stats_kind_account') | tojson }},
+      onPick: function (picked) {
+        if (window.__pubApplyPlatformFilter) {
+          window.__pubApplyPlatformFilter(
+            picked ? picked.platform_ids || [] : [],
+            emptyHint,
+            true
+          );
+        }
+      },
+    });
+    if (window.__pubApplyPlatformFilter) {
+      window.__pubApplyPlatformFilter([], emptyHint, true);
+    }
+  })();
+</script>
+<script>
+  (function () {
+    var accordion = document.getElementById("pub-comments-accordion");
+    var trigger = document.getElementById("pub-comments-trigger");
+    var panel = document.getElementById("pub-comments-panel");
+    if (!accordion || !trigger || !panel) return;
+
+    var storageKey = "pub-comments-accordion-open";
+
+    function setOpen(open) {
+      accordion.classList.toggle("pub-accordion--collapsed", !open);
+      trigger.setAttribute("aria-expanded", open ? "true" : "false");
+      panel.hidden = !open;
+      try {
+        localStorage.setItem(storageKey, open ? "1" : "0");
+      } catch (err) {}
+    }
+
+    var saved = null;
+    try {
+      saved = localStorage.getItem(storageKey);
+    } catch (err) {}
+    setOpen(saved !== "0");
+
+    trigger.addEventListener("click", function () {
+      setOpen(trigger.getAttribute("aria-expanded") !== "true");
+    });
+  })();
+
+  (function () {
+    var threadList = document.getElementById("comment-thread-list");
+    var emptyEl = document.getElementById("comment-results-empty");
+    var loadingEl = document.getElementById("comment-results-loading");
+    var platformEl = document.getElementById("comment-filter-platform");
+    var userEl = document.getElementById("comment-filter-user");
+    if (!threadList || !platformEl || !userEl) return;
+
+    var platformLabels = {{ platform_labels | tojson }};
+    var labelYou = {{ t('pub.badge_you') | tojson }};
+    var labelReplyPh = {{ t('pub.reply_ph') | tojson }};
+    var labelReplyBtn = {{ t('pub.reply_btn') | tojson }};
+    var labelCommentsCount = {{ t('pub.comments_count') | tojson }};
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function formatCount(n) {
+      return labelCommentsCount.replace("{n}", String(n));
+    }
+
+    function bindThreadToggle(article, btn, body) {
+      btn.addEventListener("click", function () {
+        var open = btn.getAttribute("aria-expanded") === "true";
+        btn.setAttribute("aria-expanded", open ? "false" : "true");
+        article.classList.toggle("comment-thread--open", !open);
+        body.hidden = open;
+      });
+    }
+
+    function renderCommentItem(comment, videoId) {
+      var li = document.createElement("li");
+      li.className = "comment-inbox__item" + (comment.parent_id ? " comment-inbox__item--reply" : "");
+
+      var meta = document.createElement("div");
+      meta.className = "comment-inbox__meta";
+      meta.innerHTML =
+        "<strong>" + escapeHtml(comment.author_name) + "</strong>" +
+        (comment.is_creator_reply ? ' <span class="badge badge-creator">' + escapeHtml(labelYou) + "</span>" : "") +
+        ' <time class="sub" datetime="' + escapeHtml(comment.created_at) + '">' +
+        escapeHtml((comment.created_at || "").slice(0, 19).replace("T", " ")) +
+        "</time>";
+
+      var body = document.createElement("p");
+      body.className = "comment-inbox__body";
+      body.textContent = comment.body;
+
+      li.appendChild(meta);
+      li.appendChild(body);
+
+      if (!comment.parent_id && !comment.is_creator_reply) {
+        var form = document.createElement("form");
+        form.method = "post";
+        form.action = "/admin/comments/reply";
+        form.className = "reply-form";
+
+        var videoInput = document.createElement("input");
+        videoInput.type = "hidden";
+        videoInput.name = "video_id";
+        videoInput.value = videoId;
+
+        var parentInput = document.createElement("input");
+        parentInput.type = "hidden";
+        parentInput.name = "parent_id";
+        parentInput.value = comment.id;
+
+        var textarea = document.createElement("textarea");
+        textarea.name = "body";
+        textarea.rows = 2;
+        textarea.required = true;
+        textarea.placeholder = labelReplyPh;
+
+        var submit = document.createElement("button");
+        submit.type = "submit";
+        submit.className = "btn btn-accent btn-sm";
+        submit.textContent = labelReplyBtn;
+
+        form.appendChild(videoInput);
+        form.appendChild(parentInput);
+        form.appendChild(textarea);
+        form.appendChild(submit);
+        li.appendChild(form);
+      }
+
+      return li;
+    }
+
+    function renderThreads(list) {
+      threadList.innerHTML = "";
+      list.forEach(function (thread) {
+        var article = document.createElement("article");
+        article.className = "comment-thread";
+
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "comment-thread__trigger";
+        btn.setAttribute("aria-expanded", "false");
+
+        var platformTags = (thread.platform_ids || [])
+          .map(function (pid) {
+            return '<span class="cap cap--yes">' + escapeHtml(platformLabels[pid] || pid) + "</span>";
+          })
+          .join(" ");
+
+        btn.innerHTML =
+          '<span class="comment-thread__title">' + escapeHtml(thread.video_title || "—") + "</span>" +
+          '<span class="comment-thread__meta sub">' +
+          escapeHtml(thread.owner_username || "") +
+          " · " +
+          escapeHtml(formatCount((thread.comments || []).length)) +
+          (platformTags ? " · " + platformTags : "") +
+          "</span>" +
+          '<span class="comment-thread__chevron" aria-hidden="true"></span>';
+
+        var panel = document.createElement("div");
+        panel.className = "comment-thread__panel";
+        panel.hidden = true;
+
+        var ul = document.createElement("ul");
+        ul.className = "comment-inbox comment-inbox--thread";
+        (thread.comments || []).forEach(function (comment) {
+          ul.appendChild(renderCommentItem(comment, thread.video_id));
+        });
+
+        panel.appendChild(ul);
+        article.appendChild(btn);
+        article.appendChild(panel);
+        bindThreadToggle(article, btn, panel);
+        threadList.appendChild(article);
+      });
+    }
+
+    function runSearch() {
+      var platform = platformEl ? platformEl.value : "__all__";
+      var user = userEl ? userEl.value : "__all__";
+      var params = new URLSearchParams();
+      if (platform && platform !== "__all__") params.set("platform", platform);
+      if (user && user !== "__all__") params.set("user", user);
+
+      if (loadingEl) loadingEl.hidden = false;
+      if (emptyEl) emptyEl.hidden = true;
+      threadList.hidden = true;
+      threadList.innerHTML = "";
+
+      fetch("/admin/api/publicaciones/comentarios?" + params.toString(), {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      })
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (body) {
+          if (!body || !body.ok) {
+            if (emptyEl) emptyEl.hidden = false;
+            return;
+          }
+          var filtered = body.threads || [];
+          if (!filtered.length) {
+            if (emptyEl) emptyEl.hidden = false;
+            threadList.hidden = true;
+            threadList.innerHTML = "";
+          } else {
+            if (emptyEl) emptyEl.hidden = true;
+            threadList.hidden = false;
+            renderThreads(filtered);
+          }
+        })
+        .catch(function () {
+          if (emptyEl) emptyEl.hidden = false;
+        })
+        .finally(function () {
+          if (loadingEl) loadingEl.hidden = true;
+        });
+    }
+
+    if (window.wireAjaxSelectSearch) {
+      window.wireAjaxSelectSearch(platformEl, runSearch);
+      window.wireAjaxSelectSearch(userEl, runSearch);
+    } else {
+      platformEl.addEventListener("change", runSearch);
+      userEl.addEventListener("change", runSearch);
+    }
+
+    runSearch();
+  })();
+
+  (function () {
+    var modal = document.getElementById("pub-platforms-info-modal");
+    var trigger = document.getElementById("open-pub-platforms-info-modal");
+    if (!modal || !trigger) return;
+
+    var lastTrigger = null;
+
+    function releaseModalFocus(returnFocusEl) {
+      var active = document.activeElement;
+      if (!active || !modal.contains(active)) return;
+      if (returnFocusEl && typeof returnFocusEl.focus === "function") {
+        returnFocusEl.focus();
+      } else {
+        active.blur();
+      }
+    }
+
+    function openModal() {
+      lastTrigger = trigger;
+      modal.classList.add("is-open");
+      modal.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+      var closeBtn = modal.querySelector(".equipo-modal__close");
+      if (closeBtn) closeBtn.focus();
+    }
+
+    function closeModal() {
+      releaseModalFocus(lastTrigger);
+      modal.classList.remove("is-open");
+      modal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+      lastTrigger = null;
+    }
+
+    trigger.addEventListener("click", openModal);
+    modal.querySelectorAll("[data-close-pub-platforms-info]").forEach(function (el) {
+      el.addEventListener("click", closeModal);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && modal.classList.contains("is-open")) closeModal();
+    });
+  })();
+</script>
+{% if user_has_admin_privileges(user) %}
+<div id="pub-log-confirm" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-log-purge="pub-log-confirm" tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel extractor-confirm__panel" role="dialog" aria-modal="true" aria-labelledby="pub-log-confirm-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div><h2 id="pub-log-confirm-title">{{ t('log.purge_confirm_title') }}</h2></div>
+      <button type="button" class="equipo-modal__close" data-close-log-purge="pub-log-confirm" aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body">
+      <p class="extractor-confirm__body" id="pub-log-confirm-body"></p>
+      <div class="extractor-confirm__actions">
+        <button type="button" class="btn btn-ghost" data-close-log-purge="pub-log-confirm">{{ t('log.purge_cancel') }}</button>
+        <button type="button" class="btn extractor-confirm__delete" id="pub-log-confirm-delete">{{ t('log.purge_confirm_btn') }}</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/static/js/log-purge.js?v=1"></script>
+<script>
+  window.wireLogPurge({
+    fromId: "pub-log-from",
+    toId: "pub-log-to",
+    btnId: "pub-log-delete",
+    msgId: "pub-log-msg",
+    modalId: "pub-log-confirm",
+    bodyId: "pub-log-confirm-body",
+    confirmId: "pub-log-confirm-delete",
+    countUrl: "/admin/api/publicaciones/logs/count",
+    deleteUrl: "/admin/api/publicaciones/logs",
+    i18n: {
+      needDates: {{ t('log.purge_need_dates') | tojson }},
+      invalid: {{ t('log.purge_invalid') | tojson }},
+      none: {{ t('log.purge_none') | tojson }},
+      confirmBody: {{ t('log.purge_confirm_pub') | tojson }},
+      network: {{ t('log.purge_network') | tojson }},
+      ok: {{ t('log.purge_ok') | tojson }}
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}

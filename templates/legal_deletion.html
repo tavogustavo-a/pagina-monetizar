@@ -1,0 +1,24 @@
+{% extends "legal_page.html" %}
+{% block legal_body %}
+{% if lang == 'es' %}
+<p class="legal-prose">
+  Solicita la eliminación de datos personales y tokens de TikTok almacenados por {{ site_name }}.
+</p>
+<h2>1. Revocar acceso a TikTok</h2>
+<p class="legal-prose">Elimina los permisos de la app desde la configuración de tu cuenta TikTok. Esto detiene el acceso nuevo a la API, pero no borra automáticamente las copias almacenadas en nuestros servidores.</p>
+<h2>2. Solicitar eliminación a nosotros</h2>
+<p class="legal-prose">Escribe a <a href="mailto:{{ contact_email }}?subject=Solicitud%20de%20eliminaci%C3%B3n%20de%20datos">{{ contact_email }}</a> con asunto «Solicitud de eliminación de datos» e incluye tu usuario del panel y tu @ de TikTok si aplica.</p>
+<h2>3. Tiempo de respuesta</h2>
+<p class="legal-prose">Nuestro objetivo es confirmar y procesar las solicitudes en un plazo de 30 días, salvo que la ley exija conservación.</p>
+{% else %}
+<p class="legal-prose">
+  Request deletion of personal data and TikTok tokens stored by {{ site_name }}.
+</p>
+<h2>1. Revoke TikTok access</h2>
+<p class="legal-prose">Remove app permissions from your TikTok account settings. This stops new API access but does not automatically delete stored copies on our servers.</p>
+<h2>2. Request deletion from us</h2>
+<p class="legal-prose">Email <a href="mailto:{{ contact_email }}?subject=Data%20deletion%20request">{{ contact_email }}</a> with subject «Data deletion request» and include your panel username and TikTok @handle if applicable.</p>
+<h2>3. Response time</h2>
+<p class="legal-prose">We aim to confirm and process requests within 30 days, except where law requires retention.</p>
+{% endif %}
+{% endblock %}

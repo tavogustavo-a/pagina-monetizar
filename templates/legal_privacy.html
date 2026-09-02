@@ -1,0 +1,60 @@
+{% extends "legal_page.html" %}
+{% block legal_body %}
+{% if lang == 'es' %}
+<p class="legal-prose">
+  {{ company_name }} («nosotros») opera {{ site_name }} en {{ site_url }}. Esta Política de privacidad explica qué
+  datos recopilamos, cómo los usamos y tus derechos al usar nuestro panel integrado con TikTok.
+</p>
+<h2>1. Responsable del tratamiento</h2>
+<p class="legal-prose">{{ company_name }} · <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
+<h2>2. Datos que recopilamos</h2>
+<ul class="legal-list">
+  <li><strong>Cuentas del panel:</strong> usuario, nombre visible, contraseña cifrada, rol, permisos y cookies de sesión.</li>
+  <li><strong>TikTok (con tu consentimiento):</strong> identificadores de perfil, tokens OAuth, métricas de video, metadatos de publicaciones, comentarios y archivos de video que subes para publicar.</li>
+  <li><strong>Registros técnicos:</strong> dirección IP y marcas de tiempo de solicitudes por seguridad.</li>
+</ul>
+<h2>3. Cómo usamos los datos</h2>
+<ul class="legal-list">
+  <li>Autenticar usuarios autorizados y aplicar permisos.</li>
+  <li>Mostrar analíticas y publicar contenido vía <code>user.info.basic</code>, <code>video.upload</code> y <code>video.publish</code>.</li>
+  <li>Listar y responder comentarios vía <code>comment.list</code> y <code>comment.reply</code>.</li>
+  <li>Mantener la seguridad y cumplir las políticas para desarrolladores de TikTok.</li>
+</ul>
+<h2>4. Compartición</h2>
+<p class="legal-prose">No vendemos datos personales. Compartimos datos con TikTok al llamar su API y con proveedores de infraestructura necesarios para alojar el servicio.</p>
+<h2>5. Conservación y eliminación</h2>
+<p class="legal-prose">Los datos se conservan mientras tu cuenta o conexión TikTok esté activa. Revoca el acceso en ajustes de TikTok o solicita eliminación en <a href="/data-deletion">{{ t('footer.deletion') }}</a>.</p>
+<h2>6. Tus derechos</h2>
+<p class="legal-prose">Puedes solicitar acceso, corrección o eliminación escribiendo a <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
+<h2>7. Contacto</h2>
+<p class="legal-prose"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
+{% else %}
+<p class="legal-prose">
+  {{ company_name }} («we») operates {{ site_name }} at {{ site_url }}. This Privacy Policy explains what
+  data we collect, how we use it, and your rights when you use our TikTok-integrated dashboard.
+</p>
+<h2>1. Data controller</h2>
+<p class="legal-prose">{{ company_name }} · <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
+<h2>2. Data we collect</h2>
+<ul class="legal-list">
+  <li><strong>Panel accounts:</strong> username, display name, hashed password, role, permissions, session cookies.</li>
+  <li><strong>TikTok (with your consent):</strong> profile identifiers, OAuth tokens, video metrics, post metadata, comments, and video files you upload for publishing.</li>
+  <li><strong>Technical logs:</strong> IP address and request timestamps for security.</li>
+</ul>
+<h2>3. How we use data</h2>
+<ul class="legal-list">
+  <li>Authenticate authorized users and enforce permissions.</li>
+  <li>Display analytics and publish content via <code>user.info.basic</code>, <code>video.upload</code> and <code>video.publish</code>.</li>
+  <li>List and reply to comments via <code>comment.list</code> and <code>comment.reply</code>.</li>
+  <li>Maintain security and comply with TikTok Developer policies.</li>
+</ul>
+<h2>4. Sharing</h2>
+<p class="legal-prose">We do <strong>not</strong> sell personal data. We share data with TikTok when calling their API and with infrastructure providers as needed to host the service.</p>
+<h2>5. Retention &amp; deletion</h2>
+<p class="legal-prose">Data is kept while your account or TikTok connection is active. Revoke access in TikTok settings or request deletion at <a href="/data-deletion">{{ t('footer.deletion') }}</a>.</p>
+<h2>6. Your rights</h2>
+<p class="legal-prose">You may request access, correction, or deletion by emailing <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
+<h2>7. Contact</h2>
+<p class="legal-prose"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
+{% endif %}
+{% endblock %}

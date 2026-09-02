@@ -1,0 +1,52 @@
+{% extends "base_public.html" %}
+{% block title %}{{ site_name }} — TikTok Creator Dashboard{% endblock %}
+{% block public_content %}
+<section class="landing-hero">
+  <div class="landing-hero__inner">
+    <h1>{{ hero_title }}</h1>
+    <p class="landing-hero__lead">{{ hero_subtitle }}</p>
+    <div class="landing-hero__actions">
+      <a href="/login" class="btn btn-accent">{{ t('nav.sign_in') }}</a>
+      <a href="/about" class="btn btn-ghost">{{ t('landing.learn_more') }}</a>
+    </div>
+  </div>
+</section>
+
+<section class="landing-section">
+  <h2 class="landing-section__heading">{{ t('landing.built_for') }}</h2>
+  <div class="feature-grid">
+    <article class="feature-card">
+      <div class="feature-card__icon" aria-hidden="true">▶</div>
+      <h3>{{ t('landing.feature1.title') }}</h3>
+      <p>{{ t('landing.feature1.body') }}</p>
+      <span class="feature-card__scope">{{ t('landing.feature1.scope') }} <code>video.upload</code>, <code>video.publish</code></span>
+    </article>
+    <article class="feature-card">
+      <div class="feature-card__icon" aria-hidden="true">📊</div>
+      <h3>{{ t('landing.feature2.title') }}</h3>
+      <p>{{ t('landing.feature2.body') }}</p>
+      <span class="feature-card__scope">{{ t('landing.feature2.scope') }}</span>
+    </article>
+    <article class="feature-card">
+      <div class="feature-card__icon" aria-hidden="true">💬</div>
+      <h3>{{ t('landing.feature3.title') }}</h3>
+      <p>{{ t('landing.feature3.body') }}</p>
+      <span class="feature-card__scope">{{ t('landing.feature3.scope') }} <code>comment.list</code>, <code>comment.reply</code></span>
+    </article>
+  </div>
+</section>
+
+<section class="landing-section landing-section--muted">
+  <h2>{{ t('landing.api.title') }}</h2>
+  <p class="legal-prose">
+    {{ t('landing.api.p1', site_name=site_name) | safe }}
+  </p>
+  <p class="legal-prose">
+    {% if lang == 'es' %}
+    Lee nuestra <a href="/privacy-policy">{{ t('footer.privacy') }}</a> y <a href="/terms-of-service">{{ t('footer.terms') }}</a>.
+    {% else %}
+    Read our <a href="/privacy-policy">{{ t('footer.privacy') }}</a> and <a href="/terms-of-service">{{ t('footer.terms') }}</a>.
+    {% endif %}
+  </p>
+</section>
+{% endblock %}

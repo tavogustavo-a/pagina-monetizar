@@ -1,0 +1,17 @@
+---
+description: Publicar en redes con OAuth real (conectar cuenta), nunca simular.
+alwaysApply: true
+---
+
+# APIs de publicación: flujo profesional
+
+Al conectar o terminar una plataforma (YouTube, Instagram, Facebook, X, Dailymotion, Bilibili, Rumble, Snapchat, etc.):
+
+- El usuario **conecta la cuenta** desde Servidores (`Conectar con …`), igual que TikTok y YouTube.
+- No pidas pegar access tokens como flujo principal. Client ID/secret van en el modal o `.env`; los tokens salen del callback OAuth.
+- Excepción: Rumble no ofrece OAuth público. Usa su Upload API de partners (`simple-upload.php`) con el token y Channel ID que emite Rumble; no simules el envío.
+- Guarda access + refresh, renueva el token al caducar y sincroniza `server_accounts` (`source_kind=oauth` en `oauth_accounts`, o la tabla específica como TikTok).
+- **No simules** una publicación porque el test de credenciales haya salido bien. Si la API no está lista, dilo; no marques el post como enviado.
+- Redirect URI: `{SITE_URL}/oauth/{plataforma}/callback`, registrada en la consola del proveedor.
+
+Ejemplo: YouTube usa `/oauth/youtube/connect` + `youtube_oauth.py` + `oauth_accounts`. Reutiliza esa tabla para las siguientes plataformas.

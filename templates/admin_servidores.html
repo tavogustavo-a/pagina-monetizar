@@ -1,0 +1,2646 @@
+{% extends "base.html" %}
+{% block title %}{{ t('nav.servers') }}{% endblock %}
+{% block body %}
+<div class="layout">
+  {% include "_sidebar.html" %}
+
+  <main class="main main--scroll">
+    <div class="admin-layout">
+      <div class="admin-inner admin-inner--wide">
+        <section class="servers-accordion pub-accordion" id="servers-platforms-accordion">
+          <div class="servers-accordion__head admin-head admin-head--title">
+            <button
+              type="button"
+              class="pub-accordion__trigger servers-accordion__trigger"
+              id="servers-platforms-trigger"
+              aria-expanded="true"
+              aria-controls="servers-platforms-panel"
+            >
+              <span class="servers-accordion__title-slot">
+                <span class="pub-accordion__title">{{ t('nav.servers') }}</span>
+                <span
+                  class="servers-info-btn admin-head__info-btn servers-accordion__info-btn"
+                  id="open-limits-modal"
+                  role="button"
+                  tabindex="0"
+                  aria-label="{{ t('servers.limits_title') }}"
+                  title="{{ t('servers.limits_title') }}"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h.008v.008H11.25v-.008zM12 17.25h.01M12 21a9 9 0 100-18 9 9 0 000 18z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v.008M12 11.25V16.5" />
+                  </svg>
+                </span>
+              </span>
+              <span class="pub-accordion__chevron" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="pub-accordion__panel" id="servers-platforms-panel">
+            {% if success %}
+            <div class="alert-ok">{{ success }}</div>
+            {% endif %}
+            {% if error %}
+            <div class="alert-error">{{ error }}</div>
+            {% endif %}
+
+            <ul class="servers-list" role="list">
+          {% for platform in platforms %}
+          {% set creds = platform_creds.get(platform.id, {}) %}
+          {% set account_count = oauth_account_counts.get(platform.id, 0) %}
+          <li class="servers-list__row" id="server-{{ platform.id }}" data-platform-id="{{ platform.id }}">
+            <div class="servers-list__main">
+              <span class="servers-list__icon" aria-hidden="true">{{ platform.icon }}</span>
+              <div class="servers-list__info">
+                <span class="servers-list__name">{{ platform.name }}</span>
+              </div>
+            </div>
+            <div class="servers-list__actions">
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm servers-list__accounts servers-list__accounts-btn js-open-accounts-modal"
+                data-platform-id="{{ platform.id }}"
+                data-platform-name="{{ platform.name }}"
+                aria-label="{{ t('servers.accounts_add') }}"
+                title="{{ t('servers.accounts_add') }}"
+              >
+                <svg class="servers-list__accounts-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 21v-2a4 4 0 00-4-4H9a4 4 0 00-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 8v6M22 11h-6" />
+                </svg>
+                {% if account_count > 0 %}
+                <span class="servers-list__count">{{ account_count }}</span>
+                {% endif %}
+              </button>
+            </div>
+          </li>
+          {% endfor %}
+            </ul>
+          </div>
+        </section>
+
+        <div class="servers-divider" role="separator" aria-hidden="true">
+          <span class="servers-divider__line"></span>
+          <span class="servers-divider__gem"></span>
+          <span class="servers-divider__line"></span>
+        </div>
+
+        <section class="servers-accounts" id="servers-accounts">
+          <div class="servers-section__head">
+            <h2 class="servers-groups__title servers-section__title">
+              {{ t('servers.accounts_section_title') }}
+              <button
+                type="button"
+                class="servers-info-btn servers-groups__info-btn"
+                id="open-accounts-info-modal"
+                aria-label="{{ t('servers.accounts_info_title') }}"
+                title="{{ t('servers.accounts_info_title') }}"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h.008v.008H11.25v-.008zM12 17.25h.01M12 21a9 9 0 100-18 9 9 0 000 18z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v.008M12 11.25V16.5" />
+                </svg>
+              </button>
+            </h2>
+          </div>
+          <div class="equipo-members-head servers-accounts__head">
+            <div class="equipo-members-head__title">
+              <div class="equipo-members-per-page">
+                <div class="equipo-members-per-page__field">
+                  <span class="equipo-members-per-page__prefix">{{ t('team.show') }}</span>
+                  <select id="servers-accounts-per-page" aria-label="{{ t('team.per_page_label') }}">
+                    <option value="10" selected>10</option>
+                    <option value="20">20</option>
+                    <option value="30">30</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                    <option value="all">{{ t('team.per_page_all') }}</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="equipo-members-toolbar servers-section__toolbar servers-accounts__toolbar">
+              <div class="equipo-search-wrap panel-search-wrap--highlight">
+                <input
+                  type="search"
+                  id="servers-accounts-search"
+                  class="equipo-search-input panel-search-input--highlight"
+                  placeholder="{{ t('servers.accounts_search') }}"
+                  aria-label="{{ t('servers.accounts_search') }}"
+                  autocomplete="off"
+                />
+                <button
+                  type="button"
+                  id="servers-accounts-search-clear"
+                  class="equipo-search-clear"
+                  aria-label="{{ t('team.search_clear') }}"
+                  title="{{ t('team.search_clear') }}"
+                  hidden
+                >
+                  ×
+                </button>
+              </div>
+              <button type="button" class="btn btn-accent btn-sm" id="servers-account-create">
+                {{ t('servers.accounts_create') }}
+              </button>
+            </div>
+          </div>
+          <p id="servers-accounts-loading" class="sub equipo-members-loading" hidden>{{ t('team.loading') }}</p>
+          <p class="sub servers-accounts__empty" id="servers-accounts-empty" hidden>{{ t('servers.accounts_empty') }}</p>
+          <p id="servers-accounts-no-results" class="sub equipo-empty-hint" hidden>{{ t('team.no_results') }}</p>
+          <div id="servers-accounts-scroll" class="user-list-scroll" hidden>
+            <ul class="servers-list servers-accounts-list servers-list--sync-cols" id="servers-accounts-list" role="list"></ul>
+          </div>
+          <nav
+            id="servers-accounts-pagination"
+            class="comment-inbox-pagination equipo-members-pagination"
+            aria-label="{{ t('servers.accounts_pagination') }}"
+            hidden
+          >
+            <div class="comment-inbox-pagination__inner">
+              <button type="button" id="servers-accounts-prev" class="btn btn-ghost btn-sm">{{ t('team.previous') }}</button>
+              <span id="servers-accounts-page-info" class="equipo-members-page-info"></span>
+              <button type="button" id="servers-accounts-next" class="btn btn-ghost btn-sm">{{ t('team.next') }}</button>
+            </div>
+          </nav>
+        </section>
+
+        <div class="servers-divider" role="separator" aria-hidden="true">
+          <span class="servers-divider__line"></span>
+          <span class="servers-divider__gem"></span>
+          <span class="servers-divider__line"></span>
+        </div>
+
+        <section class="servers-groups" id="servers-groups">
+          <div class="servers-section__head">
+            <h2 class="servers-groups__title servers-section__title">
+              {{ t('servers.groups_title') }}
+              <button
+                type="button"
+                class="servers-info-btn servers-groups__info-btn"
+                id="open-groups-info-modal"
+                aria-label="{{ t('servers.groups_info_title') }}"
+                title="{{ t('servers.groups_info_title') }}"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h.008v.008H11.25v-.008zM12 17.25h.01M12 21a9 9 0 100-18 9 9 0 000 18z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v.008M12 11.25V16.5" />
+                </svg>
+              </button>
+            </h2>
+          </div>
+          <div class="equipo-members-head servers-groups__head">
+            <div class="equipo-members-head__title">
+              <div class="equipo-members-per-page">
+                <div class="equipo-members-per-page__field">
+                  <span class="equipo-members-per-page__prefix">{{ t('team.show') }}</span>
+                  <select id="servers-groups-per-page" aria-label="{{ t('team.per_page_label') }}">
+                    <option value="10" selected>10</option>
+                    <option value="20">20</option>
+                    <option value="30">30</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                    <option value="all">{{ t('team.per_page_all') }}</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="equipo-members-toolbar servers-section__toolbar servers-groups__toolbar">
+              <div class="equipo-search-wrap panel-search-wrap--highlight">
+                <input
+                  type="search"
+                  id="servers-groups-search"
+                  class="equipo-search-input panel-search-input--highlight"
+                  placeholder="{{ t('servers.groups_list_search') }}"
+                  aria-label="{{ t('servers.groups_list_search') }}"
+                  autocomplete="off"
+                />
+                <button
+                  type="button"
+                  id="servers-groups-search-clear"
+                  class="equipo-search-clear"
+                  aria-label="{{ t('team.search_clear') }}"
+                  title="{{ t('team.search_clear') }}"
+                  hidden
+                >
+                  ×
+                </button>
+              </div>
+              <button type="button" class="btn btn-accent btn-sm" id="servers-group-create">
+                {{ t('servers.groups_create') }}
+              </button>
+            </div>
+          </div>
+          <p id="servers-groups-loading" class="sub equipo-members-loading" hidden>{{ t('team.loading') }}</p>
+          <p class="sub servers-groups__empty" id="servers-groups-empty" hidden>{{ t('servers.groups_empty') }}</p>
+          <p id="servers-groups-no-results" class="sub equipo-empty-hint" hidden>{{ t('team.no_results') }}</p>
+          <div id="servers-groups-scroll" class="user-list-scroll" hidden>
+            <ul class="servers-list servers-groups-list servers-list--sync-cols" id="servers-groups-list" role="list"></ul>
+          </div>
+          <nav
+            id="servers-groups-pagination"
+            class="comment-inbox-pagination equipo-members-pagination"
+            aria-label="{{ t('servers.groups_pagination') }}"
+            hidden
+          >
+            <div class="comment-inbox-pagination__inner">
+              <button type="button" id="servers-groups-prev" class="btn btn-ghost btn-sm">{{ t('team.previous') }}</button>
+              <span id="servers-groups-page-info" class="equipo-members-page-info"></span>
+              <button type="button" id="servers-groups-next" class="btn btn-ghost btn-sm">{{ t('team.next') }}</button>
+            </div>
+          </nav>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="limits-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-limits-modal tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel" role="dialog" aria-modal="true" aria-labelledby="limits-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div>
+        <h2 id="limits-modal-title">{{ t('servers.limits_title') }}</h2>
+      </div>
+      <button type="button" class="equipo-modal__close" data-close-limits-modal aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body">
+      <p class="sub limits-modal__hint">{{ t('servers.limits_hint') }}</p>
+      <div class="limits-table-wrap">
+        <table class="limits-table">
+          <thead>
+            <tr>
+              <th>{{ t('servers.col_platform') }}</th>
+              <th>{{ t('servers.col_video') }}</th>
+              <th>{{ t('servers.col_photo') }}</th>
+              <th>{{ t('servers.col_note') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for platform in platforms %}
+            <tr>
+              <td>{{ platform.name }}</td>
+              <td data-label="{{ t('servers.col_video') }}"><span class="cap cap--{{ platform.video }}">{{ t('cap.' ~ platform.video) }}</span></td>
+              <td data-label="{{ t('servers.col_photo') }}"><span class="cap cap--{{ platform.photo }}">{{ t('cap.' ~ platform.photo) }}</span></td>
+              <td data-label="{{ t('servers.col_note') }}">{{ platform.note }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="server-accounts-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-server-modal tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel" role="dialog" aria-modal="true" aria-labelledby="server-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div>
+        <h2 id="server-modal-title" class="server-modal-title"></h2>
+      </div>
+      <button type="button" class="equipo-modal__close" data-close-server-modal aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body" id="server-modal-body"></div>
+  </div>
+</div>
+
+<div id="groups-info-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-groups-info-modal tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel" role="dialog" aria-modal="true" aria-labelledby="groups-info-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div>
+        <h2 id="groups-info-modal-title">{{ t('servers.groups_info_title') }}</h2>
+      </div>
+      <button type="button" class="equipo-modal__close" data-close-groups-info-modal aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body">
+      <p class="sub panel-info-modal__text">{{ t('servers.groups_hint') }}</p>
+    </div>
+  </div>
+</div>
+
+<div id="accounts-info-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-accounts-info-modal tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel" role="dialog" aria-modal="true" aria-labelledby="accounts-info-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div>
+        <h2 id="accounts-info-modal-title">{{ t('servers.accounts_info_title') }}</h2>
+      </div>
+      <button type="button" class="equipo-modal__close" data-close-accounts-info-modal aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body">
+      <p class="sub panel-info-modal__text">{{ t('servers.accounts_hint') }}</p>
+    </div>
+  </div>
+</div>
+
+<div id="account-servers-picker-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-account-picker-modal tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel account-servers-picker-modal__panel" role="dialog" aria-modal="true" aria-labelledby="account-servers-picker-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div>
+        <h2 id="account-servers-picker-title" class="server-modal-title">
+          <span id="account-servers-picker-title-text">{{ t('servers.accounts_edit_servers_title') }}</span>
+          <button
+            type="button"
+            class="servers-info-btn server-modal__info-btn js-open-account-picker-info"
+            id="open-account-picker-info-modal"
+            aria-label="{{ t('servers.accounts_edit_servers_info_title') }}"
+            title="{{ t('servers.accounts_edit_servers_info_title') }}"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h.008v.008H11.25v-.008zM12 17.25h.01M12 21a9 9 0 100-18 9 9 0 000 18z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v.008M12 11.25V16.5" />
+            </svg>
+          </button>
+        </h2>
+      </div>
+      <button type="button" class="equipo-modal__close" data-close-account-picker-modal aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body">
+      <ul class="servers-list account-servers-picker__list" id="account-servers-picker-list" role="list"></ul>
+    </div>
+  </div>
+</div>
+
+<div id="account-picker-info-modal" class="equipo-modal equipo-modal--stack" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-account-picker-info-modal tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel" role="dialog" aria-modal="true" aria-labelledby="account-picker-info-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div>
+        <h2 id="account-picker-info-modal-title">{{ t('servers.accounts_edit_servers_info_title') }}</h2>
+      </div>
+      <button type="button" class="equipo-modal__close" data-close-account-picker-info-modal aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body">
+      <p class="sub panel-info-modal__text">{{ t('servers.accounts_edit_servers_hint') }}</p>
+    </div>
+  </div>
+</div>
+
+<div id="account-create-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-account-create-modal tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel" role="dialog" aria-modal="true" aria-labelledby="account-create-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div>
+        <h2 id="account-create-modal-title">{{ t('servers.accounts_modal_create') }}</h2>
+      </div>
+      <button type="button" class="equipo-modal__close" data-close-account-create-modal aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <form class="server-modal__body servers-account-create-form" id="servers-account-create-form">
+      <label class="field">
+        <input
+          type="text"
+          id="servers-account-create-name"
+          required
+          autocomplete="off"
+          placeholder="{{ t('servers.accounts_col_name') }}"
+          aria-label="{{ t('servers.accounts_col_name') }}"
+        />
+      </label>
+      <p class="sub servers-account-create-form__msg" id="servers-account-create-msg" hidden></p>
+      <div class="api-form__actions">
+        <button type="submit" class="btn btn-accent" id="servers-account-create-save">{{ t('servers.groups_save') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="server-group-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-group-modal tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel" role="dialog" aria-modal="true" aria-labelledby="server-group-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div>
+        <h2 id="server-group-modal-title">{{ t('servers.groups_modal_create') }}</h2>
+      </div>
+      <button type="button" class="equipo-modal__close" data-close-group-modal aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <form class="server-modal__body servers-group-form" id="servers-group-form">
+      <input type="hidden" id="servers-group-id" value="" />
+      <label class="field">
+        <input type="text" id="servers-group-name" required autocomplete="off" placeholder="{{ t('servers.groups_name') }}" aria-label="{{ t('servers.groups_name') }}" />
+      </label>
+      <label class="field">
+        <input
+          type="search"
+          id="servers-group-search"
+          autocomplete="off"
+          placeholder="{{ t('servers.groups_search_ph') }}"
+          aria-label="{{ t('servers.groups_search_ph') }}"
+        />
+      </label>
+      <fieldset class="servers-group-picks">
+        <legend>{{ t('servers.groups_accounts') }}</legend>
+        <div class="servers-group-picks__list" id="servers-group-picks-list"></div>
+        <p class="sub servers-group-picks__empty" id="servers-group-picks-empty" hidden>{{ t('servers.groups_picks_empty') }}</p>
+      </fieldset>
+      <p class="sub servers-group-form__msg" id="servers-group-form-msg" hidden></p>
+      <div class="api-form__actions">
+        <button type="submit" class="btn btn-accent" id="servers-group-save">{{ t('servers.groups_save') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div hidden id="server-modal-templates">
+  {% for platform in platforms %}
+  {% set creds = platform_creds.get(platform.id, {}) %}
+  <div data-platform-template="{{ platform.id }}">
+    <form class="api-form js-api-form" data-platform-id="{{ platform.id }}">
+      <label class="field">
+        <span>{{ t('api.field.name') }}</span>
+        <input type="text" name="name" value="{{ creds.name or '' }}" autocomplete="off" />
+      </label>
+      {% if 'client_id' in platform.fields %}
+      <label class="field">
+        <span>{{ platform.label_client_id }}</span>
+        <input type="text" name="client_id" value="{{ creds.client_id or '' }}" autocomplete="off" />
+      </label>
+      {% endif %}
+      {% if 'client_secret' in platform.fields %}
+      <label class="field">
+        <span>{{ platform.label_client_secret }}{% if creds.client_secret_set %} · {{ creds.client_secret_mask }}{% endif %}</span>
+        <input type="password" name="client_secret" value="" placeholder="{{ t('api.keep_secret') }}" autocomplete="new-password" />
+      </label>
+      {% endif %}
+      {% if 'extra' in platform.fields %}
+      <label class="field">
+        <span>{{ t('api.field.extra.' ~ platform.id) }}</span>
+        <input type="text" name="extra" value="{{ creds.extra or '' }}" autocomplete="off" />
+      </label>
+      {% endif %}
+      {% if 'access_token' in platform.fields %}
+      <label class="field">
+        <span>{{ t('api.field.access_token') }}{% if creds.access_token_set %} · {{ creds.access_token_mask }}{% endif %}</span>
+        <input type="password" name="access_token" value="" placeholder="{{ t('api.keep_secret') }}" autocomplete="new-password" />
+      </label>
+      {% endif %}
+      <div class="api-form__actions">
+        <button type="submit" class="btn btn-accent">{{ t('api.save') }}</button>
+        <button type="button" class="btn btn-ghost js-test-platform" data-platform-id="{{ platform.id }}">⚡ {{ t('api.test') }}</button>
+      </div>
+      <p class="sub js-api-form-msg" hidden></p>
+    </form>
+
+    {% if platform.id == 'tiktok' %}
+    <p class="sub servers-oauth-redirect">{{ t('servers.tiktok_redirect_hint') }} <code>{{ tiktok_redirect_uri }}</code></p>
+    <div class="server-modal__linked">
+    {% if oauth_configured %}
+    <a href="/oauth/tiktok/connect" class="btn btn-tiktok">
+      <span class="btn-tiktok__icon" aria-hidden="true">♪</span>
+      {{ t('servers.connect_with_tiktok') }}
+    </a>
+    {% else %}
+    <p class="sub">{{ t('servers.oauth_missing') }}</p>
+    {% endif %}
+    </div>
+    <ul class="tiktok-config-list">
+      {% for c in linked_accounts %}
+      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}">
+        <div class="tiktok-config-card__main">
+          <div class="tiktok-config-card__head">
+            <strong class="tiktok-config-card__title">{{ c.name }}</strong>
+            <span class="badge badge-active">{{ t('servers.connected') }}</span>
+          </div>
+          {% if c.internal_username %}
+          <p class="tiktok-config-card__meta sub">{{ t('servers.team_user') }} {{ c.internal_username }}</p>
+          {% else %}
+          <p class="tiktok-config-card__meta sub">{{ t('servers.assign_team', team=t('servers.ref_team')) }}</p>
+          {% endif %}
+        </div>
+        <div class="tiktok-config-card__actions">
+          <button type="button" class="btn btn-ghost btn-sm btn-equipo-warn js-tiktok-disconnect" data-config-id="{{ c.id }}">
+            {{ t('servers.disconnect') }}
+          </button>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if platform.id == 'youtube' %}
+    <p class="sub servers-oauth-redirect">{{ t('servers.youtube_redirect_hint') }} <code>{{ youtube_redirect_uri }}</code></p>
+    <div class="server-modal__linked">
+    {% if youtube_oauth_configured %}
+    <a href="/oauth/youtube/connect" class="btn btn-youtube">
+      <span class="btn-youtube__icon" aria-hidden="true">▶</span>
+      {{ t('servers.connect_with_youtube') }}
+    </a>
+    {% else %}
+    <p class="sub">{{ t('servers.youtube_oauth_missing') }}</p>
+    {% endif %}
+    </div>
+    <ul class="tiktok-config-list">
+      {% for c in youtube_linked %}
+      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}">
+        <div class="tiktok-config-card__main">
+          <div class="tiktok-config-card__head">
+            <strong class="tiktok-config-card__title">{{ c.name }}</strong>
+            <span class="badge badge-active">{{ t('servers.connected') }}</span>
+          </div>
+          {% if c.internal_username %}
+          <p class="tiktok-config-card__meta sub">{{ t('servers.team_user') }} {{ c.internal_username }}</p>
+          {% endif %}
+        </div>
+        <div class="tiktok-config-card__actions">
+          <button type="button" class="btn btn-ghost btn-sm btn-equipo-warn js-oauth-disconnect" data-account-id="{{ c.id }}">
+            {{ t('servers.disconnect') }}
+          </button>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if platform.id == 'instagram' %}
+    <p class="sub servers-oauth-redirect">{{ t('servers.instagram_redirect_hint') }} <code>{{ instagram_redirect_uri }}</code></p>
+    <div class="server-modal__linked">
+    {% if instagram_oauth_configured %}
+    <a href="/oauth/instagram/connect" class="btn btn-instagram">
+      <span class="btn-instagram__icon" aria-hidden="true">◎</span>
+      {{ t('servers.connect_with_instagram') }}
+    </a>
+    {% else %}
+    <p class="sub">{{ t('servers.instagram_oauth_missing') }}</p>
+    {% endif %}
+    </div>
+    <ul class="tiktok-config-list">
+      {% for c in instagram_linked %}
+      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}">
+        <div class="tiktok-config-card__main">
+          <div class="tiktok-config-card__head">
+            <strong class="tiktok-config-card__title">{{ c.name }}</strong>
+            <span class="badge badge-active">{{ t('servers.connected') }}</span>
+          </div>
+          {% if c.internal_username %}
+          <p class="tiktok-config-card__meta sub">{{ t('servers.team_user') }} {{ c.internal_username }}</p>
+          {% endif %}
+        </div>
+        <div class="tiktok-config-card__actions">
+          <button type="button" class="btn btn-ghost btn-sm btn-equipo-warn js-oauth-disconnect" data-account-id="{{ c.id }}">
+            {{ t('servers.disconnect') }}
+          </button>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if platform.id == 'facebook' %}
+    <p class="sub servers-oauth-redirect">{{ t('servers.facebook_redirect_hint') }} <code>{{ facebook_redirect_uri }}</code></p>
+    <div class="server-modal__linked">
+    {% if facebook_oauth_configured %}
+    <a href="/oauth/facebook/connect" class="btn btn-facebook">
+      <span class="btn-facebook__icon" aria-hidden="true">f</span>
+      {{ t('servers.connect_with_facebook') }}
+    </a>
+    {% else %}
+    <p class="sub">{{ t('servers.facebook_oauth_missing') }}</p>
+    {% endif %}
+    </div>
+    <ul class="tiktok-config-list">
+      {% for c in facebook_linked %}
+      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}">
+        <div class="tiktok-config-card__main">
+          <div class="tiktok-config-card__head">
+            <strong class="tiktok-config-card__title">{{ c.name }}</strong>
+            <span class="badge badge-active">{{ t('servers.connected') }}</span>
+          </div>
+          {% if c.internal_username %}
+          <p class="tiktok-config-card__meta sub">{{ t('servers.team_user') }} {{ c.internal_username }}</p>
+          {% endif %}
+        </div>
+        <div class="tiktok-config-card__actions">
+          <button type="button" class="btn btn-ghost btn-sm btn-equipo-warn js-oauth-disconnect" data-account-id="{{ c.id }}">
+            {{ t('servers.disconnect') }}
+          </button>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if platform.id == 'x' %}
+    <p class="sub servers-oauth-redirect">{{ t('servers.x_redirect_hint') }} <code>{{ x_redirect_uri }}</code></p>
+    <div class="server-modal__linked">
+    {% if x_oauth_configured %}
+    <a href="/oauth/x/connect" class="btn btn-x">
+      <span class="btn-x__icon" aria-hidden="true">𝕏</span>
+      {{ t('servers.connect_with_x') }}
+    </a>
+    {% else %}
+    <p class="sub">{{ t('servers.x_oauth_missing') }}</p>
+    {% endif %}
+    </div>
+    <ul class="tiktok-config-list">
+      {% for c in x_linked %}
+      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}">
+        <div class="tiktok-config-card__main">
+          <div class="tiktok-config-card__head">
+            <strong class="tiktok-config-card__title">{{ c.name }}</strong>
+            <span class="badge badge-active">{{ t('servers.connected') }}</span>
+          </div>
+          {% if c.internal_username %}
+          <p class="tiktok-config-card__meta sub">{{ t('servers.team_user') }} {{ c.internal_username }}</p>
+          {% endif %}
+        </div>
+        <div class="tiktok-config-card__actions">
+          <button type="button" class="btn btn-ghost btn-sm btn-equipo-warn js-oauth-disconnect" data-account-id="{{ c.id }}">
+            {{ t('servers.disconnect') }}
+          </button>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if platform.id == 'bilibili' %}
+    <p class="sub servers-oauth-redirect">{{ t('servers.bilibili_redirect_hint') }} <code>{{ bilibili_redirect_uri }}</code></p>
+    <div class="server-modal__linked">
+    {% if bilibili_oauth_configured %}
+    <a href="/oauth/bilibili/connect" class="btn btn-bilibili">
+      <span class="btn-bilibili__icon" aria-hidden="true">▶</span>
+      {{ t('servers.connect_with_bilibili') }}
+    </a>
+    {% else %}
+    <p class="sub">{{ t('servers.bilibili_oauth_missing') }}</p>
+    {% endif %}
+    </div>
+    <ul class="tiktok-config-list">
+      {% for c in bilibili_linked %}
+      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}">
+        <div class="tiktok-config-card__main">
+          <div class="tiktok-config-card__head">
+            <strong class="tiktok-config-card__title">{{ c.name }}</strong>
+            <span class="badge badge-active">{{ t('servers.connected') }}</span>
+          </div>
+          {% if c.internal_username %}
+          <p class="tiktok-config-card__meta sub">{{ t('servers.team_user') }} {{ c.internal_username }}</p>
+          {% endif %}
+        </div>
+        <div class="tiktok-config-card__actions">
+          <button type="button" class="btn btn-ghost btn-sm btn-equipo-warn js-oauth-disconnect" data-account-id="{{ c.id }}">
+            {{ t('servers.disconnect') }}
+          </button>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if platform.id == 'rumble' %}
+    <p class="sub servers-oauth-redirect">{{ t('servers.rumble_partner_hint') }}</p>
+    {% if rumble_token_set %}
+    <ul class="tiktok-config-list">
+      <li class="tiktok-config-card tiktok-config-card--linked">
+        <div class="tiktok-config-card__main">
+          <div class="tiktok-config-card__head">
+            <strong class="tiktok-config-card__title">{{ rumble_channel or t('platform.rumble') }}</strong>
+            <span class="badge badge-active">{{ t('servers.connected') }}</span>
+          </div>
+          <p class="tiktok-config-card__meta sub">
+            {% if rumble_channel %}
+            {{ t('servers.rumble_ready', channel=rumble_channel) }}
+            {% else %}
+            {{ t('servers.rumble_token_only') }}
+            {% endif %}
+          </p>
+        </div>
+      </li>
+    </ul>
+    {% endif %}
+    {% endif %}
+
+    {% if platform.id == 'snapchat' %}
+    <p class="sub servers-oauth-redirect">{{ t('servers.snapchat_redirect_hint') }} <code>{{ snapchat_redirect_uri }}</code></p>
+    <div class="server-modal__linked">
+    {% if snapchat_oauth_configured %}
+    <a href="/oauth/snapchat/connect" class="btn btn-snapchat">
+      <span class="btn-snapchat__icon" aria-hidden="true">👻</span>
+      {{ t('servers.connect_with_snapchat') }}
+    </a>
+    {% else %}
+    <p class="sub">{{ t('servers.snapchat_oauth_missing') }}</p>
+    {% endif %}
+    </div>
+    <ul class="tiktok-config-list">
+      {% for c in snapchat_linked %}
+      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}">
+        <div class="tiktok-config-card__main">
+          <div class="tiktok-config-card__head">
+            <strong class="tiktok-config-card__title">{{ c.name }}</strong>
+            <span class="badge badge-active">{{ t('servers.connected') }}</span>
+          </div>
+          {% if c.internal_username %}
+          <p class="tiktok-config-card__meta sub">{{ t('servers.team_user') }} {{ c.internal_username }}</p>
+          {% endif %}
+        </div>
+        <div class="tiktok-config-card__actions">
+          <button type="button" class="btn btn-ghost btn-sm btn-equipo-warn js-oauth-disconnect" data-account-id="{{ c.id }}">
+            {{ t('servers.disconnect') }}
+          </button>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if platform.id == 'dailymotion' %}
+    <p class="sub servers-oauth-redirect">{{ t('servers.dailymotion_redirect_hint') }} <code>{{ dailymotion_redirect_uri }}</code></p>
+    <div class="server-modal__linked">
+    {% if dailymotion_oauth_configured %}
+    <a href="/oauth/dailymotion/connect" class="btn btn-dailymotion">
+      <span class="btn-dailymotion__icon" aria-hidden="true">▶</span>
+      {{ t('servers.connect_with_dailymotion') }}
+    </a>
+    {% else %}
+    <p class="sub">{{ t('servers.dailymotion_oauth_missing') }}</p>
+    {% endif %}
+    </div>
+    <ul class="tiktok-config-list">
+      {% for c in dailymotion_linked %}
+      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}">
+        <div class="tiktok-config-card__main">
+          <div class="tiktok-config-card__head">
+            <strong class="tiktok-config-card__title">{{ c.name }}</strong>
+            <span class="badge badge-active">{{ t('servers.connected') }}</span>
+          </div>
+          {% if c.internal_username %}
+          <p class="tiktok-config-card__meta sub">{{ t('servers.team_user') }} {{ c.internal_username }}</p>
+          {% endif %}
+        </div>
+        <div class="tiktok-config-card__actions">
+          <button type="button" class="btn btn-ghost btn-sm btn-equipo-warn js-oauth-disconnect" data-account-id="{{ c.id }}">
+            {{ t('servers.disconnect') }}
+          </button>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<script src="/static/js/ajax-search.js?v=1"></script>
+<script>
+  (function initServersAccordions() {
+    function bindAccordion(accordionId, triggerId, panelId, storageKey) {
+      var accordion = document.getElementById(accordionId);
+      var trigger = document.getElementById(triggerId);
+      var panel = document.getElementById(panelId);
+      if (!accordion || !trigger || !panel) return;
+
+      function setOpen(open) {
+        accordion.classList.toggle("pub-accordion--collapsed", !open);
+        trigger.setAttribute("aria-expanded", open ? "true" : "false");
+        panel.hidden = !open;
+        try {
+          localStorage.setItem(storageKey, open ? "1" : "0");
+        } catch (err) {}
+      }
+
+      var saved = null;
+      try {
+        saved = localStorage.getItem(storageKey);
+      } catch (err) {}
+      setOpen(saved !== "0");
+
+      trigger.addEventListener("click", function () {
+        setOpen(trigger.getAttribute("aria-expanded") !== "true");
+      });
+    }
+
+    bindAccordion(
+      "servers-platforms-accordion",
+      "servers-platforms-trigger",
+      "servers-platforms-panel",
+      "servers-platforms-accordion-open"
+    );
+  })();
+
+  (function () {
+    var platformMeta = {
+      {% for platform in platforms %}
+      "{{ platform.id }}": { name: {{ platform.name | tojson }}, icon: {{ platform.icon | tojson }} }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    };
+    var pageLang = {{ lang | tojson }};
+    var accountPickerDefaults = {
+      es: {
+        editServersTitle: "Editar servidores de",
+        editServersInfoTitle: "Editar servidores",
+        editServersHint: "Elige un servidor para revisar credenciales, probar la API y corregir errores antes de publicar.",
+        serverLinked: "Vinculado",
+        serverNotLinked: "Sin vincular"
+      },
+      en: {
+        editServersTitle: "Edit servers for",
+        editServersInfoTitle: "Edit servers",
+        editServersHint: "Pick a server to review credentials, test the API, and fix issues before publishing.",
+        serverLinked: "Linked",
+        serverNotLinked: "Not linked"
+      }
+    };
+    function resolvePickerI18n(key, value) {
+      if (value && String(value).indexOf("servers.") !== 0) return value;
+      var pack = accountPickerDefaults[pageLang] || accountPickerDefaults.es;
+      return pack[key] || value;
+    }
+    var accountI18n = {
+      edit: {{ t('servers.accounts_edit') | tojson }},
+      deleteAccount: {{ t('servers.accounts_delete') | tojson }},
+      toggle: {{ t('servers.accounts_toggle') | tojson }},
+      confirmDelete: {{ t('servers.accounts_confirm_delete') | tojson }},
+      modalEdit: {{ t('servers.accounts_modal_edit') | tojson }},
+      editServersTitle: resolvePickerI18n("editServersTitle", {{ t('servers.accounts_edit_servers_title') | tojson }}),
+      editServersInfoTitle: resolvePickerI18n("editServersInfoTitle", {{ t('servers.accounts_edit_servers_info_title') | tojson }}),
+      editServersHint: resolvePickerI18n("editServersHint", {{ t('servers.accounts_edit_servers_hint') | tojson }}),
+      serverLinked: resolvePickerI18n("serverLinked", {{ t('servers.accounts_server_linked') | tojson }}),
+      serverNotLinked: resolvePickerI18n("serverNotLinked", {{ t('servers.accounts_server_not_linked') | tojson }}),
+      colName: {{ t('servers.accounts_col_name') | tojson }},
+      colLinked: {{ t('servers.accounts_col_linked') | tojson }},
+      colActions: {{ t('servers.accounts_col_actions') | tojson }},
+      confirmDeleteGroup: {{ t('servers.accounts_confirm_delete_group') | tojson }},
+      modalCreate: {{ t('servers.accounts_modal_create') | tojson }},
+      nameRequired: {{ t('servers.accounts_name_required') | tojson }},
+      saved: {{ t('servers.accounts_saved') | tojson }},
+      network: {{ t('servers.network_error') | tojson }},
+      pageInfo: {{ t('team.page_info') | tojson }},
+      pageInfoCompact: {{ t('team.page_info_compact') | tojson }},
+      loading: {{ t('team.loading') | tojson }},
+      noResults: {{ t('team.no_results') | tojson }},
+      searchPlaceholder: {{ t('servers.accounts_search') | tojson }}
+    };
+    var accountsCache = [
+      {% for acc in server_accounts %}
+      {
+        id: {{ acc.id | tojson }},
+        name: {{ acc.name | tojson }},
+        platform_id: {{ acc.platform_id | tojson }},
+        platform: {{ acc.platform | tojson }},
+        active: {{ acc.active | tojson }},
+        source_kind: {{ acc.source_kind | default('manual') | tojson }},
+        source_ref: {{ acc.source_ref | default('') | tojson }}
+      }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ];
+    var groupI18n = {
+      edit: {{ t('servers.groups_edit') | tojson }},
+      deleteGroup: {{ t('servers.groups_delete') | tojson }},
+      toggle: {{ t('servers.groups_toggle') | tojson }},
+      confirmDelete: {{ t('servers.groups_confirm_delete') | tojson }},
+      modalCreate: {{ t('servers.groups_modal_create') | tojson }},
+      modalEdit: {{ t('servers.groups_modal_edit') | tojson }},
+      picksLegend: {{ t('servers.groups_accounts') | tojson }},
+      picksEditLegend: {{ t('servers.groups_accounts_edit') | tojson }},
+      picksEmpty: {{ t('servers.groups_picks_empty') | tojson }},
+      picksAllTaken: {{ t('servers.groups_picks_all_taken') | tojson }},
+      picksTaken: {{ t('servers.groups_picks_taken') | tojson }},
+      picksUnlinked: {{ t('servers.groups_picks_unlinked') | tojson }},
+      network: {{ t('servers.network_error') | tojson }},
+      pageInfo: {{ t('team.page_info') | tojson }},
+      pageInfoCompact: {{ t('team.page_info_compact') | tojson }},
+      loading: {{ t('team.loading') | tojson }},
+      noResults: {{ t('team.no_results') | tojson }},
+      searchPlaceholder: {{ t('servers.groups_list_search') | tojson }}
+    };
+    var groupCredOptions = [
+      {% for acc in group_account_choices %}
+      {
+        key: {{ acc.key | tojson }},
+        id: {{ acc.key | tojson }},
+        platform_id: {{ acc.platform_id | tojson }},
+        platform_ids: {{ acc.platform_ids | tojson }},
+        account_id: {{ acc.account_id | tojson }},
+        account_ids: {{ acc.account_ids | tojson }},
+        platform: {{ acc.platform | tojson }},
+        platforms: {{ acc.platforms | tojson }},
+        name: {{ acc.name | tojson }},
+        selectable: {{ acc.selectable | default(true) | tojson }}
+      }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ];
+    var titlePrefix = {{ t('servers.modal_accounts_prefix', platform='__NAME__') | tojson }};
+    var titleCredentials = {{ t('servers.modal_api_credentials') | tojson }};
+    var confirmMsg = {{ t('servers.disconnect_confirm') | tojson }};
+    var errorMsg = {{ t('servers.disconnect_error') | tojson }};
+    var networkMsg = {{ t('servers.network_error') | tojson }};
+    var modal = document.getElementById("server-accounts-modal");
+    var modalTitle = document.getElementById("server-modal-title");
+    var modalBody = document.getElementById("server-modal-body");
+    var templatesRoot = document.getElementById("server-modal-templates");
+    var limitsModal = document.getElementById("limits-modal");
+    var limitsTrigger = document.getElementById("open-limits-modal");
+    var groupsInfoModal = document.getElementById("groups-info-modal");
+    var groupsInfoTrigger = document.getElementById("open-groups-info-modal");
+    var accountsInfoModal = document.getElementById("accounts-info-modal");
+    var accountsInfoTrigger = document.getElementById("open-accounts-info-modal");
+    var lastAccountsTrigger = null;
+    var accountPickerReturnState = null;
+
+    function releaseModalFocus(modalEl, returnFocusEl) {
+      var active = document.activeElement;
+      if (!active || !modalEl || !modalEl.contains(active)) return;
+      if (returnFocusEl && typeof returnFocusEl.focus === "function") {
+        returnFocusEl.focus();
+      } else {
+        active.blur();
+      }
+    }
+
+    function blurModalFocus(modalEl) {
+      if (!modalEl) return;
+      var active = document.activeElement;
+      if (active && modalEl.contains(active)) {
+        active.blur();
+      }
+    }
+
+    function hideModal(modalEl, returnFocusEl) {
+      if (!modalEl) return;
+      releaseModalFocus(modalEl, returnFocusEl);
+      blurModalFocus(modalEl);
+      modalEl.classList.remove("is-open");
+      modalEl.setAttribute("aria-hidden", "true");
+    }
+
+    function showModal(modalEl) {
+      if (!modalEl) return;
+      modalEl.setAttribute("aria-hidden", "false");
+      modalEl.classList.add("is-open");
+    }
+
+    function bindDisconnectButtons(root) {
+      root.querySelectorAll(".js-tiktok-disconnect").forEach(function (btn) {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", function () {
+          var id = btn.getAttribute("data-config-id");
+          if (!id) return;
+          if (!confirm(confirmMsg)) return;
+          btn.disabled = true;
+          fetch("/admin/api/tiktokers/" + encodeURIComponent(id), {
+            method: "DELETE",
+            credentials: "same-origin",
+            headers: { Accept: "application/json" },
+          })
+            .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+            .then(function (x) {
+              if (!x.res.ok || !x.body.ok) {
+                alert((x.body && x.body.error) || errorMsg);
+                btn.disabled = false;
+                return;
+              }
+              if (typeof window.__reloadServerAccounts === "function") {
+                window.__reloadServerAccounts();
+              } else {
+                window.location.reload();
+              }
+            })
+            .catch(function () {
+              alert(networkMsg);
+              btn.disabled = false;
+            });
+        });
+      });
+      root.querySelectorAll(".js-oauth-disconnect").forEach(function (btn) {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", function () {
+          var id = btn.getAttribute("data-account-id");
+          if (!id) return;
+          if (!confirm(confirmMsg)) return;
+          btn.disabled = true;
+          fetch("/admin/api/oauth/" + encodeURIComponent(id), {
+            method: "DELETE",
+            credentials: "same-origin",
+            headers: { Accept: "application/json" },
+          })
+            .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+            .then(function (x) {
+              if (!x.res.ok || !x.body.ok) {
+                alert((x.body && x.body.error) || errorMsg);
+                btn.disabled = false;
+                return;
+              }
+              if (typeof window.__reloadServerAccounts === "function") {
+                window.__reloadServerAccounts();
+              } else {
+                window.location.reload();
+              }
+            })
+            .catch(function () {
+              alert(networkMsg);
+              btn.disabled = false;
+            });
+        });
+      });
+    }
+
+    function testPlatform(platformId, msgEl, btn, form) {
+      if (btn) btn.disabled = true;
+      var payload = null;
+      if (form) {
+        var fd = new FormData(form);
+        payload = {
+          name: fd.get("name") || "",
+          client_id: fd.get("client_id") || "",
+          client_secret: fd.get("client_secret") || "",
+          access_token: fd.get("access_token") || "",
+          extra: fd.get("extra") || "",
+        };
+      }
+      return fetch("/admin/api/platforms/" + encodeURIComponent(platformId) + "/test", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload || {}),
+      })
+        .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+        .then(function (x) {
+          if (btn) btn.disabled = false;
+          var ok = !!(x.body && x.body.ok);
+          var message = (x.body && x.body.message) || networkMsg;
+          if (msgEl) {
+            msgEl.hidden = false;
+            msgEl.textContent = message;
+            msgEl.className = "sub js-api-form-msg " + (ok ? "api-msg--ok" : "api-msg--fail");
+          }
+          if (!x.res.ok && !x.body) alert(networkMsg);
+          return x.body;
+        })
+        .catch(function () {
+          if (btn) btn.disabled = false;
+          if (msgEl) {
+            msgEl.hidden = false;
+            msgEl.textContent = networkMsg;
+            msgEl.className = "sub js-api-form-msg api-msg--fail";
+          } else {
+            alert(networkMsg);
+          }
+        });
+    }
+
+    function bindApiForms(root) {
+      root.querySelectorAll(".js-api-form").forEach(function (form) {
+        if (form.dataset.bound) return;
+        form.dataset.bound = "1";
+        form.addEventListener("submit", function (e) {
+          e.preventDefault();
+          var pid = form.getAttribute("data-platform-id");
+          var fd = new FormData(form);
+          var payload = {
+            name: fd.get("name") || "",
+            client_id: fd.get("client_id") || "",
+            client_secret: fd.get("client_secret") || "",
+            access_token: fd.get("access_token") || "",
+            extra: fd.get("extra") || "",
+          };
+          var msgEl = form.querySelector(".js-api-form-msg");
+          var submit = form.querySelector('button[type="submit"]');
+          submit.disabled = true;
+          fetch("/admin/api/platforms/" + encodeURIComponent(pid) + "/credentials", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify(payload),
+          })
+            .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+            .then(function (x) {
+              submit.disabled = false;
+              if (x.body && x.body.ok) {
+                if (typeof window.__reloadServerGroups === "function") {
+                  window.__reloadServerGroups();
+                }
+                if (typeof window.__reloadServerAccounts === "function") {
+                  window.__reloadServerAccounts();
+                }
+                if (modal && modal.classList.contains("is-open")) {
+                  closeModal();
+                }
+                return;
+              }
+              if (msgEl) {
+                msgEl.hidden = false;
+                msgEl.textContent = (x.body && (x.body.message || x.body.error)) || networkMsg;
+                msgEl.className = "sub js-api-form-msg api-msg--fail";
+              }
+            })
+            .catch(function () {
+              submit.disabled = false;
+              if (msgEl) {
+                msgEl.hidden = false;
+                msgEl.textContent = networkMsg;
+                msgEl.className = "sub js-api-form-msg api-msg--fail";
+              }
+            });
+        });
+      });
+      root.querySelectorAll(".js-test-platform").forEach(function (btn) {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", function () {
+          var pid = btn.getAttribute("data-platform-id");
+          var form = btn.closest(".js-api-form");
+          var msgEl = form ? form.querySelector(".js-api-form-msg") : null;
+          testPlatform(pid, msgEl, btn, form);
+        });
+      });
+    }
+
+    function setModalTitle(platformId, platformName) {
+      if (!modalTitle) return;
+      var prefix = titlePrefix.replace("__NAME__", platformName);
+      modalTitle.textContent = prefix + " " + titleCredentials;
+    }
+
+    function resetApiFormForCreate(root) {
+      if (!root) return;
+      root.querySelectorAll(".js-api-form input, .js-api-form textarea").forEach(function (input) {
+        if (input.type === "checkbox" || input.type === "radio") {
+          input.checked = false;
+          return;
+        }
+        input.value = "";
+      });
+      root.querySelectorAll(".js-api-form-msg").forEach(function (msgEl) {
+        msgEl.hidden = true;
+        msgEl.textContent = "";
+      });
+    }
+
+    function openModal(platformId, platformName, trigger, modalOptions) {
+      var tpl = templatesRoot.querySelector('[data-platform-template="' + platformId + '"]');
+      if (!tpl || !modal || !modalBody) return;
+      var options = modalOptions;
+      var accountName = "";
+      var isCreate = false;
+      var fromAccountPicker = false;
+      if (typeof options === "string") {
+        accountName = options;
+      } else if (options && typeof options === "object") {
+        accountName = options.accountName || "";
+        isCreate = !!options.create;
+        fromAccountPicker = !!options.fromAccountPicker;
+      }
+      if (!fromAccountPicker) {
+        accountPickerReturnState = null;
+      }
+      if (accountPickerModal && accountPickerModal.classList.contains("is-open")) {
+        blurModalFocus(accountPickerModal);
+        accountPickerModal.classList.remove("is-open");
+        accountPickerModal.setAttribute("aria-hidden", "true");
+      }
+      blurModalFocus(modal);
+      lastAccountsTrigger = trigger || null;
+      setModalTitle(platformId, platformName);
+      modalBody.innerHTML = tpl.innerHTML;
+      if (isCreate) {
+        resetApiFormForCreate(modalBody);
+      } else if (accountName) {
+        var nameInput = modalBody.querySelector('input[name="name"]');
+        if (nameInput) nameInput.value = accountName;
+      }
+      bindDisconnectButtons(modalBody);
+      bindApiForms(modalBody);
+      if (fromAccountPicker) {
+        modal.classList.add("equipo-modal--stack");
+      } else {
+        modal.classList.remove("equipo-modal--stack");
+      }
+      showModal(modal);
+      document.body.style.overflow = "hidden";
+      if (isCreate) {
+        var focusInput = modalBody.querySelector('.js-api-form input[name="name"]');
+        if (focusInput && typeof focusInput.focus === "function") focusInput.focus();
+      }
+    }
+
+    function restoreAccountPickerModal(returnState) {
+      if (!returnState || !accountPickerModal) return;
+      editingGroupKey = returnState.key || "";
+      editingGroupName = returnState.name || "";
+      lastAccountTrigger = returnState.trigger || null;
+      syncAccountPickerStaticText();
+      if (accountPickerTitleText) {
+        accountPickerTitleText.textContent =
+          accountI18n.editServersTitle + (returnState.name ? " " + returnState.name : "");
+      }
+      var refreshList = function () {
+        renderAccountPickerList(returnState.key, returnState.name);
+        showModal(accountPickerModal);
+        document.body.style.overflow = "hidden";
+      };
+      if (typeof window.__reloadServerAccounts === "function") {
+        window.__reloadServerAccounts().then(refreshList).catch(refreshList);
+      } else {
+        refreshList();
+      }
+    }
+
+    function closeModal() {
+      if (!modal) return;
+      var returnState = accountPickerReturnState;
+      hideModal(modal, lastAccountsTrigger);
+      modal.classList.remove("equipo-modal--stack");
+      modalBody.innerHTML = "";
+      lastAccountsTrigger = null;
+      accountPickerReturnState = null;
+      if (returnState) {
+        restoreAccountPickerModal(returnState);
+        return;
+      }
+      document.body.style.overflow = "";
+    }
+
+    function closeLimits() {
+      if (!limitsModal) return;
+      releaseModalFocus(limitsModal, limitsTrigger);
+      limitsModal.classList.remove("is-open");
+      limitsModal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+    }
+
+    function closeGroupsInfo() {
+      if (!groupsInfoModal) return;
+      releaseModalFocus(groupsInfoModal, groupsInfoTrigger);
+      groupsInfoModal.classList.remove("is-open");
+      groupsInfoModal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+    }
+
+    function closeAccountsInfo() {
+      if (!accountsInfoModal) return;
+      releaseModalFocus(accountsInfoModal, accountsInfoTrigger);
+      accountsInfoModal.classList.remove("is-open");
+      accountsInfoModal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+    }
+
+    var accountPickerInfoModal = document.getElementById("account-picker-info-modal");
+    var accountPickerInfoTrigger = document.getElementById("open-account-picker-info-modal");
+    var lastAccountPickerInfoTrigger = null;
+
+    function openAccountPickerInfo(trigger) {
+      if (!accountPickerInfoModal) return;
+      lastAccountPickerInfoTrigger = trigger || accountPickerInfoTrigger || null;
+      showModal(accountPickerInfoModal);
+      document.body.style.overflow = "hidden";
+    }
+
+    function closeAccountPickerInfo() {
+      if (!accountPickerInfoModal) return;
+      hideModal(accountPickerInfoModal, lastAccountPickerInfoTrigger);
+      lastAccountPickerInfoTrigger = null;
+      if (accountPickerModal && accountPickerModal.classList.contains("is-open")) {
+        document.body.style.overflow = "hidden";
+      } else {
+        document.body.style.overflow = "";
+      }
+    }
+
+    document.querySelectorAll(".js-open-accounts-modal").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        openModal(
+          btn.getAttribute("data-platform-id"),
+          btn.getAttribute("data-platform-name"),
+          btn,
+          { create: true }
+        );
+      });
+    });
+
+    document.getElementById("open-limits-modal").addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      limitsModal.classList.add("is-open");
+      limitsModal.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+    });
+    document.getElementById("open-limits-modal").addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      e.stopPropagation();
+      limitsModal.classList.add("is-open");
+      limitsModal.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+    });
+    if (groupsInfoTrigger && groupsInfoModal) {
+      groupsInfoTrigger.addEventListener("click", function () {
+        groupsInfoModal.classList.add("is-open");
+        groupsInfoModal.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+      });
+      groupsInfoModal.querySelectorAll("[data-close-groups-info-modal]").forEach(function (el) {
+        el.addEventListener("click", closeGroupsInfo);
+      });
+    }
+    if (accountsInfoTrigger && accountsInfoModal) {
+      accountsInfoTrigger.addEventListener("click", function () {
+        accountsInfoModal.classList.add("is-open");
+        accountsInfoModal.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+      });
+      accountsInfoModal.querySelectorAll("[data-close-accounts-info-modal]").forEach(function (el) {
+        el.addEventListener("click", closeAccountsInfo);
+      });
+    }
+    if (accountPickerInfoTrigger && accountPickerInfoModal) {
+      accountPickerInfoTrigger.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openAccountPickerInfo(accountPickerInfoTrigger);
+      });
+      accountPickerInfoModal.querySelectorAll("[data-close-account-picker-info-modal]").forEach(function (el) {
+        el.addEventListener("click", closeAccountPickerInfo);
+      });
+    }
+    limitsModal.querySelectorAll("[data-close-limits-modal]").forEach(function (el) {
+      el.addEventListener("click", closeLimits);
+    });
+    modal.querySelectorAll("[data-close-server-modal]").forEach(function (el) {
+      el.addEventListener("click", closeModal);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      if (modal.classList.contains("is-open")) closeModal();
+      else if (accountCreateModal && accountCreateModal.classList.contains("is-open")) closeAccountCreateModal();
+      else if (accountPickerInfoModal && accountPickerInfoModal.classList.contains("is-open")) closeAccountPickerInfo();
+      else if (accountPickerModal && accountPickerModal.classList.contains("is-open")) closeAccountPickerModal();
+      else if (limitsModal.classList.contains("is-open")) closeLimits();
+      else if (groupsInfoModal && groupsInfoModal.classList.contains("is-open")) closeGroupsInfo();
+      else if (accountsInfoModal && accountsInfoModal.classList.contains("is-open")) closeAccountsInfo();
+    });
+
+    var groupModal = document.getElementById("server-group-modal");
+    var groupForm = document.getElementById("servers-group-form");
+    var groupList = document.getElementById("servers-groups-list");
+    var groupScroll = document.getElementById("servers-groups-scroll");
+    var groupTitle = document.getElementById("server-group-modal-title");
+    var groupIdInput = document.getElementById("servers-group-id");
+    var groupNameInput = document.getElementById("servers-group-name");
+    var groupSearchInput = document.getElementById("servers-group-search");
+    var groupPicksList = document.getElementById("servers-group-picks-list");
+    var groupPicksEmpty = document.getElementById("servers-group-picks-empty");
+    var groupMsg = document.getElementById("servers-group-form-msg");
+    var lastGroupTrigger = null;
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function attrEsc(value) {
+      return escapeHtml(value).replace(/'/g, "&#39;");
+    }
+
+    function isServersSyncLayout() {
+      return window.matchMedia("(max-width: 719px)").matches;
+    }
+
+    function syncServersListColumns(listEl) {
+      if (!listEl) return;
+      listEl.style.removeProperty("--servers-list-name-col");
+      listEl.style.removeProperty("--servers-list-actions-col");
+      if (!isServersSyncLayout()) return;
+      var titles = listEl.querySelectorAll(".servers-list__title");
+      var actions = listEl.querySelectorAll(".servers-list__actions");
+      if (!titles.length) return;
+      var nameMax = 0;
+      var actionsMax = 0;
+      titles.forEach(function (el) {
+        nameMax = Math.max(nameMax, el.scrollWidth);
+      });
+      actions.forEach(function (el) {
+        actionsMax = Math.max(actionsMax, el.scrollWidth);
+      });
+      listEl.style.setProperty("--servers-list-name-col", nameMax + "px");
+      if (actionsMax > 0) {
+        listEl.style.setProperty("--servers-list-actions-col", actionsMax + "px");
+      }
+    }
+
+    function afterServersListRender(listEl) {
+      syncServersListColumns(listEl);
+      requestAnimationFrame(function () {
+        syncServersListColumns(listEl);
+      });
+    }
+
+    var serversListResizeTimer = null;
+    window.addEventListener("resize", function () {
+      clearTimeout(serversListResizeTimer);
+      serversListResizeTimer = setTimeout(function () {
+        syncServersListColumns(document.getElementById("servers-accounts-list"));
+        syncServersListColumns(document.getElementById("servers-groups-list"));
+      }, 120);
+    });
+
+    function renderEquipoPageInfo(el, page, totalPages, labels) {
+      if (!el) return;
+      var compact = (labels.pageInfoCompact || "{page} / {total}")
+        .replace("{page}", String(page))
+        .replace("{total}", String(totalPages));
+      var aria = (labels.pageInfo || "Page {page} of {total}")
+        .replace("{page}", String(page))
+        .replace("{total}", String(totalPages));
+      el.innerHTML =
+        '<span class="equipo-members-page-info__wrap" role="status" aria-label="' +
+        attrEsc(aria) +
+        '">' +
+        '<svg class="equipo-members-page-info__icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />' +
+        "</svg>" +
+        '<span class="equipo-members-page-info__text">' +
+        escapeHtml(compact) +
+        "</span></span>";
+    }
+
+    function pickLabel(opt) {
+      return opt.name || "";
+    }
+
+    function optionPlatformIds(opt) {
+      if (opt.platform_ids && opt.platform_ids.length) return opt.platform_ids;
+      return opt.platform_id ? [opt.platform_id] : [];
+    }
+
+    function optionAccountIds(opt) {
+      if (opt.account_ids && opt.account_ids.length) return opt.account_ids;
+      return opt.account_id ? [opt.account_id] : [];
+    }
+
+    function matchesGroupSearch(opt, query) {
+      if (!query) return true;
+      var parts = [opt.name || ""];
+      if (opt.platform) parts.push(opt.platform);
+      if (opt.platforms && opt.platforms.length) parts = parts.concat(opt.platforms);
+      return parts.join(" ").toLowerCase().indexOf(query) !== -1;
+    }
+
+    function accountIdsToGroupKeys(accountIds) {
+      var idSet = {};
+      (accountIds || []).forEach(function (id) {
+        if (id) idSet[id] = true;
+      });
+      var keys = {};
+      groupCredOptions.forEach(function (opt) {
+        var hasMatch = optionAccountIds(opt).some(function (id) {
+          return !!idSet[id];
+        });
+        if (hasMatch) keys[opt.key] = true;
+      });
+      return keys;
+    }
+
+    function takenGroupMemberKeys(excludeGroupId) {
+      var takenIds = {};
+      groupsCache.forEach(function (g) {
+        if (excludeGroupId && g.id === excludeGroupId) return;
+        (g.members || g.platforms || []).forEach(function (member) {
+          var memberId = member.id || member.account_id;
+          if (memberId) takenIds[memberId] = true;
+        });
+      });
+      var takenKeys = {};
+      groupCredOptions.forEach(function (opt) {
+        var isTaken = optionAccountIds(opt).some(function (id) {
+          return !!takenIds[id];
+        });
+        if (isTaken) takenKeys[opt.key] = true;
+      });
+      return takenKeys;
+    }
+
+    function renderGroupPicks(preselected) {
+      if (!groupPicksList) return;
+      var selected = preselected || {};
+      if (!preselected) {
+        groupForm.querySelectorAll('input[name="group_members"]:checked').forEach(function (el) {
+          selected[el.value] = true;
+        });
+      }
+      var editingGroupId = (groupIdInput && groupIdInput.value || "").trim();
+      var takenKeys = takenGroupMemberKeys(editingGroupId);
+      var query = (groupSearchInput && groupSearchInput.value || "").trim().toLowerCase();
+      var visible = 0;
+      var selectableVisible = 0;
+      var html = "";
+      groupCredOptions.forEach(function (opt) {
+        var selectable = opt.selectable !== false && optionPlatformIds(opt).length > 0;
+        var isTaken = !!takenKeys[opt.key] && !selected[opt.key];
+        var isSelected = !!selected[opt.key];
+        if (!isSelected && !matchesGroupSearch(opt, query)) return;
+        visible += 1;
+        if (selectable && !isTaken) selectableVisible += 1;
+        var checked = isSelected ? " checked" : "";
+        var disabled = !selectable || isTaken ? " disabled" : "";
+        var rowClass = "servers-group-picks__row";
+        if (!selectable || isTaken) rowClass += " servers-group-picks__row--disabled";
+        var statusLabel = "";
+        if (!selectable) statusLabel = groupI18n.picksUnlinked;
+        else if (isTaken) statusLabel = groupI18n.picksTaken;
+        html +=
+          '<div class="' +
+          rowClass +
+          '">' +
+          '<div class="servers-group-picks__row-main">' +
+          '<label class="servers-group-picks__item">' +
+          '<input type="checkbox" name="group_members" value="' +
+          escapeHtml(opt.key) +
+          '"' +
+          checked +
+          disabled +
+          " />" +
+          '<span class="servers-group-picks__label">' +
+          escapeHtml(pickLabel(opt)) +
+          "</span>" +
+          (statusLabel
+            ? '<span class="servers-group-picks__status">' + escapeHtml(statusLabel) + "</span>"
+            : "") +
+          "</label>" +
+          "</div>" +
+          "</div>";
+      });
+      groupPicksList.innerHTML = html;
+      if (groupPicksEmpty) {
+        groupPicksEmpty.hidden = visible > 0;
+        if (!visible) {
+          groupPicksEmpty.textContent = groupI18n.picksEmpty;
+        } else if (!selectableVisible) {
+          groupPicksEmpty.hidden = false;
+          groupPicksEmpty.textContent = groupI18n.picksAllTaken;
+        }
+      }
+    }
+
+    function selectedGroupMembers() {
+      var selectedKeys = {};
+      groupForm.querySelectorAll('input[name="group_members"]:checked').forEach(function (el) {
+        selectedKeys[el.value] = true;
+      });
+      var ids = [];
+      groupCredOptions.forEach(function (opt) {
+        if (!selectedKeys[opt.key]) return;
+        optionAccountIds(opt).forEach(function (id) {
+          if (ids.indexOf(id) === -1) ids.push(id);
+        });
+      });
+      return ids;
+    }
+
+    function setGroupMembers(accountIds) {
+      var set = accountIdsToGroupKeys(accountIds);
+      if (groupSearchInput) groupSearchInput.value = "";
+      renderGroupPicks(set);
+    }
+
+    function closeGroupModal() {
+      if (!groupModal) return;
+      releaseModalFocus(groupModal, lastGroupTrigger);
+      groupModal.classList.remove("is-open");
+      groupModal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+      lastGroupTrigger = null;
+    }
+
+    var groupPicksLegend = groupForm ? groupForm.querySelector(".servers-group-picks legend") : null;
+
+    function updateGroupPicksLegend(isEdit) {
+      if (!groupPicksLegend) return;
+      groupPicksLegend.textContent = isEdit ? groupI18n.picksEditLegend : groupI18n.picksLegend;
+    }
+
+    function openGroupModal(group, trigger) {
+      if (!groupModal || !groupForm) return;
+      var showModalNow = function (resolvedGroup) {
+        var g = resolvedGroup || group;
+        lastGroupTrigger = trigger || null;
+        groupTitle.textContent = g ? groupI18n.modalEdit : groupI18n.modalCreate;
+        updateGroupPicksLegend(!!g);
+        groupIdInput.value = g ? g.id : "";
+        groupNameInput.value = g ? g.name : "";
+        setGroupMembers(
+          g
+            ? (g.members || g.platforms || []).map(function (m) {
+                return m.id || m.account_id;
+              })
+            : []
+        );
+        if (groupMsg) {
+          groupMsg.hidden = true;
+          groupMsg.textContent = "";
+        }
+        groupModal.classList.add("is-open");
+        groupModal.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+        groupNameInput.focus();
+      };
+      Promise.all([
+        typeof reloadServerAccounts === "function" ? reloadServerAccounts() : Promise.resolve(),
+        syncGroupsCache(),
+      ])
+        .then(function () {
+          var resolved = group && group.id ? (groupById(group.id) || group) : group;
+          showModalNow(resolved);
+        })
+        .catch(function () {
+          showModalNow(group);
+        });
+    }
+
+    function renderGroupRow(group) {
+      var inactive = !group.active;
+      var checked = group.active ? " checked" : "";
+      return (
+        '<li class="servers-list__row servers-group-row' +
+        (inactive ? " servers-group-row--inactive" : "") +
+        '" data-group-id="' +
+        escapeHtml(group.id) +
+        '">' +
+        '<div class="servers-list__main servers-group-row__main">' +
+        '<span class="servers-list__name servers-list__title">' +
+        escapeHtml(group.name) +
+        "</span>" +
+        "</div>" +
+        '<div class="servers-list__actions servers-group-row__actions">' +
+        '<button type="button" class="btn btn-ghost btn-sm js-group-edit" data-group-id="' +
+        attrEsc(group.id) +
+        '">' +
+        escapeHtml(groupI18n.edit) +
+        "</button>" +
+        '<label class="user-active-toggle" title="' +
+        attrEsc(groupI18n.toggle) +
+        '">' +
+        '<input type="checkbox" class="user-active-toggle__input js-group-toggle"' +
+        checked +
+        ' aria-label="' +
+        attrEsc(groupI18n.toggle) +
+        '" />' +
+        '<span class="user-active-toggle__ui" aria-hidden="true"></span>' +
+        "</label>" +
+        '<button type="button" class="btn btn-ghost btn-sm btn-user-delete js-group-delete" data-group-id="' +
+        attrEsc(group.id) +
+        '" title="' +
+        attrEsc(groupI18n.deleteGroup) +
+        '" aria-label="' +
+        attrEsc(groupI18n.deleteGroup) +
+        '">' +
+        '<svg class="icon-trash" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />' +
+        "</svg>" +
+        "</button>" +
+        "</div>" +
+        "</li>"
+      );
+    }
+
+    var groupsCache = [];
+    var groupsById = {};
+
+    function mergeGroupsIntoCache(groups) {
+      (groups || []).forEach(function (g) {
+        if (!g || !g.id) return;
+        groupsById[g.id] = g;
+        var idx = groupsCache.findIndex(function (x) { return x.id === g.id; });
+        if (idx >= 0) groupsCache[idx] = g;
+        else groupsCache.push(g);
+      });
+    }
+    var groupEmpty = document.getElementById("servers-groups-empty");
+    var groupNoResults = document.getElementById("servers-groups-no-results");
+    var groupLoading = document.getElementById("servers-groups-loading");
+    var groupPagination = document.getElementById("servers-groups-pagination");
+    var groupPrev = document.getElementById("servers-groups-prev");
+    var groupNext = document.getElementById("servers-groups-next");
+    var groupPageInfo = document.getElementById("servers-groups-page-info");
+    var groupSearch = document.getElementById("servers-groups-search");
+    var groupSearchClear = document.getElementById("servers-groups-search-clear");
+    var groupPerPage = document.getElementById("servers-groups-per-page");
+    var groupsState = { q: "", page: 1, perPage: "10", loading: false, requestId: 0 };
+
+    function fetchGroupsList(params) {
+      return fetch("/admin/api/server-groups/list?" + params.toString(), {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      }).then(function (r) {
+        return r.json().then(function (j) {
+          return { res: r, body: j };
+        });
+      });
+    }
+
+    function fetchGroupsListWithRetry(params, retriesLeft) {
+      return fetchGroupsList(params).catch(function () {
+        if (retriesLeft <= 0) throw new Error("network");
+        return new Promise(function (resolve) {
+          window.setTimeout(function () {
+            resolve(fetchGroupsListWithRetry(params, retriesLeft - 1));
+          }, 450);
+        });
+      });
+    }
+
+    function syncGroupsCache() {
+      var params = new URLSearchParams();
+      params.set("page", "1");
+      params.set("per_page", "all");
+      return fetchGroupsListWithRetry(params, 2)
+        .then(function (x) {
+          if (!x.body || !x.body.ok) return;
+          groupsCache = x.body.groups || [];
+          groupsById = {};
+          mergeGroupsIntoCache(groupsCache);
+          if (groupModal && groupModal.classList.contains("is-open")) {
+            renderGroupPicks();
+          }
+        })
+        .catch(function () {});
+    }
+
+    function setGroupsListVisible(visible) {
+      if (groupScroll) groupScroll.hidden = !visible;
+    }
+
+    function renderManualGroupsList(groups) {
+      if (!groupList) return;
+      if (!groups.length) {
+        groupList.innerHTML = "";
+        setGroupsListVisible(false);
+        return;
+      }
+      if (groupEmpty) groupEmpty.hidden = true;
+      groupList.innerHTML = groups.map(renderGroupRow).join("");
+      setGroupsListVisible(true);
+      afterServersListRender(groupList);
+    }
+
+    function updateGroupsPagination(data) {
+      if (!groupPagination || !groupPrev || !groupNext || !groupPageInfo) return;
+      var show = data.total > 0 && data.total_pages > 1;
+      groupPagination.hidden = !show;
+      if (!show) return;
+      groupPrev.disabled = !data.has_prev;
+      groupNext.disabled = !data.has_next;
+      groupPrev.classList.toggle("comment-inbox-pagination__off", !data.has_prev);
+      groupNext.classList.toggle("comment-inbox-pagination__off", !data.has_next);
+      renderEquipoPageInfo(groupPageInfo, data.page, data.total_pages, groupI18n);
+    }
+
+    function setGroupsSearchClearVisible(visible) {
+      if (groupSearchClear) groupSearchClear.hidden = !visible;
+    }
+
+    function loadManualGroups(page, q) {
+      if (!groupList) return;
+      groupsState.page = page || 1;
+      groupsState.q = q == null ? groupsState.q : q;
+      var reqId = ++groupsState.requestId;
+      groupsState.loading = true;
+      if (groupLoading) groupLoading.hidden = false;
+      if (groupEmpty) groupEmpty.hidden = true;
+      if (groupNoResults) groupNoResults.hidden = true;
+      setGroupsListVisible(false);
+
+      var params = new URLSearchParams();
+      params.set("page", String(groupsState.page));
+      params.set("per_page", String(groupsState.perPage || "10"));
+      if (groupsState.q) params.set("q", groupsState.q);
+
+      fetchGroupsListWithRetry(params, 2)
+        .then(function (x) {
+          if (reqId !== groupsState.requestId) return;
+          groupsState.loading = false;
+          if (groupLoading) groupLoading.hidden = true;
+          if (!x.res.ok || !x.body || !x.body.ok) return;
+          var data = x.body;
+          mergeGroupsIntoCache(data.groups);
+          groupsState.page = data.page;
+          if (data.per_page != null) {
+            groupsState.perPage = String(data.per_page);
+            if (groupPerPage && groupPerPage.value !== groupsState.perPage) {
+              groupPerPage.value = groupsState.perPage;
+            }
+          }
+          if (!data.groups.length && data.page > 1 && data.total > 0) {
+            loadManualGroups(data.page - 1, groupsState.q);
+            return;
+          }
+          if (data.groups.length) {
+            renderManualGroupsList(data.groups);
+            if (groupEmpty) groupEmpty.hidden = true;
+            if (groupNoResults) groupNoResults.hidden = true;
+          } else if (groupsState.q) {
+            groupList.innerHTML = "";
+            setGroupsListVisible(false);
+            if (groupNoResults) groupNoResults.hidden = false;
+            if (groupEmpty) groupEmpty.hidden = true;
+          } else {
+            groupList.innerHTML = "";
+            setGroupsListVisible(false);
+            if (groupEmpty) groupEmpty.hidden = false;
+            if (groupNoResults) groupNoResults.hidden = true;
+          }
+          updateGroupsPagination(data);
+        })
+        .catch(function () {
+          if (reqId !== groupsState.requestId) return;
+          groupsState.loading = false;
+          if (groupLoading) groupLoading.hidden = true;
+        });
+    }
+
+    function reloadServerGroups() {
+      return syncGroupsCache().then(function () {
+        return loadManualGroups(groupsState.page, groupsState.q);
+      });
+    }
+    window.__reloadServerGroups = reloadServerGroups;
+
+    function groupById(id) {
+      return groupsById[id] || groupsCache.find(function (g) { return g.id === id; }) || null;
+    }
+
+    document.getElementById("servers-group-create").addEventListener("click", function () {
+      openGroupModal(null, this);
+    });
+
+    if (groupModal) {
+      groupModal.querySelectorAll("[data-close-group-modal]").forEach(function (el) {
+        el.addEventListener("click", closeGroupModal);
+      });
+    }
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && groupModal && groupModal.classList.contains("is-open")) {
+        closeGroupModal();
+      }
+    });
+
+    if (groupForm) {
+      if (groupSearchInput) {
+        groupSearchInput.addEventListener("input", renderGroupPicks);
+      }
+      groupForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var id = (groupIdInput.value || "").trim();
+        var payload = {
+          name: (groupNameInput.value || "").trim(),
+          account_ids: selectedGroupMembers(),
+        };
+        var saveBtn = document.getElementById("servers-group-save");
+        if (saveBtn) saveBtn.disabled = true;
+        fetch(id ? "/admin/api/server-groups/" + encodeURIComponent(id) : "/admin/api/server-groups", {
+          method: id ? "PUT" : "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify(payload),
+        })
+          .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+          .then(function (x) {
+            if (saveBtn) saveBtn.disabled = false;
+            if (!x.body || !x.body.ok) {
+              if (groupMsg) {
+                groupMsg.hidden = false;
+                groupMsg.textContent = (x.body && x.body.error) || groupI18n.network;
+                groupMsg.className = "sub servers-group-form__msg api-msg--fail";
+              }
+              return;
+            }
+            closeGroupModal();
+            reloadServerGroups();
+          })
+          .catch(function () {
+            if (saveBtn) saveBtn.disabled = false;
+            if (groupMsg) {
+              groupMsg.hidden = false;
+              groupMsg.textContent = groupI18n.network;
+              groupMsg.className = "sub servers-group-form__msg api-msg--fail";
+            }
+          });
+      });
+    }
+
+    if (groupList) {
+      groupList.addEventListener("click", function (e) {
+        var editBtn = e.target.closest(".js-group-edit");
+        if (editBtn) {
+          var g = groupById(editBtn.getAttribute("data-group-id"));
+          if (g) openGroupModal(g, editBtn);
+          return;
+        }
+        var delBtn = e.target.closest(".js-group-delete");
+        if (delBtn) {
+          var delId = delBtn.getAttribute("data-group-id");
+          if (!delId || !confirm(groupI18n.confirmDelete)) return;
+          delBtn.disabled = true;
+          fetch("/admin/api/server-groups/" + encodeURIComponent(delId), {
+            method: "DELETE",
+            credentials: "same-origin",
+            headers: { Accept: "application/json" },
+          })
+            .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+            .then(function (x) {
+              if (!x.body || !x.body.ok) {
+                alert((x.body && x.body.error) || groupI18n.network);
+                delBtn.disabled = false;
+                return;
+              }
+              reloadServerGroups();
+            })
+            .catch(function () {
+              alert(groupI18n.network);
+              delBtn.disabled = false;
+            });
+        }
+      });
+
+      groupList.addEventListener("change", function (e) {
+        var toggle = e.target.closest(".js-group-toggle");
+        if (!toggle) return;
+        var row = toggle.closest("[data-group-id]");
+        if (!row) return;
+        var gid = row.getAttribute("data-group-id");
+        toggle.disabled = true;
+        fetch("/admin/api/server-groups/" + encodeURIComponent(gid) + "/active", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ active: !!toggle.checked }),
+        })
+          .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+          .then(function (x) {
+            toggle.disabled = false;
+            if (!x.body || !x.body.ok) {
+              toggle.checked = !toggle.checked;
+              alert((x.body && x.body.error) || groupI18n.network);
+              return;
+            }
+            reloadServerGroups();
+          })
+          .catch(function () {
+            toggle.disabled = false;
+            toggle.checked = !toggle.checked;
+            alert(groupI18n.network);
+          });
+      });
+    }
+
+    loadManualGroups(1, "");
+
+    if (groupSearch && window.wireAjaxSearch) {
+      window.wireAjaxSearch(groupSearch, groupSearchClear, function (q) {
+        loadManualGroups(1, q);
+      });
+    } else if (groupSearch) {
+      var groupSearchTimer = null;
+      groupSearch.addEventListener("input", function () {
+        var q = groupSearch.value.trim();
+        setGroupsSearchClearVisible(!!q);
+        clearTimeout(groupSearchTimer);
+        groupSearchTimer = setTimeout(function () {
+          loadManualGroups(1, q);
+        }, 320);
+      });
+    }
+
+    if (groupSearch) {
+      if (groupI18n.searchPlaceholder) {
+        groupSearch.placeholder = groupI18n.searchPlaceholder;
+        groupSearch.setAttribute("aria-label", groupI18n.searchPlaceholder);
+      }
+    }
+
+    if (groupSearchClear && groupSearch && !window.wireAjaxSearch) {
+      groupSearchClear.addEventListener("click", function () {
+        groupSearch.value = "";
+        setGroupsSearchClearVisible(false);
+        loadManualGroups(1, "");
+        groupSearch.focus();
+      });
+    }
+
+    if (groupPerPage) {
+      groupPerPage.addEventListener("change", function () {
+        groupsState.perPage = groupPerPage.value || "10";
+        loadManualGroups(1, groupsState.q);
+      });
+    }
+
+    if (groupPrev) {
+      groupPrev.addEventListener("click", function () {
+        if (groupsState.page > 1) loadManualGroups(groupsState.page - 1, groupsState.q);
+      });
+    }
+
+    if (groupNext) {
+      groupNext.addEventListener("click", function () {
+        loadManualGroups(groupsState.page + 1, groupsState.q);
+      });
+    }
+
+    var accountPickerModal = document.getElementById("account-servers-picker-modal");
+    var accountPickerList = document.getElementById("account-servers-picker-list");
+    var accountPickerTitleText = document.getElementById("account-servers-picker-title-text");
+    var accountList = document.getElementById("servers-accounts-list");
+    var accountScroll = document.getElementById("servers-accounts-scroll");
+    var accountEmpty = document.getElementById("servers-accounts-empty");
+    var accountNoResults = document.getElementById("servers-accounts-no-results");
+    var accountLoading = document.getElementById("servers-accounts-loading");
+    var accountPagination = document.getElementById("servers-accounts-pagination");
+    var accountPrev = document.getElementById("servers-accounts-prev");
+    var accountNext = document.getElementById("servers-accounts-next");
+    var accountPageInfo = document.getElementById("servers-accounts-page-info");
+    var accountSearch = document.getElementById("servers-accounts-search");
+    var accountSearchClear = document.getElementById("servers-accounts-search-clear");
+    var accountPerPage = document.getElementById("servers-accounts-per-page");
+    var accountsState = { q: "", page: 1, perPage: "10", loading: false, requestId: 0 };
+    var lastAccountTrigger = null;
+
+    function applyGroupChoices(choices) {
+      groupCredOptions = choices || [];
+      if (groupModal && groupModal.classList.contains("is-open")) {
+        renderGroupPicks();
+      }
+    }
+
+    function accountsByLinkName() {
+      var map = {};
+      accountsCache.forEach(function (account) {
+        var key = (account.name || "").trim().toLowerCase();
+        if (!key) return;
+        if (!map[key]) map[key] = [];
+        map[key].push(account);
+      });
+      return map;
+    }
+
+    function accountsByLinkKey(key) {
+      return accountsByLinkName()[key] || [];
+    }
+
+    function renderAccountGroupRow(group) {
+      var rowClass = group.active ? "" : " servers-accounts-row--inactive";
+      var checked = group.active ? " checked" : "";
+      var accountIds = group.accounts.map(function (a) { return a.id; }).join(",");
+      var linkId = group.link_id || "";
+      return (
+        '<li class="servers-list__row servers-accounts-row' +
+        rowClass +
+        '" data-link-key="' +
+        escapeHtml(group.key) +
+        '" data-link-id="' +
+        escapeHtml(linkId) +
+        '" data-account-ids="' +
+        escapeHtml(accountIds) +
+        '">' +
+        '<div class="servers-list__main servers-accounts-row__main">' +
+        '<strong class="servers-accounts-row__name servers-list__title">' +
+        escapeHtml(group.name) +
+        "</strong>" +
+        "</div>" +
+        '<div class="servers-list__actions servers-accounts-row__actions">' +
+        '<button type="button" class="btn btn-ghost btn-sm js-account-edit" data-link-key="' +
+        attrEsc(group.key) +
+        '" data-link-name="' +
+        attrEsc(group.name) +
+        '">' +
+        escapeHtml(accountI18n.edit) +
+        "</button>" +
+        '<label class="user-active-toggle" title="' +
+        attrEsc(accountI18n.toggle) +
+        '">' +
+        '<input type="checkbox" class="user-active-toggle__input js-account-toggle"' +
+        checked +
+        ' aria-label="' +
+        attrEsc(accountI18n.toggle) +
+        '" />' +
+        '<span class="user-active-toggle__ui" aria-hidden="true"></span>' +
+        "</label>" +
+        '<button type="button" class="btn btn-ghost btn-sm btn-user-delete js-account-delete" data-link-key="' +
+        attrEsc(group.key) +
+        '" data-link-id="' +
+        attrEsc(linkId) +
+        '" data-link-name="' +
+        attrEsc(group.name) +
+        '" title="' +
+        attrEsc(accountI18n.deleteAccount) +
+        '" aria-label="' +
+        attrEsc(accountI18n.deleteAccount) +
+        '">' +
+        '<svg class="icon-trash" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />' +
+        "</svg>" +
+        "</button>" +
+        "</div>" +
+        "</li>"
+      );
+    }
+
+    function setAccountsListVisible(visible) {
+      if (accountScroll) accountScroll.hidden = !visible;
+    }
+
+    function renderAccountGroupsList(groups) {
+      if (!accountList || !accountEmpty) return;
+      if (!groups.length) {
+        accountList.innerHTML = "";
+        setAccountsListVisible(false);
+        return;
+      }
+      accountEmpty.hidden = true;
+      accountList.innerHTML = groups.map(renderAccountGroupRow).join("");
+      setAccountsListVisible(true);
+      afterServersListRender(accountList);
+    }
+
+    function updateAccountsPagination(data) {
+      if (!accountPagination || !accountPrev || !accountNext || !accountPageInfo) return;
+      var show = data.total > 0 && data.total_pages > 1;
+      accountPagination.hidden = !show;
+      if (!show) return;
+      accountPrev.disabled = !data.has_prev;
+      accountNext.disabled = !data.has_next;
+      accountPrev.classList.toggle("comment-inbox-pagination__off", !data.has_prev);
+      accountNext.classList.toggle("comment-inbox-pagination__off", !data.has_next);
+      renderEquipoPageInfo(accountPageInfo, data.page, data.total_pages, accountI18n);
+    }
+
+    function setAccountsSearchClearVisible(visible) {
+      if (accountSearchClear) accountSearchClear.hidden = !visible;
+    }
+
+    function loadAccountGroups(page, q) {
+      if (!accountList) return;
+      accountsState.page = page || 1;
+      accountsState.q = q == null ? accountsState.q : q;
+      var reqId = ++accountsState.requestId;
+      accountsState.loading = true;
+      if (accountLoading) accountLoading.hidden = false;
+      if (accountEmpty) accountEmpty.hidden = true;
+      if (accountNoResults) accountNoResults.hidden = true;
+      setAccountsListVisible(false);
+
+      var params = new URLSearchParams();
+      params.set("page", String(accountsState.page));
+      params.set("per_page", String(accountsState.perPage || "10"));
+      if (accountsState.q) params.set("q", accountsState.q);
+
+      fetch("/admin/api/server-account-groups?" + params.toString(), {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      })
+        .then(function (r) {
+          return r.json().then(function (j) {
+            return { res: r, body: j };
+          });
+        })
+        .then(function (x) {
+          if (reqId !== accountsState.requestId) return;
+          accountsState.loading = false;
+          if (accountLoading) accountLoading.hidden = true;
+          if (!x.res.ok || !x.body || !x.body.ok) return;
+          var data = x.body;
+          accountsState.page = data.page;
+          if (data.per_page != null) {
+            accountsState.perPage = String(data.per_page);
+            if (accountPerPage && accountPerPage.value !== accountsState.perPage) {
+              accountPerPage.value = accountsState.perPage;
+            }
+          }
+          if (!data.groups.length && data.page > 1 && data.total > 0) {
+            loadAccountGroups(data.page - 1, accountsState.q);
+            return;
+          }
+          if (data.groups.length) {
+            renderAccountGroupsList(data.groups);
+            if (accountEmpty) accountEmpty.hidden = true;
+            if (accountNoResults) accountNoResults.hidden = true;
+          } else if (accountsState.q) {
+            accountList.innerHTML = "";
+            setAccountsListVisible(false);
+            if (accountNoResults) accountNoResults.hidden = false;
+            if (accountEmpty) accountEmpty.hidden = true;
+          } else {
+            accountList.innerHTML = "";
+            setAccountsListVisible(false);
+            if (accountEmpty) accountEmpty.hidden = false;
+            if (accountNoResults) accountNoResults.hidden = true;
+          }
+          updateAccountsPagination(data);
+        })
+        .catch(function () {
+          if (reqId !== accountsState.requestId) return;
+          accountsState.loading = false;
+          if (accountLoading) accountLoading.hidden = true;
+        });
+    }
+
+    function reloadServerAccounts() {
+      return fetch("/admin/api/server-accounts", {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (j && j.ok) {
+            accountsCache = j.accounts || [];
+            applyGroupChoices(j.choices || []);
+            loadAccountGroups(accountsState.page, accountsState.q);
+          }
+        })
+        .catch(function () {});
+    }
+    window.__reloadServerAccounts = reloadServerAccounts;
+
+    var editingGroupKey = "";
+    var editingGroupName = "";
+
+    function closeAccountPickerModal() {
+      if (!accountPickerModal) return;
+      if (accountPickerInfoModal && accountPickerInfoModal.classList.contains("is-open")) {
+        closeAccountPickerInfo();
+      }
+      accountPickerReturnState = null;
+      hideModal(accountPickerModal, lastAccountTrigger);
+      document.body.style.overflow = "";
+      lastAccountTrigger = null;
+      editingGroupKey = "";
+      editingGroupName = "";
+    }
+
+    function syncAccountPickerStaticText() {
+      if (accountPickerTitleText) {
+        accountPickerTitleText.textContent = accountI18n.editServersTitle;
+      }
+      if (accountPickerInfoTrigger) {
+        accountPickerInfoTrigger.setAttribute("aria-label", accountI18n.editServersInfoTitle);
+        accountPickerInfoTrigger.setAttribute("title", accountI18n.editServersInfoTitle);
+      }
+      var accountPickerInfoTitle = document.getElementById("account-picker-info-modal-title");
+      if (accountPickerInfoTitle) {
+        accountPickerInfoTitle.textContent = accountI18n.editServersInfoTitle;
+      }
+      var accountPickerInfoText = accountPickerInfoModal
+        ? accountPickerInfoModal.querySelector(".panel-info-modal__text")
+        : null;
+      if (accountPickerInfoText) {
+        accountPickerInfoText.textContent = accountI18n.editServersHint;
+      }
+    }
+
+    function renderAccountPickerList(groupKey, groupName) {
+      if (!accountPickerList) return;
+      var members = accountsByLinkKey(groupKey);
+      var linkedPlatforms = {};
+      members.forEach(function (member) {
+        linkedPlatforms[member.platform_id] = member;
+      });
+      var platformIds = Object.keys(platformMeta).sort(function (a, b) {
+        var an = (platformMeta[a] && platformMeta[a].name) || a;
+        var bn = (platformMeta[b] && platformMeta[b].name) || b;
+        return an.localeCompare(bn, undefined, { sensitivity: "base" });
+      });
+      accountPickerList.innerHTML = platformIds
+        .map(function (platformId) {
+          var meta = platformMeta[platformId] || { name: platformId, icon: "•" };
+          var linked = linkedPlatforms[platformId];
+          var badgeClass = linked ? "badge badge-active" : "badge badge-muted";
+          var badgeLabel = linked ? accountI18n.serverLinked : accountI18n.serverNotLinked;
+          return (
+            '<li class="servers-list__row account-servers-picker__row">' +
+            '<div class="servers-list__main account-servers-picker__main">' +
+            '<span class="servers-list__icon" aria-hidden="true">' +
+            escapeHtml(meta.icon) +
+            "</span>" +
+            '<span class="servers-list__name">' +
+            escapeHtml(meta.name) +
+            "</span>" +
+            "</div>" +
+            '<div class="servers-list__actions account-servers-picker__actions">' +
+            '<span class="' +
+            badgeClass +
+            ' account-servers-picker__badge">' +
+            escapeHtml(badgeLabel) +
+            "</span>" +
+            '<button type="button" class="btn btn-ghost btn-sm js-picker-edit-server" data-platform-id="' +
+            escapeHtml(platformId) +
+            '" data-platform-name="' +
+            escapeHtml(meta.name) +
+            '">' +
+            escapeHtml(accountI18n.edit) +
+            "</button>" +
+            "</div>" +
+            "</li>"
+          );
+        })
+        .join("");
+    }
+
+    function openAccountGroupModal(group, trigger) {
+      if (!accountPickerModal) return;
+      accountPickerReturnState = null;
+      if (modal) {
+        if (modal.classList.contains("is-open")) {
+          closeModal();
+        } else {
+          blurModalFocus(modal);
+        }
+      }
+      lastAccountTrigger = trigger || null;
+      editingGroupKey = group.key;
+      editingGroupName = group.name || "";
+      syncAccountPickerStaticText();
+      if (accountPickerTitleText) {
+        accountPickerTitleText.textContent = accountI18n.editServersTitle + " " + group.name;
+      }
+      renderAccountPickerList(group.key, group.name);
+      showModal(accountPickerModal);
+      document.body.style.overflow = "hidden";
+    }
+
+    if (accountPickerModal) {
+      accountPickerModal.querySelectorAll("[data-close-account-picker-modal]").forEach(function (el) {
+        el.addEventListener("click", closeAccountPickerModal);
+      });
+      accountPickerModal.addEventListener("click", function (e) {
+        var infoBtn = e.target.closest(".js-open-account-picker-info");
+        if (!infoBtn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        openAccountPickerInfo(infoBtn);
+      });
+    }
+
+    if (accountPickerList) {
+      accountPickerList.addEventListener("click", function (e) {
+        var editBtn = e.target.closest(".js-picker-edit-server");
+        if (!editBtn) return;
+        var platformId = editBtn.getAttribute("data-platform-id");
+        var platformName = editBtn.getAttribute("data-platform-name");
+        if (!platformId) return;
+        var accountName = editingGroupName;
+        accountPickerReturnState = {
+          key: editingGroupKey,
+          name: editingGroupName,
+          trigger: lastAccountTrigger,
+        };
+        openModal(platformId, platformName, editBtn, {
+          accountName: accountName,
+          fromAccountPicker: true,
+        });
+      });
+    }
+
+    function setAccountsActive(accountIds, active) {
+      return Promise.all(
+        accountIds.map(function (aid) {
+          return fetch("/admin/api/server-accounts/" + encodeURIComponent(aid) + "/active", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ active: !!active }),
+          }).then(function (r) { return r.json(); });
+        })
+      );
+    }
+
+    function deleteAccounts(accountIds) {
+      return Promise.all(
+        accountIds.map(function (aid) {
+          return fetch("/admin/api/server-accounts/" + encodeURIComponent(aid), {
+            method: "DELETE",
+            credentials: "same-origin",
+            headers: { Accept: "application/json" },
+          }).then(function (r) { return r.json(); });
+        })
+      );
+    }
+
+    if (accountList) {
+      accountList.addEventListener("click", function (e) {
+        var editBtn = e.target.closest(".js-account-edit");
+        if (editBtn) {
+          var linkKey = editBtn.getAttribute("data-link-key");
+          var linkName = editBtn.getAttribute("data-link-name") || "";
+          openAccountGroupModal({ key: linkKey, name: linkName }, editBtn);
+          return;
+        }
+        var delBtn = e.target.closest(".js-account-delete");
+        if (delBtn) {
+          var linkId = delBtn.getAttribute("data-link-id");
+          if (!linkId || !confirm(accountI18n.confirmDeleteGroup)) return;
+          delBtn.disabled = true;
+          fetch("/admin/api/server-account-links/" + encodeURIComponent(linkId), {
+            method: "DELETE",
+            credentials: "same-origin",
+            headers: { Accept: "application/json" },
+          })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+              if (!j || !j.ok) {
+                alert((j && j.error) || accountI18n.network);
+                delBtn.disabled = false;
+                return;
+              }
+              if (j.choices) applyGroupChoices(j.choices);
+              reloadServerAccounts();
+              reloadServerGroups();
+            })
+            .catch(function () {
+              alert(accountI18n.network);
+              delBtn.disabled = false;
+            });
+        }
+      });
+
+      accountList.addEventListener("change", function (e) {
+        var toggle = e.target.closest(".js-account-toggle");
+        if (!toggle) return;
+        var row = toggle.closest("[data-link-id]");
+        if (!row) return;
+        var linkId = (row.getAttribute("data-link-id") || "").trim();
+        if (!linkId) return;
+        toggle.disabled = true;
+        fetch("/admin/api/server-account-links/" + encodeURIComponent(linkId) + "/active", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ active: !!toggle.checked }),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            toggle.disabled = false;
+            if (!j || !j.ok) {
+              toggle.checked = !toggle.checked;
+              alert((j && j.error) || accountI18n.network);
+              return;
+            }
+            if (j.choices) applyGroupChoices(j.choices);
+            reloadServerAccounts();
+          })
+          .catch(function () {
+            toggle.disabled = false;
+            toggle.checked = !toggle.checked;
+            alert(accountI18n.network);
+          });
+      });
+    }
+
+    var accountCreateModal = document.getElementById("account-create-modal");
+    var accountCreateForm = document.getElementById("servers-account-create-form");
+    var accountCreateName = document.getElementById("servers-account-create-name");
+    var accountCreateMsg = document.getElementById("servers-account-create-msg");
+    var accountCreateBtn = document.getElementById("servers-account-create");
+    var lastAccountCreateTrigger = null;
+
+    function closeAccountCreateModal() {
+      if (!accountCreateModal) return;
+      hideModal(accountCreateModal, lastAccountCreateTrigger);
+      lastAccountCreateTrigger = null;
+      document.body.style.overflow = "";
+    }
+
+    function openAccountCreateModal(trigger) {
+      if (!accountCreateModal || !accountCreateForm) return;
+      lastAccountCreateTrigger = trigger || null;
+      accountCreateForm.reset();
+      if (accountCreateMsg) {
+        accountCreateMsg.hidden = true;
+        accountCreateMsg.textContent = "";
+      }
+      showModal(accountCreateModal);
+      document.body.style.overflow = "hidden";
+      if (accountCreateName) accountCreateName.focus();
+    }
+
+    if (accountCreateBtn) {
+      accountCreateBtn.addEventListener("click", function () {
+        openAccountCreateModal(this);
+      });
+    }
+
+    if (accountCreateModal) {
+      accountCreateModal.querySelectorAll("[data-close-account-create-modal]").forEach(function (el) {
+        el.addEventListener("click", closeAccountCreateModal);
+      });
+    }
+
+    if (accountCreateForm) {
+      accountCreateForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var name = (accountCreateName && accountCreateName.value || "").trim();
+        if (!name) {
+          if (accountCreateMsg) {
+            accountCreateMsg.hidden = false;
+            accountCreateMsg.textContent = accountI18n.nameRequired;
+            accountCreateMsg.className = "sub servers-account-create-form__msg api-msg--fail";
+          }
+          return;
+        }
+        var saveBtn = document.getElementById("servers-account-create-save");
+        if (saveBtn) saveBtn.disabled = true;
+        fetch("/admin/api/server-account-links", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ name: name }),
+        })
+          .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+          .then(function (x) {
+            if (saveBtn) saveBtn.disabled = false;
+            if (!x.body || !x.body.ok) {
+              if (accountCreateMsg) {
+                accountCreateMsg.hidden = false;
+                accountCreateMsg.textContent = (x.body && x.body.error) || accountI18n.network;
+                accountCreateMsg.className = "sub servers-account-create-form__msg api-msg--fail";
+              }
+              return;
+            }
+            if (x.body.choices) applyGroupChoices(x.body.choices);
+            closeAccountCreateModal();
+            reloadServerAccounts();
+          })
+          .catch(function () {
+            if (saveBtn) saveBtn.disabled = false;
+            if (accountCreateMsg) {
+              accountCreateMsg.hidden = false;
+              accountCreateMsg.textContent = accountI18n.network;
+              accountCreateMsg.className = "sub servers-account-create-form__msg api-msg--fail";
+            }
+          });
+      });
+    }
+
+    syncAccountPickerStaticText();
+
+    if (accountSearch && window.wireAjaxSearch) {
+      window.wireAjaxSearch(accountSearch, accountSearchClear, function (q) {
+        loadAccountGroups(1, q);
+      });
+    } else if (accountSearch) {
+      var accountSearchTimer = null;
+      accountSearch.addEventListener("input", function () {
+        var q = accountSearch.value.trim();
+        setAccountsSearchClearVisible(!!q);
+        clearTimeout(accountSearchTimer);
+        accountSearchTimer = setTimeout(function () {
+          loadAccountGroups(1, q);
+        }, 320);
+      });
+    }
+
+    if (accountSearch) {
+      if (accountI18n.searchPlaceholder) {
+        accountSearch.placeholder = accountI18n.searchPlaceholder;
+        accountSearch.setAttribute("aria-label", accountI18n.searchPlaceholder);
+      }
+    }
+
+    if (accountSearchClear && accountSearch && !window.wireAjaxSearch) {
+      accountSearchClear.addEventListener("click", function () {
+        accountSearch.value = "";
+        setAccountsSearchClearVisible(false);
+        loadAccountGroups(1, "");
+        accountSearch.focus();
+      });
+    }
+
+    if (accountPerPage) {
+      accountPerPage.addEventListener("change", function () {
+        accountsState.perPage = accountPerPage.value || "10";
+        loadAccountGroups(1, accountsState.q);
+      });
+    }
+
+    if (accountPrev) {
+      accountPrev.addEventListener("click", function () {
+        if (accountsState.page > 1) loadAccountGroups(accountsState.page - 1, accountsState.q);
+      });
+    }
+
+    if (accountNext) {
+      accountNext.addEventListener("click", function () {
+        loadAccountGroups(accountsState.page + 1, accountsState.q);
+      });
+    }
+
+    loadAccountGroups(1, "");
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "base_public.html" %}
+{% block title %}{{ page_title }} — {{ site_name }}{% endblock %}
+{% block public_content %}
+<article class="legal-doc">
+  <header class="legal-doc__head">
+    <h1>{{ page_title }}</h1>
+    {% if page_updated %}
+    <p class="legal-doc__updated">{{ t('legal.last_updated') }} {{ page_updated }}</p>
+    {% endif %}
+  </header>
+  <div class="legal-doc__body">
+    {% block legal_body %}{% endblock %}
+  </div>
+</article>
+{% endblock %}

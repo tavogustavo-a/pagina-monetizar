@@ -1,0 +1,59 @@
+{% extends "legal_page.html" %}
+{% block legal_body %}
+{% if lang == 'es' %}
+<p class="legal-prose">
+  <strong>{{ company_name }}</strong> opera <strong>{{ site_name }}</strong>, una plataforma web privada
+  para creadores y equipos autorizados que gestionan su presencia en TikTok de forma profesional.
+</p>
+<h2>Nuestra misión</h2>
+<p class="legal-prose">
+  Ayudamos a creadores y sus equipos a ver métricas de rendimiento, publicar videos y gestionar comentarios
+  usando la API oficial de
+  <a href="https://developers.tiktok.com/" rel="noopener noreferrer" target="_blank">TikTok for Developers</a>.
+</p>
+<h2>Para quién es</h2>
+<p class="legal-prose">
+  El acceso está restringido a usuarios invitados por {{ company_name }} (administradores, supervisores y
+  colaboradores con permisos asignados). No es una red social pública.
+</p>
+<h2>Funciones principales</h2>
+<ul class="legal-list">
+  <li><strong>Analíticas:</strong> vistas, engagement y rendimiento de la cuenta (solo alcances autorizados).</li>
+  <li><strong>Publicación:</strong> subir y publicar videos en cuentas TikTok conectadas.</li>
+  <li><strong>Comentarios:</strong> bandeja para leer y responder comentarios en tus publicaciones.</li>
+</ul>
+<h2>Relación con TikTok</h2>
+<p class="legal-prose">
+  {{ site_name }} no está afiliado ni respaldado por TikTok Inc. TikTok es una marca registrada de sus respectivos
+  propietarios. El uso de datos de TikTok se rige por los Términos de Servicio y Términos para Desarrolladores de TikTok.
+</p>
+<p class="legal-prose">Contacto: <a href="mailto:{{ support_email }}">{{ support_email }}</a></p>
+{% else %}
+<p class="legal-prose">
+  <strong>{{ company_name }}</strong> operates <strong>{{ site_name }}</strong>, a private web platform
+  for creators and authorized teams managing TikTok presence professionally.
+</p>
+<h2>Our mission</h2>
+<p class="legal-prose">
+  We help creators and their teams view performance metrics, publish videos, and manage comments using
+  the official <a href="https://developers.tiktok.com/" rel="noopener noreferrer" target="_blank">TikTok for Developers</a> API.
+</p>
+<h2>Who this is for</h2>
+<p class="legal-prose">
+  Access is restricted to users invited by {{ company_name }} (admins, supervisors, and collaborators with assigned permissions).
+  This is not a public social network.
+</p>
+<h2>Core features</h2>
+<ul class="legal-list">
+  <li><strong>Analytics:</strong> views, engagement, and account performance (authorized scopes only).</li>
+  <li><strong>Publishing:</strong> upload and publish videos to connected TikTok accounts.</li>
+  <li><strong>Comments:</strong> inbox to read and reply to comments on your posts.</li>
+</ul>
+<h2>Relationship with TikTok</h2>
+<p class="legal-prose">
+  {{ site_name }} is not affiliated with or endorsed by TikTok Inc. TikTok is a trademark of its respective owners.
+  Use of TikTok data is governed by TikTok's Terms of Service and Developer Terms.
+</p>
+<p class="legal-prose">Contact: <a href="mailto:{{ support_email }}">{{ support_email }}</a></p>
+{% endif %}
+{% endblock %}

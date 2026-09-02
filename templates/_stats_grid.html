@@ -1,0 +1,39 @@
+{# Requires: stats (dict), visible_stats (dict), t #}
+<div class="stat-grid stat-grid--compact">
+  {% if visible_stats.views %}
+  <div class="stat-card stat-card--inline">
+    <span class="stat-value">{{ stats.views }}</span>
+    <span class="stat-label">{{ t('admin.views') }}</span>
+  </div>
+  {% endif %}
+  {% if visible_stats.likes %}
+  <div class="stat-card stat-card--inline">
+    <span class="stat-value">{{ stats.likes }}</span>
+    <span class="stat-label">{{ t('admin.likes') }}</span>
+  </div>
+  {% endif %}
+  {% if visible_stats.comments %}
+  <div class="stat-card stat-card--inline">
+    <span class="stat-value">{{ stats.comments }}</span>
+    <span class="stat-label">{{ t('admin.comments') }}</span>
+  </div>
+  {% endif %}
+  {% if visible_stats.videos %}
+  <div class="stat-card stat-card--inline">
+    <span class="stat-value">{{ stats.videos }}</span>
+    <span class="stat-label">{{ t('admin.videos') }}</span>
+  </div>
+  {% endif %}
+  {% if visible_stats.shares %}
+  <div class="stat-card stat-card--inline">
+    <span class="stat-value">{{ stats.shares }}</span>
+    <span class="stat-label">{{ t('admin.shares') }}</span>
+  </div>
+  {% endif %}
+  {% if visible_stats.followers %}
+  <div class="stat-card stat-card--inline">
+    <span class="stat-value">{{ stats.followers }}</span>
+    <span class="stat-label">{{ t('admin.followers_demo') }}</span>
+  </div>
+  {% endif %}
+</div>

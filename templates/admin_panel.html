@@ -1,0 +1,1756 @@
+{% extends "base.html" %}
+{% block title %}{{ t('nav.panel') }}{% endblock %}
+{% block body %}
+<style>
+  .panel-line {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.55rem !important;
+    width: 100%;
+  }
+  .panel-line h2 {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.45rem !important;
+    margin: 0 !important;
+    width: auto !important;
+    flex: 0 0 auto !important;
+    white-space: nowrap;
+  }
+  .panel-line h2 .panel-info-btn {
+    display: inline-flex !important;
+    vertical-align: middle;
+    width: 1.7rem !important;
+    height: 1.7rem !important;
+    flex: 0 0 auto !important;
+  }
+  .panel-section--settings {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 0.55rem;
+    row-gap: 0.25rem;
+    align-items: center;
+  }
+  .panel-section--settings .panel-line--mail,
+  .panel-section--settings .panel-password-block {
+    display: contents !important;
+  }
+  .panel-section--settings .panel-email-wrap {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+  }
+  .panel-section--settings .panel-line--mail .btn {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .panel-section--settings .panel-password-block__form {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex !important;
+    width: 100%;
+    justify-content: center;
+  }
+  .panel-section--settings .panel-password-block__form .btn {
+    width: 100%;
+    white-space: normal;
+    text-align: center;
+  }
+  .panel-line .btn {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    white-space: nowrap !important;
+  }
+</style>
+<div class="layout">
+  {% include "_sidebar.html" %}
+
+  <main class="main main--scroll">
+    <div class="admin-layout">
+      <div class="admin-inner">
+        <div class="admin-head admin-head--title admin-head--panel">
+          <div>
+            <h1 class="panel-page-title">
+              {{ t('panel.title_prefix') }}
+              <span class="panel-page-title__user">{{ user.username }}</span>
+              {% if user.role == 'admin' or user.user_mode == 'admin' %}
+              <span class="panel-page-title__role">{{ t('team.admin_badge') }}</span>
+              {% endif %}
+              <button
+                type="button"
+                class="servers-info-btn panel-info-btn panel-page-title__info js-panel-info-open"
+                data-info-title="{{ t('panel.email_section') }}"
+                data-info-text="{{ t('panel.email_hint') }}"
+                aria-label="{{ t('panel.email_info_btn') }}"
+                title="{{ t('panel.email_info_btn') }}"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h.008v.008H11.25v-.008zM12 17.25h.01M12 21a9 9 0 100-18 9 9 0 000 18z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v.008M12 11.25V16.5" />
+                </svg>
+              </button>
+            </h1>
+          </div>
+        </div>
+
+        <div id="equipo-flash-wrap">
+          {% if success %}
+          <div class="alert-ok">{{ success }}</div>
+          {% elif error %}
+          <div class="alert-error">{{ error }}</div>
+          {% endif %}
+        </div>
+
+        <div class="servers-divider panel-divider" role="separator" aria-hidden="true">
+          <span class="servers-divider__line"></span>
+          <span class="servers-divider__gem"></span>
+          <span class="servers-divider__line"></span>
+        </div>
+
+        <section class="section panel-section panel-section--settings">
+          <form method="post" action="/admin/panel/email" class="panel-line panel-line--mail">
+            <div class="panel-email-wrap">
+              <input
+                type="email"
+                name="email"
+                class="panel-email-input"
+                required
+                value="{{ admin_email }}"
+                placeholder="{{ t('panel.email_ph') }}"
+                aria-label="{{ t('panel.email_section') }}"
+                autocomplete="email"
+              />
+            </div>
+            <button type="submit" class="btn btn-accent">{{ t('panel.email_save') }}</button>
+          </form>
+
+          <div class="panel-password-block">
+            <form method="post" action="/admin/panel/password-reset" class="panel-password-block__form">
+              <button type="submit" class="btn panel-password-block__btn" {% if not admin_email or not smtp_configured %}disabled{% endif %}>
+                {{ t('panel.password_send') }}
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <div class="servers-divider panel-divider" role="separator" aria-hidden="true">
+          <span class="servers-divider__line"></span>
+          <span class="servers-divider__gem"></span>
+          <span class="servers-divider__line"></span>
+        </div>
+
+        <div class="panel-team-block">
+          <section class="section section--equipo">
+            <h2 class="panel-create-user__title">{{ t('team.create_user') }}</h2>
+            <form id="create-user-form" method="post" action="/admin/users" class="equipo-create-form">
+              <label class="field equipo-create-form__field equipo-create-form__field--grow">
+                <input
+                  type="text"
+                  name="username"
+                  id="create-user-username"
+                  minlength="2"
+                  placeholder="{{ t('team.username') }}"
+                  aria-label="{{ t('team.username') }}"
+                  autocomplete="username"
+                  required
+                />
+              </label>
+              <label class="field equipo-create-form__field equipo-create-form__field--wide">
+                <select name="user_mode" aria-label="{{ t('team.mode') }}">
+                  {% for opt in user_mode_choices %}
+                  <option value="{{ opt.id }}" title="{{ opt.hint }}">{{ opt.label }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <div class="field equipo-link-account equipo-create-form__field equipo-create-form__field--full">
+                <div class="equipo-account-picker" id="create-account-picker">
+                  <div id="create-account-hidden-inputs" class="equipo-account-picker__hidden-inputs"></div>
+                  <button
+                    type="button"
+                    class="equipo-account-picker__trigger"
+                    id="create-account-trigger"
+                    aria-haspopup="listbox"
+                    aria-expanded="false"
+                    aria-controls="create-account-panel"
+                    aria-label="{{ t('team.link_account') }}"
+                  >
+                    <span class="equipo-account-picker__value" id="create-account-value">{{ team_account_placeholder }}</span>
+                    <span class="equipo-account-picker__chevron" aria-hidden="true">▾</span>
+                  </button>
+                  <div class="equipo-account-picker__panel" id="create-account-panel" hidden>
+                    <div class="equipo-search-wrap equipo-account-picker__search">
+                      <input
+                        type="search"
+                        id="create-account-search"
+                        class="equipo-search-input"
+                        placeholder="{{ search_accounts_placeholder }}"
+                        aria-label="{{ search_accounts_placeholder }}"
+                        autocomplete="off"
+                      />
+                      <button
+                        type="button"
+                        id="create-account-search-clear"
+                        class="equipo-search-clear"
+                        aria-label="{{ t('team.search_clear') }}"
+                        title="{{ t('team.search_clear') }}"
+                        hidden
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <ul
+                      class="equipo-account-picker__list"
+                      id="create-account-list"
+                      role="listbox"
+                      aria-label="{{ t('team.link_account') }}"
+                    ></ul>
+                  </div>
+                </div>
+              </div>
+              <label class="field equipo-create-form__field">
+                <div class="password-input-wrap">
+                  <input
+                    type="password"
+                    name="password"
+                    id="create-user-password"
+                    minlength="4"
+                    placeholder="{{ t('team.password') }}"
+                    aria-label="{{ t('team.password') }}"
+                    autocomplete="new-password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    class="password-toggle"
+                    id="create-user-toggle-password"
+                    aria-label="{{ t('team.js.show_password') }}"
+                    aria-pressed="false"
+                  >
+                    <svg class="icon-eye" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <svg class="icon-eye-off" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.274M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                    </svg>
+                  </button>
+                </div>
+              </label>
+              <button type="submit" id="create-user-submit" class="btn btn-accent equipo-create-form__submit">{{ t('team.create_btn') }}</button>
+            </form>
+          </section>
+
+          <div class="servers-divider panel-divider" role="separator" aria-hidden="true">
+            <span class="servers-divider__line"></span>
+            <span class="servers-divider__gem"></span>
+            <span class="servers-divider__line"></span>
+          </div>
+
+          <section class="section section--equipo">
+            <div class="equipo-members-head">
+              <div class="equipo-members-head__title">
+                <h2>{{ t('team.members') }}</h2>
+                <div class="equipo-members-per-page">
+                  <div class="equipo-members-per-page__field">
+                    <span class="equipo-members-per-page__prefix">{{ t('team.show') }}</span>
+                    <select id="equipo-members-per-page" aria-label="{{ t('team.per_page_label') }}">
+                      <option value="10" selected>10</option>
+                      <option value="20">20</option>
+                      <option value="30">30</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                      <option value="200">200</option>
+                      <option value="all">{{ t('team.per_page_all') }}</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div class="equipo-members-toolbar">
+                <div class="equipo-search-wrap panel-search-wrap--highlight">
+                  <input
+                    type="search"
+                    id="equipo-members-search"
+                    class="equipo-search-input panel-search-input--highlight"
+                    placeholder="{{ t('team.search_members') }}"
+                    aria-label="{{ t('team.search_members') }}"
+                    autocomplete="off"
+                  />
+                  <button
+                    type="button"
+                    id="equipo-members-search-clear"
+                    class="equipo-search-clear"
+                    aria-label="{{ t('team.search_clear') }}"
+                    title="{{ t('team.search_clear') }}"
+                    hidden
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p id="equipo-members-loading" class="sub equipo-members-loading">{{ t('team.loading') }}</p>
+            <div id="equipo-members-scroll" class="user-list-scroll" hidden>
+              <ul id="equipo-members-list" class="user-list user-list--sync-cols"></ul>
+            </div>
+            <p id="equipo-members-empty" class="sub equipo-empty-hint" hidden>{{ t('team.no_users') }}</p>
+            <p id="equipo-members-no-results" class="sub equipo-empty-hint" hidden>{{ t('team.no_results') }}</p>
+            <nav
+              id="equipo-members-pagination"
+              class="comment-inbox-pagination equipo-members-pagination"
+              aria-label="{{ t('team.pagination') }}"
+              hidden
+            >
+              <div class="comment-inbox-pagination__inner">
+                <button type="button" id="equipo-members-prev" class="btn btn-ghost btn-sm">{{ t('team.previous') }}</button>
+                <span id="equipo-members-page-info" class="equipo-members-page-info"></span>
+                <button type="button" id="equipo-members-next" class="btn btn-ghost btn-sm">{{ t('team.next') }}</button>
+              </div>
+            </nav>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="panel-info-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-panel-info tabindex="-1"></div>
+  <div class="equipo-modal__panel panel-info-modal__panel" role="dialog" aria-modal="true" aria-labelledby="panel-info-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div>
+        <h2 id="panel-info-modal-title"></h2>
+      </div>
+      <button type="button" class="equipo-modal__close" data-close-panel-info aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body">
+      <p class="sub panel-info-modal__text" id="panel-info-modal-text"></p>
+    </div>
+  </div>
+</div>
+
+<div id="edit-user-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-edit-modal tabindex="-1"></div>
+  <div class="equipo-modal__panel" role="dialog" aria-modal="true" aria-labelledby="edit-user-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div>
+        <h2 id="edit-user-modal-title">{{ t('team.edit_user') }}</h2>
+      </div>
+      <button type="button" class="equipo-modal__close" data-close-edit-modal aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <form id="edit-user-form" method="post" action="" class="equipo-edit-modal-form">
+      <div class="field equipo-link-account equipo-link-account--edit equipo-link-account--first">
+        <div id="edit-account-hidden-inputs" class="equipo-account-picker__hidden-inputs"></div>
+        <div class="equipo-search-wrap equipo-link-account__search-field">
+          <input
+            type="search"
+            id="edit-account-search"
+            class="equipo-search-input"
+            placeholder="{{ t('team.search_accounts_to_link') }}"
+            aria-label="{{ t('team.search_accounts_to_link') }}"
+            autocomplete="off"
+          />
+          <button
+            type="button"
+            id="edit-account-search-clear"
+            class="equipo-search-clear"
+            aria-label="{{ t('team.search_clear') }}"
+            title="{{ t('team.search_clear') }}"
+            hidden
+          >
+            ×
+          </button>
+        </div>
+        <fieldset class="equipo-account-picks equipo-account-picks--search" id="edit-account-search-picks" hidden>
+          <div class="equipo-account-picks__list" id="edit-account-list" role="listbox" aria-label="{{ t('team.search_accounts_to_link') }}"></div>
+          <p class="sub equipo-account-picks__empty" id="edit-account-empty" hidden>{{ t('team.no_account_results') }}</p>
+        </fieldset>
+      </div>
+      <div class="equipo-edit-modal-form__row">
+        <label class="field field--no-label">
+          <input
+            type="text"
+            name="username"
+            id="edit-user-username"
+            minlength="2"
+            required
+            autocomplete="username"
+            placeholder="{{ t('team.username') }}"
+            aria-label="{{ t('team.username') }}"
+          />
+        </label>
+        <label class="field field--no-label">
+          <select id="edit-user-mode" name="user_mode" required aria-label="{{ t('team.mode') }}">
+            {% for opt in user_mode_choices %}
+            <option value="{{ opt.id }}" title="{{ opt.hint }}">{{ opt.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <div class="equipo-edit-modal-form__row equipo-edit-modal-form__row--password">
+        <label class="field field--no-label">
+          <div class="password-input-wrap">
+            <input
+              type="password"
+              name="password"
+              id="edit-user-password"
+              placeholder="{{ password_optional_placeholder }}"
+              aria-label="{{ password_optional_placeholder }}"
+              autocomplete="new-password"
+            />
+            <button
+              type="button"
+              class="password-toggle"
+              id="edit-user-toggle-password"
+              aria-label="{{ t('team.js.show_password') }}"
+              aria-pressed="false"
+            >
+              <svg class="icon-eye" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <svg class="icon-eye-off" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.274M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+              </svg>
+            </button>
+          </div>
+        </label>
+        <label class="field equipo-perm-checkbox equipo-perm-checkbox--inline">
+          <input type="checkbox" name="can_view_comments" value="1" id="edit-user-can-comments" />
+          <span class="equipo-perm-checkbox__label">{{ t('team.can_view_comments') }}</span>
+        </label>
+      </div>
+      <div class="equipo-link-account equipo-link-account--linked-view">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm equipo-linked-toggle"
+          id="edit-linked-accounts-toggle"
+          aria-expanded="false"
+          aria-controls="edit-linked-accounts-preview"
+        >
+          {{ t('team.view_linked_accounts') }}
+        </button>
+        <div class="equipo-linked-preview" id="edit-linked-accounts-preview" hidden>
+          <p class="equipo-linked-preview__text" id="edit-linked-accounts-text"></p>
+        </div>
+      </div>
+      <div class="equipo-modal__actions">
+        <button type="submit" class="btn btn-accent">{{ t('team.save_changes') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  window.__EQUIPO_I18N = {
+    showPassword: {{ t('team.js.show_password') | tojson }},
+    hidePassword: {{ t('team.js.hide_password') | tojson }},
+    errStatus: {{ t('team.js.err_status') | tojson }},
+    updated: {{ t('team.js.updated') | tojson }},
+    networkError: {{ t('team.js.network_error') | tojson }},
+    deleteConfirm: {{ t('team.js.delete_confirm') | tojson }},
+    errDelete: {{ t('team.js.err_delete') | tojson }},
+    userDeleted: {{ t('team.js.user_deleted') | tojson }},
+    errSave: {{ t('team.js.err_save') | tojson }},
+    userUpdated: {{ t('team.js.user_updated') | tojson }},
+    userCreated: {{ t('team.js.user_created') | tojson }},
+    errCreate: {{ t('team.js.err_save') | tojson }},
+    edit: {{ t('team.edit') | tojson }},
+    toggleActive: {{ t('team.toggle_active') | tojson }},
+    deleteUser: {{ t('team.delete_user') | tojson }},
+    pageInfo: {{ t('team.page_info') | tojson }},
+    pageInfoCompact: {{ t('team.page_info_compact') | tojson }},
+    errLoad: {{ t('team.js.network_error') | tojson }},
+    searchAccountsToLink: {{ t('team.search_accounts_to_link') | tojson }},
+    viewLinkedAccounts: {{ t('team.view_linked_accounts') | tojson }},
+    noLinkedAccounts: {{ t('team.no_linked_accounts') | tojson }},
+    kindGroup: {{ t('admin.stats_kind_group') | tojson }},
+    kindAccount: {{ t('admin.stats_kind_account') | tojson }}
+  };
+  window.__EQUIPO_ACCOUNTS = {{ tiktok_config_choices | tojson }};
+  window.__TEAM_ACCOUNT_PLACEHOLDER = {{ team_account_placeholder | tojson }};
+</script>
+<script src="/static/js/ajax-search.js?v=1"></script>
+<script>
+  (function () {
+    var i18n = window.__EQUIPO_I18N || {};
+
+    function wirePasswordToggle(input, btn) {
+      if (!input || !btn) return;
+      btn.addEventListener("click", function () {
+        var visible = input.type === "text";
+        input.type = visible ? "password" : "text";
+        btn.classList.toggle("is-visible", !visible);
+        btn.setAttribute("aria-pressed", visible ? "false" : "true");
+        btn.setAttribute("aria-label", visible ? i18n.showPassword : i18n.hidePassword);
+      });
+    }
+
+    function escapeHtml(s) {
+      var d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function showEquipoFlash(kind, message) {
+      var wrap = document.getElementById("equipo-flash-wrap");
+      if (!wrap) return;
+      var cls = kind === "ok" ? "alert-ok" : "alert-error";
+      wrap.innerHTML = '<div class="' + cls + ' equipo-flash-live">' + escapeHtml(message) + "</div>";
+      clearTimeout(showEquipoFlash._timer);
+      showEquipoFlash._timer = setTimeout(function () {
+        var el = wrap.querySelector(".equipo-flash-live");
+        if (el) {
+          el.classList.add("equipo-flash-live--hide");
+          setTimeout(function () {
+            if (el.parentNode === wrap) wrap.innerHTML = "";
+          }, 280);
+        }
+      }, 4200);
+    }
+
+    function setTogglePending(input, pending) {
+      var label = input && input.closest(".user-active-toggle");
+      if (!input) return;
+      input.dataset.pending = pending ? "1" : "0";
+      if (label) label.classList.toggle("user-active-toggle--pending", pending);
+    }
+
+    function setRowActiveState(row, active) {
+      if (!row) return;
+      if (active) {
+        row.classList.remove("user-list__row--inactive");
+      } else {
+        row.classList.add("user-list__row--inactive");
+      }
+      var toggle = row.querySelector(".js-user-active-toggle");
+      if (toggle) {
+        toggle.checked = active;
+        toggle.disabled = false;
+      }
+    }
+
+    var membersState = { q: "", page: 1, perPage: "10", loading: false, requestId: 0 };
+
+    var membersList = document.getElementById("equipo-members-list");
+    var membersScroll = document.getElementById("equipo-members-scroll");
+    var membersLoading = document.getElementById("equipo-members-loading");
+    var membersEmpty = document.getElementById("equipo-members-empty");
+    var membersNoResults = document.getElementById("equipo-members-no-results");
+    var membersPagination = document.getElementById("equipo-members-pagination");
+    var membersPrev = document.getElementById("equipo-members-prev");
+    var membersNext = document.getElementById("equipo-members-next");
+    var membersPageInfo = document.getElementById("equipo-members-page-info");
+    var membersSearch = document.getElementById("equipo-members-search");
+    var membersSearchClear = document.getElementById("equipo-members-search-clear");
+    var membersPerPage = document.getElementById("equipo-members-per-page");
+
+    function attrEsc(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;");
+    }
+
+    function renderUserRow(u) {
+      var inactive = !u.active;
+      var rowCls = "user-list__row js-user-row" + (inactive ? " user-list__row--inactive" : "");
+      var checked = u.active ? " checked" : "";
+      var canManage = u.can_manage !== false;
+      var actions = "";
+      if (canManage) {
+        actions =
+          '<button type="button" class="btn btn-ghost btn-sm btn-equipo-edit js-open-edit-user"' +
+          ' data-user-id="' +
+          attrEsc(u.id) +
+          '"' +
+          ' data-username="' +
+          attrEsc(u.username) +
+          '"' +
+          ' data-user-mode="' +
+          attrEsc(u.user_mode) +
+          '"' +
+          ' data-can-view-comments="' +
+          (u.can_view_comments ? "1" : "0") +
+          '"' +
+          ' data-linked-account-ids="' +
+          attrEsc(JSON.stringify(u.linked_account_link_ids || [])) +
+          '">' +
+          escapeHtml(i18n.edit || "Edit") +
+          "</button>" +
+          '<label class="user-active-toggle" title="' +
+          attrEsc(i18n.toggleActive) +
+          '">' +
+          '<input type="checkbox" class="user-active-toggle__input js-user-active-toggle"' +
+          checked +
+          ' aria-label="' +
+          attrEsc(i18n.toggleActive) +
+          '" />' +
+          '<span class="user-active-toggle__ui" aria-hidden="true"></span>' +
+          "</label>" +
+          '<button type="button" class="btn btn-ghost btn-sm btn-user-delete js-user-delete"' +
+          ' data-user-id="' +
+          attrEsc(u.id) +
+          '"' +
+          ' data-username="' +
+          attrEsc(u.username) +
+          '"' +
+          ' aria-label="' +
+          attrEsc((i18n.deleteUser || "Delete") + " @" + u.username) +
+          '"' +
+          ' title="' +
+          attrEsc(i18n.deleteUser) +
+          '">' +
+          '<svg class="icon-trash" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />' +
+          "</svg>" +
+          "</button>";
+      }
+      return (
+        '<li id="equipo-user-' +
+        escapeHtml(u.id) +
+        '" class="' +
+        rowCls +
+        '" data-user-id="' +
+        escapeHtml(u.id) +
+        '">' +
+        '<div class="user-list__profile">' +
+        '<div class="user-list__text">' +
+        '<div class="user-list__name-row">' +
+        '<strong class="user-list__title">' +
+        escapeHtml(u.username) +
+        "</strong>" +
+        "</div>" +
+        "</div>" +
+        "</div>" +
+        '<div class="user-list__actions">' +
+        actions +
+        "</div>" +
+        "</li>"
+      );
+    }
+
+    function renderMembersPageInfo(page, totalPages) {
+      if (!membersPageInfo) return;
+      var compact = (i18n.pageInfoCompact || "{page} / {total}")
+        .replace("{page}", String(page))
+        .replace("{total}", String(totalPages));
+      var aria = (i18n.pageInfo || "Page {page} of {total}")
+        .replace("{page}", String(page))
+        .replace("{total}", String(totalPages));
+      membersPageInfo.innerHTML =
+        '<span class="equipo-members-page-info__wrap" role="status" aria-label="' +
+        attrEsc(aria) +
+        '">' +
+        '<svg class="equipo-members-page-info__icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />' +
+        "</svg>" +
+        '<span class="equipo-members-page-info__text">' +
+        escapeHtml(compact) +
+        "</span></span>";
+    }
+
+    function updateMembersPagination(data) {
+      if (!membersPagination || !membersPrev || !membersNext || !membersPageInfo) return;
+      var show = data.total > 0 && data.total_pages > 1;
+      membersPagination.hidden = !show;
+      if (!show) return;
+      membersPrev.disabled = !data.has_prev;
+      membersNext.disabled = !data.has_next;
+      membersPrev.classList.toggle("comment-inbox-pagination__off", !data.has_prev);
+      membersNext.classList.toggle("comment-inbox-pagination__off", !data.has_next);
+      renderMembersPageInfo(data.page, data.total_pages);
+    }
+
+    function setMembersListVisible(visible) {
+      if (membersScroll) membersScroll.hidden = !visible;
+    }
+
+    function isMembersSyncLayout() {
+      return window.matchMedia("(max-width: 719px)").matches;
+    }
+
+    function syncMembersListColumns() {
+      if (!membersList) return;
+      membersList.style.removeProperty("--user-list-name-col");
+      membersList.style.removeProperty("--user-list-actions-col");
+      if (!isMembersSyncLayout()) return;
+      var titles = membersList.querySelectorAll(".user-list__title");
+      var actions = membersList.querySelectorAll(".user-list__actions");
+      if (!titles.length) return;
+      var nameMax = 0;
+      var actionsMax = 0;
+      titles.forEach(function (el) {
+        nameMax = Math.max(nameMax, el.scrollWidth);
+      });
+      actions.forEach(function (el) {
+        actionsMax = Math.max(actionsMax, el.scrollWidth);
+      });
+      membersList.style.setProperty("--user-list-name-col", nameMax + "px");
+      if (actionsMax > 0) {
+        membersList.style.setProperty("--user-list-actions-col", actionsMax + "px");
+      }
+    }
+
+    function afterMembersRender() {
+      syncMembersListColumns();
+      requestAnimationFrame(syncMembersListColumns);
+    }
+
+    var membersResizeTimer = null;
+    window.addEventListener("resize", function () {
+      clearTimeout(membersResizeTimer);
+      membersResizeTimer = setTimeout(syncMembersListColumns, 120);
+    });
+
+    function setMembersSearchClearVisible(visible) {
+      if (membersSearchClear) membersSearchClear.hidden = !visible;
+    }
+
+    function loadMembers(page, q) {
+      if (!membersList) return;
+      membersState.page = page || 1;
+      membersState.q = q == null ? membersState.q : q;
+      var reqId = ++membersState.requestId;
+      membersState.loading = true;
+      if (membersLoading) membersLoading.hidden = false;
+      if (membersEmpty) membersEmpty.hidden = true;
+      if (membersNoResults) membersNoResults.hidden = true;
+      setMembersListVisible(false);
+
+      var params = new URLSearchParams();
+      params.set("page", String(membersState.page));
+      params.set("per_page", String(membersState.perPage || "10"));
+      if (membersState.q) params.set("q", membersState.q);
+
+      fetch("/admin/api/equipo/miembros?" + params.toString(), {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      })
+        .then(function (r) {
+          return r.json().then(function (j) {
+            return { res: r, body: j };
+          });
+        })
+        .then(function (x) {
+          if (reqId !== membersState.requestId) return;
+          membersState.loading = false;
+          if (membersLoading) membersLoading.hidden = true;
+          if (!x.res.ok || !x.body.ok) {
+            showEquipoFlash("error", (x.body && x.body.error) || i18n.errLoad);
+            return;
+          }
+          var data = x.body;
+          membersState.page = data.page;
+          if (data.per_page != null) {
+            membersState.perPage = String(data.per_page);
+            if (membersPerPage && membersPerPage.value !== membersState.perPage) {
+              membersPerPage.value = membersState.perPage;
+            }
+          }
+          if (!data.users.length && data.page > 1 && data.total > 0) {
+            loadMembers(data.page - 1, membersState.q);
+            return;
+          }
+          if (data.users.length) {
+            membersList.innerHTML = data.users.map(renderUserRow).join("");
+            setMembersListVisible(true);
+            afterMembersRender();
+            if (membersEmpty) membersEmpty.hidden = true;
+            if (membersNoResults) membersNoResults.hidden = true;
+          } else if (membersState.q) {
+            membersList.innerHTML = "";
+            setMembersListVisible(false);
+            if (membersNoResults) membersNoResults.hidden = false;
+            if (membersEmpty) membersEmpty.hidden = true;
+          } else {
+            membersList.innerHTML = "";
+            setMembersListVisible(false);
+            if (membersEmpty) membersEmpty.hidden = false;
+            if (membersNoResults) membersNoResults.hidden = true;
+          }
+          updateMembersPagination(data);
+        })
+        .catch(function () {
+          if (reqId !== membersState.requestId) return;
+          membersState.loading = false;
+          if (membersLoading) membersLoading.hidden = true;
+          showEquipoFlash("error", i18n.errLoad);
+        });
+    }
+
+    var createInput = document.getElementById("create-user-password");
+    var createBtn = document.getElementById("create-user-toggle-password");
+    wirePasswordToggle(createInput, createBtn);
+
+    var createForm = document.getElementById("create-user-form");
+    var createSubmit = document.getElementById("create-user-submit");
+    var createUsername = document.getElementById("create-user-username");
+
+    function resetCreateUserForm() {
+      if (!createForm) return;
+      createForm.reset();
+      if (createAccountPickerApi) createAccountPickerApi.reset();
+      if (createInput) {
+        createInput.type = "password";
+      }
+      if (createBtn) {
+        createBtn.classList.remove("is-visible");
+        createBtn.setAttribute("aria-pressed", "false");
+        createBtn.setAttribute("aria-label", i18n.showPassword);
+      }
+    }
+
+    var teamAccounts = (window.__EQUIPO_ACCOUNTS || []).slice();
+    var placeholderLabel = window.__TEAM_ACCOUNT_PLACEHOLDER || "Vincular cuenta";
+
+    function setTeamAccounts(list) {
+      teamAccounts = (list || []).slice();
+      window.__EQUIPO_ACCOUNTS = teamAccounts;
+    }
+
+    function kindSearchLabel(acc) {
+      if (acc && acc.kind === "group") return (i18n.kindGroup || "Grupo").toLowerCase();
+      return (i18n.kindAccount || "Cuenta").toLowerCase();
+    }
+
+    function filterTeamAccounts(list, q) {
+      var query = (q || "").trim().toLowerCase();
+      if (!query) return (list || []).slice();
+      var tokens = query.split(/\s+/).filter(Boolean);
+      return (list || []).filter(function (acc) {
+        var hay = (
+          (acc.name || "") +
+          " " +
+          (acc.platform || "") +
+          " " +
+          (acc.platform_ids || []).join(" ") +
+          " " +
+          kindSearchLabel(acc)
+        ).toLowerCase();
+        return tokens.every(function (token) {
+          return hay.indexOf(token) !== -1;
+        });
+      });
+    }
+
+    function parseLinkedAccountIds(raw) {
+      if (!raw) return [];
+      try {
+        var parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (err) {
+        return [];
+      }
+    }
+
+    function initMultiAccountLinkPicker(cfg) {
+      var selectedIds = (cfg.initialIds || []).slice();
+      var reqId = 0;
+      var searchTimer = null;
+      var linkedPreviewOpen = false;
+      var searchPicksOpen = false;
+
+      function attrEsc(s) {
+        return String(s == null ? "" : s)
+          .replace(/&/g, "&amp;")
+          .replace(/"/g, "&quot;")
+          .replace(/</g, "&lt;");
+      }
+
+      function updateLinkedPreview() {
+        if (!cfg.compactLinkedView || !cfg.linkedPreview || !cfg.linkedText) return;
+        var map = accountMap();
+        var names = selectedIds.map(function (id) {
+          return (map[id] && map[id].name) || id;
+        });
+        if (!names.length) {
+          cfg.linkedText.textContent = cfg.noLinkedLabel || "—";
+          cfg.linkedPreview.classList.add("is-empty");
+        } else {
+          cfg.linkedText.textContent = names.join(", ");
+          cfg.linkedPreview.classList.remove("is-empty");
+        }
+        if (!linkedPreviewOpen) cfg.linkedPreview.hidden = true;
+      }
+
+      function setLinkedPreviewOpen(open) {
+        if (!cfg.compactLinkedView) return;
+        linkedPreviewOpen = !!open;
+        if (cfg.linkedPreview) cfg.linkedPreview.hidden = !linkedPreviewOpen;
+        if (cfg.linkedToggle) {
+          cfg.linkedToggle.setAttribute("aria-expanded", linkedPreviewOpen ? "true" : "false");
+          cfg.linkedToggle.classList.toggle("is-open", linkedPreviewOpen);
+        }
+        if (linkedPreviewOpen) updateLinkedPreview();
+      }
+
+      function updateSearchPicksVisibility() {
+        if (!cfg.compactLinkedView || !cfg.searchPicks) return;
+        cfg.searchPicks.hidden = !searchPicksOpen;
+      }
+
+      function normalizeStatsChoice(c) {
+        return {
+          id: c.id,
+          name: c.name,
+          kind: c.kind || "link",
+          platform: c.platform || "",
+          platform_ids: c.platform_ids || [],
+          link_ids: c.link_ids || (c.kind === "group" ? [] : [c.id]),
+        };
+      }
+
+      function loadStatsAccountChoices(q, syncCache) {
+        var localReq = ++reqId;
+        return fetch("/admin/api/stats-filter-choices?platform=all", {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (body) {
+            if (localReq !== reqId) return;
+            if (!body || !body.ok) return;
+            var accounts = (body.choices || [])
+              .filter(function (c) {
+                if (cfg.accountsOnly) return c.kind !== "group";
+                return true;
+              })
+              .map(normalizeStatsChoice);
+            if (syncCache) setTeamAccounts(accounts);
+            renderList(filterTeamAccounts(accounts, q));
+            updateLinkedPreview();
+          })
+          .catch(function () {});
+      }
+
+      function refreshSearchResults() {
+        if (!cfg.compactLinkedView || !cfg.search) return;
+        var query = cfg.search.value.trim();
+        if (cfg.useStatsChoices) {
+          var query = cfg.search.value.trim();
+          if (teamAccounts.length) {
+            renderList(filterTeamAccounts(teamAccounts, query));
+            return;
+          }
+          loadStatsAccountChoices(query, true);
+          return;
+        }
+        if (query) {
+          loadAccounts(query, [], false);
+          return;
+        }
+        renderList(teamAccounts);
+        if (!teamAccounts.length) loadAccounts("", [], true);
+      }
+
+      function accountMap() {
+        var map = {};
+        (teamAccounts || []).forEach(function (acc) {
+          map[acc.id] = acc;
+        });
+        return map;
+      }
+
+      function syncHiddenInputs() {
+        if (!cfg.hiddenWrap) return;
+        cfg.hiddenWrap.innerHTML = selectedIds
+          .map(function (id) {
+            return (
+              '<input type="hidden" name="account_link_ids" value="' + attrEsc(id) + '" />'
+            );
+          })
+          .join("");
+      }
+
+      function updateTriggerLabel() {
+        if (!cfg.valueEl || !cfg.trigger) return;
+        if (!selectedIds.length) {
+          cfg.trigger.classList.remove("has-selection");
+          cfg.valueEl.className = "equipo-account-picker__value equipo-account-picker__value--placeholder";
+          cfg.valueEl.textContent = placeholderLabel;
+          return;
+        }
+        cfg.trigger.classList.add("has-selection");
+        cfg.valueEl.className = "equipo-account-picker__value";
+        var map = accountMap();
+        cfg.valueEl.textContent = selectedIds
+          .map(function (id) {
+            return (map[id] && map[id].name) || id;
+          })
+          .join(", ");
+      }
+
+      function setSelectedIds(ids) {
+        var seen = {};
+        selectedIds = [];
+        (ids || []).forEach(function (id) {
+          id = (id || "").trim();
+          if (!id || seen[id]) return;
+          seen[id] = true;
+          selectedIds.push(id);
+        });
+        syncHiddenInputs();
+        updateTriggerLabel();
+        updateLinkedPreview();
+        if (cfg.inline) {
+          var q = cfg.search ? cfg.search.value.trim() : "";
+          if (q || !cfg.compactLinkedView) {
+            renderList(filterTeamAccounts(teamAccounts, q));
+          }
+          updateSearchPicksVisibility();
+        }
+      }
+
+      function linkIdsForChoice(id) {
+        var acc = accountMap()[id];
+        if (acc && acc.kind === "group" && acc.link_ids && acc.link_ids.length) {
+          return acc.link_ids.slice();
+        }
+        return id ? [id] : [];
+      }
+
+      function isChoiceSelected(acc) {
+        if (!acc) return false;
+        if (acc.kind === "group" && acc.link_ids && acc.link_ids.length) {
+          return acc.link_ids.every(function (lid) {
+            return selectedIds.indexOf(lid) !== -1;
+          });
+        }
+        return selectedIds.indexOf(acc.id) !== -1;
+      }
+
+      function toggleId(id) {
+        id = (id || "").trim();
+        if (!id) return;
+        var linkIds = linkIdsForChoice(id);
+        if (!linkIds.length) return;
+        var allSelected = linkIds.every(function (lid) {
+          return selectedIds.indexOf(lid) !== -1;
+        });
+        if (allSelected) {
+          linkIds.forEach(function (lid) {
+            var idx = selectedIds.indexOf(lid);
+            if (idx >= 0) selectedIds.splice(idx, 1);
+          });
+        } else {
+          linkIds.forEach(function (lid) {
+            if (selectedIds.indexOf(lid) < 0) selectedIds.push(lid);
+          });
+        }
+        syncHiddenInputs();
+        updateTriggerLabel();
+        updateLinkedPreview();
+        if (cfg.inline) {
+          var q = cfg.search ? cfg.search.value.trim() : "";
+          if (q || !cfg.compactLinkedView) {
+            renderList(filterTeamAccounts(teamAccounts, q));
+          }
+        }
+      }
+
+      function setSearchClearVisible(visible) {
+        if (cfg.searchClear) cfg.searchClear.hidden = !visible;
+      }
+
+      function resetSearch() {
+        if (!cfg.search) return;
+        cfg.search.value = "";
+        setSearchClearVisible(false);
+      }
+
+      function kindLabel(acc) {
+        return acc && acc.kind === "group"
+          ? i18n.kindGroup || "Grupo"
+          : i18n.kindAccount || "Cuenta";
+      }
+
+      function renderList(accounts) {
+        if (!cfg.list) return;
+        var items = accounts || [];
+        if (cfg.inline) {
+          if (cfg.emptyEl) cfg.emptyEl.hidden = items.length > 0;
+          cfg.list.innerHTML = items
+            .map(function (acc) {
+              var checked = isChoiceSelected(acc);
+              return (
+                '<label class="equipo-account-picks__item" role="option" aria-selected="' +
+                (checked ? "true" : "false") +
+                '">' +
+                '<input type="checkbox" data-account-id="' +
+                escapeHtml(acc.id) +
+                '"' +
+                (checked ? " checked" : "") +
+                " />" +
+                '<span class="equipo-account-picks__label">' +
+                escapeHtml(acc.name) +
+                "</span></label>"
+              );
+            })
+            .join("");
+          return;
+        }
+        cfg.list.innerHTML = items
+          .map(function (acc) {
+            var checked = isChoiceSelected(acc);
+            if (cfg.statsOptionStyle) {
+              return (
+                '<li role="option" tabindex="-1" class="equipo-account-picker__option equipo-account-picker__option--stats' +
+                (checked ? " is-selected" : "") +
+                '" data-account-id="' +
+                escapeHtml(acc.id) +
+                '" aria-selected="' +
+                (checked ? "true" : "false") +
+                '">' +
+                '<span class="equipo-account-picker__option-main">' +
+                '<span class="equipo-account-picker__kind">' +
+                escapeHtml(kindLabel(acc)) +
+                "</span>" +
+                '<span class="equipo-account-picker__name">' +
+                escapeHtml(acc.name) +
+                "</span></span></li>"
+              );
+            }
+            return (
+              '<li role="option" tabindex="-1" class="equipo-account-picker__option' +
+              (checked ? " is-selected" : "") +
+              '" data-account-id="' +
+              escapeHtml(acc.id) +
+              '" aria-selected="' +
+              (checked ? "true" : "false") +
+              '">' +
+              '<span class="pub-account-picker__name">' +
+              escapeHtml(acc.name) +
+              "</span></li>"
+            );
+          })
+          .join("");
+      }
+
+      function openPanel() {
+        if (!cfg.picker || !cfg.panel) return;
+        cfg.picker.classList.add("is-open");
+        if (cfg.trigger) cfg.trigger.setAttribute("aria-expanded", "true");
+        cfg.panel.hidden = false;
+        if (cfg.useStatsChoices && (cfg.statsOptionStyle || !teamAccounts.length)) {
+          loadStatsAccountChoices("", true);
+        } else {
+          renderList(filterTeamAccounts(teamAccounts, ""));
+        }
+        resetSearch();
+        if (cfg.search) cfg.search.focus();
+      }
+
+      function closePanel() {
+        if (cfg.inline) return;
+        if (!cfg.picker || !cfg.panel) return;
+        cfg.picker.classList.remove("is-open");
+        if (cfg.trigger) cfg.trigger.setAttribute("aria-expanded", "false");
+        cfg.panel.hidden = true;
+        resetSearch();
+      }
+
+      function isOpen() {
+        return !!(cfg.picker && cfg.picker.classList.contains("is-open"));
+      }
+
+      function contains(target) {
+        return !!(cfg.picker && cfg.picker.contains(target));
+      }
+
+      function loadAccounts(q, selIds, syncCache) {
+        var localReq = ++reqId;
+        var params = new URLSearchParams();
+        if (q) params.set("q", q);
+        if (selIds && selIds.length) params.set("selected", selIds.join(","));
+        fetch("/admin/api/equipo/cuentas?" + params.toString(), {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        })
+          .then(function (r) {
+            return r.json().then(function (j) {
+              return { res: r, body: j };
+            });
+          })
+          .then(function (x) {
+            if (localReq !== reqId) return;
+            if (!x.res.ok || !x.body.ok) return;
+            if (syncCache && !(q || "").trim()) {
+              setTeamAccounts(x.body.accounts || []);
+              updateLinkedPreview();
+            }
+            if ((q || "").trim()) {
+              renderList(x.body.accounts || []);
+              updateSearchPicksVisibility();
+            } else if (syncCache && !cfg.compactLinkedView) {
+              renderList(teamAccounts);
+            }
+          })
+          .catch(function () {});
+      }
+
+      if (cfg.trigger) {
+        cfg.trigger.addEventListener("click", function () {
+          if (isOpen()) closePanel();
+          else openPanel();
+        });
+      }
+
+      if (cfg.list) {
+        cfg.list.addEventListener("change", function (e) {
+          if (!cfg.inline) return;
+          var cb = e.target.closest('input[type="checkbox"][data-account-id]');
+          if (!cb) return;
+          var id = cb.getAttribute("data-account-id") || "";
+          if (cb.checked) {
+            if (selectedIds.indexOf(id) < 0) selectedIds.push(id);
+          } else {
+            var idx = selectedIds.indexOf(id);
+            if (idx >= 0) selectedIds.splice(idx, 1);
+          }
+          syncHiddenInputs();
+          updateLinkedPreview();
+        });
+        cfg.list.addEventListener("click", function (e) {
+          if (cfg.inline) return;
+          var opt = e.target.closest(".equipo-account-picker__option");
+          if (!opt) return;
+          var id = opt.getAttribute("data-account-id") || "";
+          toggleId(id);
+          if (cfg.statsOptionStyle) {
+            var q = cfg.search ? cfg.search.value.trim() : "";
+            renderList(filterTeamAccounts(teamAccounts, q));
+            return;
+          }
+          var selected = selectedIds.indexOf(id) !== -1;
+          opt.classList.toggle("is-selected", selected);
+          opt.setAttribute("aria-selected", selected ? "true" : "false");
+        });
+      }
+
+      if (cfg.search) {
+        cfg.search.addEventListener("focus", function () {
+          if (!cfg.compactLinkedView) return;
+          searchPicksOpen = true;
+          updateSearchPicksVisibility();
+          refreshSearchResults();
+        });
+        cfg.search.addEventListener("blur", function () {
+          if (!cfg.compactLinkedView) return;
+          setTimeout(function () {
+            var active = document.activeElement;
+            if (cfg.searchPicks && active && cfg.searchPicks.contains(active)) return;
+            searchPicksOpen = false;
+            updateSearchPicksVisibility();
+          }, 140);
+        });
+        cfg.search.addEventListener("input", function () {
+          var q = cfg.search.value.trim();
+          setSearchClearVisible(!!q);
+          if (cfg.compactLinkedView) {
+            searchPicksOpen = true;
+            updateSearchPicksVisibility();
+          }
+          clearTimeout(searchTimer);
+          searchTimer = setTimeout(function () {
+            if (cfg.compactLinkedView) {
+              refreshSearchResults();
+              return;
+            }
+            if (cfg.useStatsChoices) {
+              var statsQuery = cfg.search.value.trim();
+              if (teamAccounts.length) {
+                renderList(filterTeamAccounts(teamAccounts, statsQuery));
+              } else {
+                loadStatsAccountChoices(statsQuery, true);
+              }
+              return;
+            }
+            var query = cfg.search.value.trim();
+            if (query) {
+              loadAccounts(query, selectedIds, false);
+            } else {
+              renderList(filterTeamAccounts(teamAccounts, ""));
+            }
+          }, 220);
+        });
+      }
+
+      if (cfg.searchPicks && cfg.compactLinkedView) {
+        cfg.searchPicks.addEventListener("mousedown", function (e) {
+          e.preventDefault();
+        });
+      }
+
+      if (cfg.linkedToggle) {
+        cfg.linkedToggle.addEventListener("click", function () {
+          setLinkedPreviewOpen(!linkedPreviewOpen);
+        });
+      }
+
+      if (cfg.searchClear && cfg.search) {
+        cfg.searchClear.addEventListener("click", function () {
+          resetSearch();
+          if (cfg.compactLinkedView) {
+            searchPicksOpen = false;
+            updateSearchPicksVisibility();
+            if (cfg.list) cfg.list.innerHTML = "";
+            if (cfg.emptyEl) cfg.emptyEl.hidden = true;
+            return;
+          }
+          renderList(filterTeamAccounts(teamAccounts, ""));
+          cfg.search.focus();
+        });
+      }
+
+      setSelectedIds(selectedIds);
+      if (cfg.compactLinkedView) {
+        setLinkedPreviewOpen(false);
+        updateSearchPicksVisibility();
+        updateLinkedPreview();
+      } else if (cfg.useStatsChoices) {
+        loadStatsAccountChoices("", true);
+      } else {
+        renderList(teamAccounts);
+      }
+
+      return {
+        setSelectedIds: setSelectedIds,
+        getSelectedIds: function () {
+          return selectedIds.slice();
+        },
+        closePanel: closePanel,
+        openPanel: openPanel,
+        setLinkedPreviewOpen: setLinkedPreviewOpen,
+        resetSearchPicks: function () {
+          searchPicksOpen = false;
+          updateSearchPicksVisibility();
+        },
+        reset: function () {
+          setSelectedIds([]);
+          closePanel();
+          if (cfg.compactLinkedView) setLinkedPreviewOpen(false);
+        },
+        loadAccounts: loadAccounts,
+        loadStatsAccountChoices: loadStatsAccountChoices,
+        isOpen: isOpen,
+        contains: contains,
+        focusTrigger: function () {
+          if (cfg.trigger) cfg.trigger.focus();
+        },
+      };
+    }
+
+    var createAccountPickerApi = initMultiAccountLinkPicker({
+      picker: document.getElementById("create-account-picker"),
+      hiddenWrap: document.getElementById("create-account-hidden-inputs"),
+      trigger: document.getElementById("create-account-trigger"),
+      valueEl: document.getElementById("create-account-value"),
+      panel: document.getElementById("create-account-panel"),
+      list: document.getElementById("create-account-list"),
+      search: document.getElementById("create-account-search"),
+      searchClear: document.getElementById("create-account-search-clear"),
+      useStatsChoices: true,
+      statsOptionStyle: true,
+      initialIds: [],
+    });
+
+
+    if (createForm) {
+      createForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (!createSubmit) return;
+        var fd = new FormData(createForm);
+        createSubmit.disabled = true;
+        fetch("/admin/api/equipo/usuario", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+          body: fd,
+        })
+          .then(function (r) {
+            return r.json().then(function (j) {
+              return { res: r, body: j };
+            });
+          })
+          .then(function (x) {
+            createSubmit.disabled = false;
+            if (!x.res.ok || !x.body.ok) {
+              showEquipoFlash("error", (x.body && x.body.error) || i18n.errCreate);
+              if (createUsername) createUsername.focus();
+              return;
+            }
+            resetCreateUserForm();
+            showEquipoFlash("ok", x.body.message || i18n.userCreated);
+            loadMembers(1, membersState.q);
+          })
+          .catch(function () {
+            createSubmit.disabled = false;
+            showEquipoFlash("error", i18n.networkError);
+          });
+      });
+    }
+
+    var modal = document.getElementById("edit-user-modal");
+    var form = document.getElementById("edit-user-form");
+    var editUsername = document.getElementById("edit-user-username");
+    var editPassword = document.getElementById("edit-user-password");
+    var editMode = document.getElementById("edit-user-mode");
+    var editCanComments = document.getElementById("edit-user-can-comments");
+    var editToggle = document.getElementById("edit-user-toggle-password");
+    var editSubmit = form ? form.querySelector('button[type="submit"]') : null;
+    var lastEditTrigger = null;
+    wirePasswordToggle(editPassword, editToggle);
+
+    var editAccountPickerApi = initMultiAccountLinkPicker({
+      inline: true,
+      compactLinkedView: true,
+      useStatsChoices: true,
+      accountsOnly: true,
+      hiddenWrap: document.getElementById("edit-account-hidden-inputs"),
+      list: document.getElementById("edit-account-list"),
+      search: document.getElementById("edit-account-search"),
+      searchClear: document.getElementById("edit-account-search-clear"),
+      searchPicks: document.getElementById("edit-account-search-picks"),
+      emptyEl: document.getElementById("edit-account-empty"),
+      linkedToggle: document.getElementById("edit-linked-accounts-toggle"),
+      linkedPreview: document.getElementById("edit-linked-accounts-preview"),
+      linkedText: document.getElementById("edit-linked-accounts-text"),
+      noLinkedLabel: i18n.noLinkedAccounts || "—",
+      initialIds: [],
+    });
+
+    function releaseModalFocus(modalEl, returnFocusEl) {
+      var active = document.activeElement;
+      if (!active || !modalEl || !modalEl.contains(active)) return;
+      if (returnFocusEl && typeof returnFocusEl.focus === "function") {
+        returnFocusEl.focus();
+      } else {
+        active.blur();
+      }
+    }
+
+    function resetEditPasswordField() {
+      if (!editPassword || !editToggle) return;
+      editPassword.value = "";
+      editPassword.type = "password";
+      editToggle.classList.remove("is-visible");
+      editToggle.setAttribute("aria-pressed", "false");
+      editToggle.setAttribute("aria-label", i18n.showPassword);
+    }
+
+    function setEditMode(mode) {
+      if (!editMode) return;
+      var m = mode || "basic";
+      editMode.value = m;
+      if (editMode.value !== m) editMode.value = "basic";
+    }
+
+    function openEditModal(userId, username, userMode, linkedAccountIds, canViewComments, trigger) {
+      if (!modal || !form || !editUsername) return;
+      lastEditTrigger = trigger || null;
+      form.dataset.editUserId = userId;
+      editUsername.value = username || "";
+      editAccountPickerApi.closePanel();
+      var editAccountSearch = document.getElementById("edit-account-search");
+      var editAccountSearchPicks = document.getElementById("edit-account-search-picks");
+      if (editAccountSearch) editAccountSearch.value = "";
+      if (editAccountSearchPicks) editAccountSearchPicks.hidden = true;
+      editAccountPickerApi.setLinkedPreviewOpen(false);
+      if (typeof editAccountPickerApi.resetSearchPicks === "function") {
+        editAccountPickerApi.resetSearchPicks();
+      }
+      editAccountPickerApi.setSelectedIds(linkedAccountIds || []);
+      editAccountPickerApi.loadStatsAccountChoices("", true);
+      setEditMode(userMode || "basic");
+      if (editCanComments) editCanComments.checked = !!canViewComments;
+      resetEditPasswordField();
+      modal.classList.add("is-open");
+      modal.setAttribute("aria-hidden", "false");
+      editUsername.focus();
+    }
+
+    function closeEditModal() {
+      if (!modal) return;
+      releaseModalFocus(modal, lastEditTrigger);
+      modal.classList.remove("is-open");
+      modal.setAttribute("aria-hidden", "true");
+      lastEditTrigger = null;
+      editAccountPickerApi.closePanel();
+    }
+
+    document.addEventListener("click", function (e) {
+      if (createAccountPickerApi.isOpen() && !createAccountPickerApi.contains(e.target)) {
+        createAccountPickerApi.closePanel();
+      }
+      if (editAccountPickerApi.isOpen() && !editAccountPickerApi.contains(e.target)) {
+        editAccountPickerApi.closePanel();
+      }
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      if (createAccountPickerApi.isOpen()) {
+        createAccountPickerApi.closePanel();
+        createAccountPickerApi.focusTrigger();
+        return;
+      }
+      if (editAccountPickerApi.isOpen()) {
+        editAccountPickerApi.closePanel();
+        editAccountPickerApi.focusTrigger();
+        return;
+      }
+      if (modal && modal.classList.contains("is-open")) closeEditModal();
+    });
+
+    if (membersList) {
+      membersList.addEventListener("click", function (e) {
+        var editBtn = e.target.closest(".js-open-edit-user");
+        if (editBtn) {
+          openEditModal(
+            editBtn.getAttribute("data-user-id"),
+            editBtn.getAttribute("data-username"),
+            editBtn.getAttribute("data-user-mode"),
+            parseLinkedAccountIds(editBtn.getAttribute("data-linked-account-ids")),
+            editBtn.getAttribute("data-can-view-comments") === "1",
+            editBtn
+          );
+          return;
+        }
+        var delBtn = e.target.closest(".js-user-delete");
+        if (!delBtn) return;
+        var userId = delBtn.getAttribute("data-user-id");
+        var uname = delBtn.getAttribute("data-username") || "";
+        if (!userId) return;
+        var msg = (i18n.deleteConfirm || "").replace("@{user}", "@" + uname);
+        if (!confirm(msg)) return;
+        delBtn.disabled = true;
+        fetch("/admin/api/equipo/usuario/" + encodeURIComponent(userId), {
+          method: "DELETE",
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        })
+          .then(function (r) {
+            return r.json().then(function (j) {
+              return { res: r, body: j };
+            });
+          })
+          .then(function (x) {
+            if (!x.res.ok || !x.body.ok) {
+              delBtn.disabled = false;
+              showEquipoFlash("error", (x.body && x.body.error) || i18n.errDelete);
+              return;
+            }
+            showEquipoFlash("ok", x.body.message || i18n.userDeleted);
+            loadMembers(membersState.page, membersState.q);
+          })
+          .catch(function () {
+            delBtn.disabled = false;
+            showEquipoFlash("error", i18n.networkError);
+          });
+      });
+
+      membersList.addEventListener("change", function (e) {
+        var input = e.target.closest(".js-user-active-toggle");
+        if (!input) return;
+        var row = input.closest(".js-user-row");
+        if (!row) return;
+        var userId = row.getAttribute("data-user-id");
+        if (!userId) return;
+        if (input.dataset.pending === "1") {
+          input.checked = !input.checked;
+          return;
+        }
+
+        var active = input.checked;
+        var previousActive = !active;
+
+        setRowActiveState(row, active);
+        setTogglePending(input, true);
+        input.disabled = true;
+
+        fetch("/admin/api/equipo/usuario/" + encodeURIComponent(userId) + "/estado", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({ active: active }),
+        })
+          .then(function (r) {
+            return r.json().then(function (j) {
+              return { res: r, body: j };
+            });
+          })
+          .then(function (x) {
+            input.disabled = false;
+            setTogglePending(input, false);
+            if (!x.res.ok || !x.body.ok) {
+              setRowActiveState(row, previousActive);
+              showEquipoFlash("error", (x.body && x.body.error) || i18n.errStatus);
+              return;
+            }
+            setRowActiveState(row, x.body.active);
+          })
+          .catch(function () {
+            input.disabled = false;
+            setTogglePending(input, false);
+            setRowActiveState(row, previousActive);
+            showEquipoFlash("error", i18n.networkError);
+          });
+      });
+    }
+
+    if (membersSearch && window.wireAjaxSearch) {
+      window.wireAjaxSearch(membersSearch, membersSearchClear, function (q) {
+        loadMembers(1, q);
+      });
+    } else if (membersSearch) {
+      var searchTimer = null;
+      membersSearch.addEventListener("input", function () {
+        var q = membersSearch.value.trim();
+        setMembersSearchClearVisible(!!q);
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(function () {
+          loadMembers(1, q);
+        }, 320);
+      });
+    }
+
+    if (membersSearchClear && membersSearch && !window.wireAjaxSearch) {
+      membersSearchClear.addEventListener("click", function () {
+        membersSearch.value = "";
+        setMembersSearchClearVisible(false);
+        loadMembers(1, "");
+        membersSearch.focus();
+      });
+    }
+
+    if (membersPerPage) {
+      membersPerPage.addEventListener("change", function () {
+        membersState.perPage = membersPerPage.value || "10";
+        loadMembers(1, membersState.q);
+      });
+    }
+
+    if (membersPrev) {
+      membersPrev.addEventListener("click", function () {
+        if (membersState.page > 1) loadMembers(membersState.page - 1, membersState.q);
+      });
+    }
+
+    if (membersNext) {
+      membersNext.addEventListener("click", function () {
+        loadMembers(membersState.page + 1, membersState.q);
+      });
+    }
+
+    loadMembers(1, "");
+
+    document.querySelectorAll("[data-close-edit-modal]").forEach(function (el) {
+      el.addEventListener("click", closeEditModal);
+    });
+
+    if (form) {
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var userId = form.dataset.editUserId;
+        if (!userId || !editSubmit) return;
+        var fd = new FormData(form);
+        editSubmit.disabled = true;
+        fetch("/admin/api/equipo/usuario/" + encodeURIComponent(userId) + "/edit", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+          body: fd,
+        })
+          .then(function (r) {
+            return r.json().then(function (j) {
+              return { res: r, body: j };
+            });
+          })
+          .then(function (x) {
+            editSubmit.disabled = false;
+            if (!x.res.ok || !x.body.ok) {
+              showEquipoFlash("error", (x.body && x.body.error) || i18n.errSave);
+              return;
+            }
+            showEquipoFlash("ok", x.body.message || i18n.userUpdated);
+            closeEditModal();
+            loadMembers(membersState.page, membersState.q);
+          })
+          .catch(function () {
+            editSubmit.disabled = false;
+            showEquipoFlash("error", i18n.networkError);
+          });
+      });
+    }
+  })();
+</script>
+
+<script>
+  (function () {
+    var modal = document.getElementById("panel-info-modal");
+    var titleEl = document.getElementById("panel-info-modal-title");
+    var textEl = document.getElementById("panel-info-modal-text");
+    var lastTrigger = null;
+
+    if (!modal || !titleEl || !textEl) return;
+
+    function releaseModalFocus(returnFocusEl) {
+      var active = document.activeElement;
+      if (!active || !modal.contains(active)) return;
+      if (returnFocusEl && typeof returnFocusEl.focus === "function") {
+        returnFocusEl.focus();
+      } else {
+        active.blur();
+      }
+    }
+
+    function openPanelInfo(btn) {
+      var title = btn.getAttribute("data-info-title") || "";
+      var text = btn.getAttribute("data-info-text") || "";
+      lastTrigger = btn;
+      titleEl.textContent = title;
+      textEl.textContent = text;
+      modal.classList.add("is-open");
+      modal.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+      var closeBtn = modal.querySelector(".equipo-modal__close");
+      if (closeBtn) closeBtn.focus();
+    }
+
+    function closePanelInfo() {
+      releaseModalFocus(lastTrigger);
+      modal.classList.remove("is-open");
+      modal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+      lastTrigger = null;
+    }
+
+    document.querySelectorAll(".js-panel-info-open").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        openPanelInfo(btn);
+      });
+    });
+
+    modal.querySelectorAll("[data-close-panel-info]").forEach(function (el) {
+      el.addEventListener("click", closePanelInfo);
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && modal.classList.contains("is-open")) {
+        closePanelInfo();
+      }
+    });
+  })();
+</script>
+{% endblock %}

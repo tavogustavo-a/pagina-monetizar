@@ -1,0 +1,87 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.env/
+.venv/
+*.egg-info/
+.eggs/
+dist/
+build/
+pip-wheel-metadata/
+
+# Cachés de herramientas
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.cache/
+*.cover
+
+# Entorno y secretos (nunca al repo)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*credentials*.json
+client_secret*.json
+token.json
+tokens.json
+
+# Base de datos local, WAL, dumps y backups
+.data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sql
+*.sql.gz
+*.dump
+backups/
+instance/
+
+# Vídeos/fotos subidos en local (producción usa su propio uploads/)
+uploads/*
+!uploads/.gitkeep
+
+# Notas de despliegue locales (claves, pasos del VPS; no van al repo)
+archivos para usar en monetizacion.txt
+*usar*monetizacion*.txt
+git subir y actualizar.txt
+
+# Logs y temporales
+*.log
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Medios sueltos en la raíz (pruebas locales)
+/*.mp4
+/*.webm
+/*.mov
+/*.mkv
+/*.jpg
+/*.jpeg
+/*.png
+/*.webp
+/*.gif
+
+# Arranque local en Windows (no va al repo)
+cmd.bat
+
+# Sistema / IDE
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~

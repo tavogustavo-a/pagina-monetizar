@@ -1,0 +1,57 @@
+{# Requires: publications, visible_stats, selected_platform, t, empty_message, hide_platform=false #}
+{% if publications %}
+<ul class="stats-video-list" role="list">
+  {% for v in publications %}
+  <li class="stats-video-list__row">
+    <div class="stats-video-list__main">
+      {% if hide_platform is not defined or not hide_platform %}
+      {% if v.platform_id %}
+      <span class="stats-video-list__platform">{{ t('platform.' ~ v.platform_id) }}</span>
+      {% else %}
+      <span class="stats-video-list__platform stats-video-list__platform--local">{{ t('admin.local_only') }}</span>
+      {% endif %}
+      {% endif %}
+      {% set link_platform = v.platform_id if v.platform_id else selected_platform %}
+      {% if v.account_link_id %}
+      <a
+        href="/admin?platform={{ link_platform | urlencode }}&amp;account={{ v.account_link_id | urlencode }}&amp;video={{ v.id | urlencode }}"
+        class="stats-video-list__title"
+        title="{{ v.title }}"
+      >{{ v.title }}</a>
+      {% elif v.config_id and (not v.platform_id or v.platform_id == 'tiktok') %}
+      <a
+        href="/admin?platform={{ link_platform | urlencode }}&amp;account={{ v.config_id | urlencode }}&amp;video={{ v.id | urlencode }}"
+        class="stats-video-list__title"
+        title="{{ v.title }}"
+      >{{ v.title }}</a>
+      {% elif v.platform_id %}
+      <a
+        href="/admin?platform={{ v.platform_id | urlencode }}&amp;video={{ v.id | urlencode }}"
+        class="stats-video-list__title"
+        title="{{ v.title }}"
+      >{{ v.title }}</a>
+      {% else %}
+      <span class="stats-video-list__title stats-video-list__title--plain" title="{{ v.title }}">{{ v.title }}</span>
+      {% endif %}
+      <span class="stats-video-list__account">{{ v.account }}</span>
+    </div>
+    <div class="stats-video-list__metrics">
+      {% if visible_stats.views %}
+      <span class="stats-video-list__metric"><strong>{{ v.views_label }}</strong> {{ t('admin.views') }}</span>
+      {% endif %}
+      {% if visible_stats.likes %}
+      <span class="stats-video-list__metric"><strong>{{ v.likes_label }}</strong> {{ t('admin.likes') }}</span>
+      {% endif %}
+      {% if visible_stats.comments %}
+      <span class="stats-video-list__metric"><strong>{{ v.comments_label }}</strong> {{ t('admin.comments') }}</span>
+      {% endif %}
+      {% if visible_stats.shares %}
+      <span class="stats-video-list__metric"><strong>{{ v.shares_label }}</strong> {{ t('admin.shares') }}</span>
+      {% endif %}
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="sub stats-video-list__empty">{{ empty_message }}</p>
+{% endif %}

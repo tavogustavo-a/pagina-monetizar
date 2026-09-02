@@ -1,0 +1,17 @@
+{% extends "errors/error_base.html" %}
+
+{% block title %}{{ t('offline.title') }}{% endblock %}
+
+{% block content %}
+  <div class="err-icon" aria-hidden="true">⌀</div>
+  <h1>{{ t('offline.title') }}</h1>
+  <p>{{ t('offline.message') }}</p>
+  <p>{{ t('offline.hint') }}</p>
+  <div class="err-actions">
+    <form method="get" action="" class="err-retry-form">
+      <input type="hidden" name="_retry" value="1" />
+      <button type="submit" class="err-btn" id="errRetryBtn">{{ t('offline.retry') }}</button>
+    </form>
+    <a class="err-btn err-btn--soft" href="{{ home_url }}">{{ t('offline.home') }}</a>
+  </div>
+{% endblock %}
