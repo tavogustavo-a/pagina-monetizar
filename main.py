@@ -1856,8 +1856,7 @@ def tiktok_oauth_connect(request: Request):
         return _admin_privileges_redirect_login()
     if not tiktok_oauth.oauth_configured():
         request.session["tiktok_error"] = (
-            "TikTok credentials missing. Set TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET, "
-            "and TIKTOK_REDIRECT_URI in the server .env file."
+            "Faltan las credenciales de TikTok. Pon Client Key y Secret en Servidores."
         )
         return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
     state = tiktok_oauth.new_csrf_state()
