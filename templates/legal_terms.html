@@ -6,53 +6,79 @@
 </p>
 <h2>1. Descripción del servicio</h2>
 <p class="legal-prose">
-  Un panel privado para equipos autorizados que consultan métricas de TikTok, publican videos y gestionan comentarios mediante la API oficial de TikTok.
+  {{ site_name }} es un panel privado, por invitación, para personas y equipos que quieren crecer en redes sociales:
+  programar y publicar contenido, consultar métricas y gestionar comentarios en las cuentas que conecten
+  mediante el inicio de sesión oficial de cada plataforma.
 </p>
 <h2>2. Elegibilidad</h2>
-<p class="legal-prose">Debes estar invitado por un administrador, cumplir los requisitos de edad de TikTok y conectar solo cuentas que estés autorizado a gestionar.</p>
+<p class="legal-prose">
+  Debes estar invitado por un administrador, tener al menos 13 años (y la edad mínima de cada red que conectes)
+  y conectar solo cuentas que te pertenezcan o que estés autorizado a gestionar.
+</p>
 <h2>3. Uso aceptable</h2>
 <ul class="legal-list">
-  <li>Cumplir los Términos de Servicio, Normas de la comunidad y Términos para Desarrolladores de TikTok.</li>
-  <li>Sin spam, acoso, contenido ilegal ni abuso de la API.</li>
+  <li>Cumplir los términos, normas de comunidad y políticas para desarrolladores de cada plataforma conectada.</li>
+  <li>Sin spam, acoso, contenido ilegal ni abuso de las APIs.</li>
   <li>Publicar solo contenido sobre el que tengas derechos.</li>
+  <li>No presentar {{ site_name }} como si fuera una red social o un producto oficial de esas plataformas.</li>
 </ul>
-<h2>4. Alcances de la API</h2>
-<p class="legal-prose">Solicitamos <code>user.info.basic</code>, <code>video.upload</code>, <code>video.publish</code>, <code>comment.list</code> y <code>comment.reply</code> únicamente para ofrecer las funciones de publicación y gestión de comentarios descritas en la app.</p>
+<h2>4. Conexiones oficiales</h2>
+<p class="legal-prose">
+  Solicitamos únicamente los permisos necesarios para las funciones descritas (perfil básico, publicación,
+  comentarios y analíticas, según lo que actives). Puedes revocar el acceso en cualquier momento desde el panel
+  o desde los ajustes de la plataforma.
+</p>
 <h2>5. Membresías y pagos</h2>
 <p class="legal-prose">
   Los planes de pago son mensuales. Puedes cancelar tu suscripción cuando quieras; consulta la
   <a href="/cancellation-policy">{{ t('footer.cancellation') }}</a> para el procedimiento, acceso tras la cancelación y reembolsos.
 </p>
 <h2>6. Limitación de responsabilidad</h2>
-<p class="legal-prose">El servicio se ofrece «tal cual». No somos responsables de daños indirectos ni interrupciones del servicio de TikTok.</p>
+<p class="legal-prose">
+  El servicio se ofrece «tal cual». No somos responsables de daños indirectos ni de interrupciones, cambios de
+  política o errores de las redes sociales de terceros.
+</p>
 <h2>7. Contacto</h2>
-<p class="legal-prose"><a href="mailto:{{ support_email }}">{{ support_email }}</a></p>
+<p class="legal-prose"><a href="mailto:{{ support_email }}">{{ support_email }}</a> · <a href="/support">{{ t('footer.support') }}</a></p>
 {% else %}
 <p class="legal-prose">
   By using {{ site_name }} operated by {{ company_name }}, you agree to these Terms of Service.
 </p>
 <h2>1. Service description</h2>
 <p class="legal-prose">
-  A private dashboard for authorized teams to view TikTok metrics, publish videos, and manage comments through the official TikTok API.
+  {{ site_name }} is a private, invite-only dashboard for people and teams who want to grow on social media:
+  schedule and publish content, view metrics, and manage comments on the accounts they connect through
+  each platform's official login.
 </p>
 <h2>2. Eligibility</h2>
-<p class="legal-prose">You must be invited by an administrator, meet TikTok's age requirements, and connect only accounts you are authorized to manage.</p>
+<p class="legal-prose">
+  You must be invited by an administrator, be at least 13 years old (and meet the minimum age of each
+  network you connect), and connect only accounts you own or are authorized to manage.
+</p>
 <h2>3. Acceptable use</h2>
 <ul class="legal-list">
-  <li>Comply with TikTok Terms of Service, Community Guidelines, and Developer Terms.</li>
+  <li>Comply with the terms, community guidelines, and developer policies of each connected platform.</li>
   <li>No spam, harassment, illegal content, or API abuse.</li>
   <li>Publish only content you have rights to use.</li>
+  <li>Do not present {{ site_name }} as a social network or as an official product of those platforms.</li>
 </ul>
-<h2>4. API scopes</h2>
-<p class="legal-prose">We request <code>user.info.basic</code>, <code>video.upload</code>, <code>video.publish</code>, <code>comment.list</code>, and <code>comment.reply</code> solely to provide publishing and comment management features described in the app.</p>
+<h2>4. Official connections</h2>
+<p class="legal-prose">
+  We request only the permissions needed for the features described (basic profile, publishing, comments,
+  and analytics, depending on what you enable). You may revoke access at any time from the panel or from
+  the platform's settings.
+</p>
 <h2>5. Memberships and billing</h2>
 <p class="legal-prose">
   Paid plans are billed monthly. You may cancel your subscription anytime; see our
   <a href="/cancellation-policy">{{ t('footer.cancellation') }}</a> for the process, access after cancellation, and refunds.
 </p>
 <h2>6. Limitation of liability</h2>
-<p class="legal-prose">The service is provided «as is». We are not liable for indirect damages or TikTok service interruptions.</p>
+<p class="legal-prose">
+  The service is provided «as is». We are not liable for indirect damages or for outages, policy changes,
+  or errors of third-party social networks.
+</p>
 <h2>7. Contact</h2>
-<p class="legal-prose"><a href="mailto:{{ support_email }}">{{ support_email }}</a></p>
+<p class="legal-prose"><a href="mailto:{{ support_email }}">{{ support_email }}</a> · <a href="/support">{{ t('footer.support') }}</a></p>
 {% endif %}
 {% endblock %}

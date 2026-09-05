@@ -16,8 +16,10 @@
       body {
         min-height: 100vh;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
+        gap: 1.25rem;
         padding: 1.25rem;
         background:
           radial-gradient(900px 500px at 10% 0%, rgba(37, 244, 238, 0.12), transparent 55%),
@@ -25,6 +27,19 @@
           #000;
         color: #fff;
       }
+      .err-legal {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.55rem 1rem;
+        max-width: 36rem;
+        font-size: 0.78rem;
+      }
+      .err-legal a {
+        color: rgba(255, 255, 255, 0.55);
+        text-decoration: none;
+      }
+      .err-legal a:hover { color: #fff; }
       .err-card {
         width: 100%;
         max-width: 420px;
@@ -95,6 +110,14 @@
     <main class="err-card" role="main">
       {% block content %}{% endblock %}
     </main>
+    <nav class="err-legal" aria-label="Legal and support">
+      <a href="/about">{{ t('footer.about') }}</a>
+      <a href="/privacy-policy">{{ t('footer.privacy') }}</a>
+      <a href="/terms-of-service">{{ t('footer.terms') }}</a>
+      <a href="/cancellation-policy">{{ t('footer.cancellation') }}</a>
+      <a href="/data-deletion">{{ t('footer.deletion') }}</a>
+      <a href="/support">{{ t('footer.support') }}</a>
+    </nav>
     <script src="/static/js/error_page.js?v=1" defer></script>
   </body>
 </html>

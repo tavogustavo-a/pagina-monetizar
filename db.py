@@ -2282,7 +2282,7 @@ def list_support_threads(q: str = "") -> list[dict[str, Any]]:
 
 
 GUEST_THREAD_PREFIX = "g:"
-GUEST_SEARCH_TERMS = ("anon", "invit", "guest", "visit")
+GUEST_SEARCH_TERMS = ("anon", "anoni", "invit", "guest", "visit", "anón")
 
 
 def guest_thread_matches_query(query: str) -> bool:

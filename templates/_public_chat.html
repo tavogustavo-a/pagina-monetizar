@@ -20,8 +20,8 @@
     <div class="chat-box public-chat__box" id="public-chat-box" aria-live="polite">
       <div class="chat-empty" id="public-chat-empty">{{ t('support.empty') }}</div>
     </div>
-    <form class="chat-compose public-chat__form" id="public-chat-form">
-      <div class="chat-compose__field chat-compose__field--compact">
+    <form class="chat-compose support-chat-compose public-chat__form" id="public-chat-form">
+      <div class="chat-compose__field">
         <textarea
           id="public-chat-input"
           class="chat-compose__input"
@@ -31,7 +31,7 @@
           aria-label="{{ t('support.placeholder') }}"
         ></textarea>
       </div>
-      <button type="submit" class="btn btn-accent chat-compose__send chat-compose__send--compact" aria-label="{{ t('support.send') }}" title="{{ t('support.send') }}">{% include '_icon_send.html' %}</button>
+      <button type="submit" class="btn btn-accent chat-compose__send" aria-label="{{ t('support.send') }}" title="{{ t('support.send') }}">{% include '_icon_send.html' %}</button>
     </form>
   </div>
 </div>

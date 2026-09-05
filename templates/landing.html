@@ -1,5 +1,5 @@
 {% extends "base_public.html" %}
-{% block title %}{{ site_name }} — TikTok Creator Dashboard{% endblock %}
+{% block title %}{{ site_name }} — {{ t('landing.title_suffix') }}{% endblock %}
 {% block public_content %}
 <section class="landing-hero">
   <div class="landing-hero__inner">
@@ -19,7 +19,7 @@
       <div class="feature-card__icon" aria-hidden="true">▶</div>
       <h3>{{ t('landing.feature1.title') }}</h3>
       <p>{{ t('landing.feature1.body') }}</p>
-      <span class="feature-card__scope">{{ t('landing.feature1.scope') }} <code>video.upload</code>, <code>video.publish</code></span>
+      <span class="feature-card__scope">{{ t('landing.feature1.scope') }}</span>
     </article>
     <article class="feature-card">
       <div class="feature-card__icon" aria-hidden="true">📊</div>
@@ -31,7 +31,7 @@
       <div class="feature-card__icon" aria-hidden="true">💬</div>
       <h3>{{ t('landing.feature3.title') }}</h3>
       <p>{{ t('landing.feature3.body') }}</p>
-      <span class="feature-card__scope">{{ t('landing.feature3.scope') }} <code>comment.list</code>, <code>comment.reply</code></span>
+      <span class="feature-card__scope">{{ t('landing.feature3.scope') }}</span>
     </article>
   </div>
 </section>

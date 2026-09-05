@@ -13,13 +13,16 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/style.css?v=panel296" />
+    <link rel="stylesheet" href="/static/style.css?v=panel302" />
     <meta name="service-worker-url" content="/sw.js" />
     <meta name="offline-banner-offline" content="{{ t('offline.banner') }}" />
     <meta name="offline-banner-online" content="{{ t('offline.restored') }}" />
   </head>
   <body>
     {% block body %}{% endblock %}
+    {% block site_footer %}
+    {% include "_footer.html" %}
+    {% endblock %}
     <script src="/static/js/register_service_worker.js?v=1" defer></script>
     <script src="/static/js/offline-status.js?v=1" defer></script>
   </body>

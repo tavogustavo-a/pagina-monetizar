@@ -3,58 +3,98 @@
 {% if lang == 'es' %}
 <p class="legal-prose">
   {{ company_name }} («nosotros») opera {{ site_name }} en {{ site_url }}. Esta Política de privacidad explica qué
-  datos recopilamos, cómo los usamos y tus derechos al usar nuestro panel integrado con TikTok.
+  datos recopilamos, cómo los usamos y tus derechos al usar nuestro panel para crecer en redes sociales.
 </p>
 <h2>1. Responsable del tratamiento</h2>
 <p class="legal-prose">{{ company_name }} · <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
 <h2>2. Datos que recopilamos</h2>
 <ul class="legal-list">
-  <li><strong>Cuentas del panel:</strong> usuario, nombre visible, contraseña cifrada, rol, permisos y cookies de sesión.</li>
-  <li><strong>TikTok (con tu consentimiento):</strong> identificadores de perfil, tokens OAuth, métricas de video, metadatos de publicaciones, comentarios y archivos de video que subes para publicar.</li>
-  <li><strong>Registros técnicos:</strong> dirección IP y marcas de tiempo de solicitudes por seguridad.</li>
+  <li><strong>Cuentas del panel:</strong> usuario, nombre visible, correo, contraseña cifrada, rol, permisos y cookies de sesión.</li>
+  <li><strong>Plataformas conectadas (con tu consentimiento):</strong> identificadores de perfil, tokens de acceso y renovación obtenidos por OAuth oficial, métricas de contenido, metadatos de publicaciones, comentarios y archivos que subes para publicar.</li>
+  <li><strong>Membresías y pagos:</strong> plan contratado, fechas de vigencia y registros de cobro necesarios para facturar el servicio.</li>
+  <li><strong>Registros técnicos:</strong> dirección IP, agente de usuario y marcas de tiempo de solicitudes, para seguridad y diagnóstico.</li>
+  <li><strong>Soporte:</strong> mensajes que nos envías por correo o por el chat del panel.</li>
 </ul>
 <h2>3. Cómo usamos los datos</h2>
 <ul class="legal-list">
-  <li>Autenticar usuarios autorizados y aplicar permisos.</li>
-  <li>Mostrar analíticas y publicar contenido vía <code>user.info.basic</code>, <code>video.upload</code> y <code>video.publish</code>.</li>
-  <li>Listar y responder comentarios vía <code>comment.list</code> y <code>comment.reply</code>.</li>
-  <li>Mantener la seguridad y cumplir las políticas para desarrolladores de TikTok.</li>
+  <li>Autenticar usuarios invitados y aplicar permisos del equipo.</li>
+  <li>Publicar y programar el contenido que tú envías a las cuentas que hayas conectado.</li>
+  <li>Mostrar analíticas y gestionar comentarios solo con los permisos que otorgaste en cada plataforma.</li>
+  <li>Prestar soporte, facturar membresías y mantener la seguridad del servicio.</li>
 </ul>
+<p class="legal-prose">No usamos los datos de plataformas conectadas para anuncios a terceros ni para entrenar modelos ajenos a {{ site_name }}.</p>
 <h2>4. Compartición</h2>
-<p class="legal-prose">No vendemos datos personales. Compartimos datos con TikTok al llamar su API y con proveedores de infraestructura necesarios para alojar el servicio.</p>
+<p class="legal-prose">
+  No vendemos datos personales. Compartimos datos con la plataforma social que tú conectas (para ejecutar la acción que pediste),
+  con proveedores de infraestructura necesarios para alojar el servicio y, si aplica, con el procesador de pagos.
+  No vendemos ni alquilamos listas de usuarios.
+</p>
 <h2>5. Conservación y eliminación</h2>
-<p class="legal-prose">Los datos se conservan mientras tu cuenta o conexión TikTok esté activa. Revoca el acceso en ajustes de TikTok o solicita eliminación en <a href="/data-deletion">{{ t('footer.deletion') }}</a>.</p>
+<p class="legal-prose">
+  Conservamos los datos mientras tu cuenta o una conexión de plataforma esté activa, y el tiempo adicional que exija la ley
+  (por ejemplo, registros de facturación). Puedes desconectar una cuenta en el panel, revocar el acceso en los ajustes de
+  esa red social y solicitar la eliminación completa en
+  <a href="/data-deletion">{{ t('footer.deletion') }}</a>.
+</p>
 <h2>6. Tus derechos</h2>
-<p class="legal-prose">Puedes solicitar acceso, corrección o eliminación escribiendo a <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
-<h2>7. Contacto</h2>
-<p class="legal-prose"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
+<p class="legal-prose">
+  Según tu jurisdicción, puedes solicitar acceso, corrección, portabilidad o eliminación escribiendo a
+  <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>. También puedes retirar el consentimiento
+  desconectando las cuentas o dejando de usar el servicio.
+</p>
+<h2>7. Menores</h2>
+<p class="legal-prose">El servicio no está dirigido a menores de 13 años. Debes cumplir además la edad mínima de cada plataforma que conectes.</p>
+<h2>8. Seguridad</h2>
+<p class="legal-prose">Aplicamos medidas razonables (cifrado en tránsito, contraseñas con hash, tokens almacenados de forma restringida). Ningún sistema es 100&nbsp;% seguro.</p>
+<h2>9. Contacto</h2>
+<p class="legal-prose"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a> · <a href="/support">{{ t('footer.support') }}</a></p>
 {% else %}
 <p class="legal-prose">
   {{ company_name }} («we») operates {{ site_name }} at {{ site_url }}. This Privacy Policy explains what
-  data we collect, how we use it, and your rights when you use our TikTok-integrated dashboard.
+  data we collect, how we use it, and your rights when you use our dashboard to grow on social media.
 </p>
 <h2>1. Data controller</h2>
 <p class="legal-prose">{{ company_name }} · <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
 <h2>2. Data we collect</h2>
 <ul class="legal-list">
-  <li><strong>Panel accounts:</strong> username, display name, hashed password, role, permissions, session cookies.</li>
-  <li><strong>TikTok (with your consent):</strong> profile identifiers, OAuth tokens, video metrics, post metadata, comments, and video files you upload for publishing.</li>
-  <li><strong>Technical logs:</strong> IP address and request timestamps for security.</li>
+  <li><strong>Panel accounts:</strong> username, display name, email, hashed password, role, permissions, and session cookies.</li>
+  <li><strong>Connected platforms (with your consent):</strong> profile identifiers, access and refresh tokens obtained through official OAuth, content metrics, post metadata, comments, and files you upload for publishing.</li>
+  <li><strong>Memberships and payments:</strong> plan, validity dates, and billing records needed to charge for the service.</li>
+  <li><strong>Technical logs:</strong> IP address, user agent, and request timestamps for security and diagnostics.</li>
+  <li><strong>Support:</strong> messages you send by email or through the in-app support chat.</li>
 </ul>
 <h2>3. How we use data</h2>
 <ul class="legal-list">
-  <li>Authenticate authorized users and enforce permissions.</li>
-  <li>Display analytics and publish content via <code>user.info.basic</code>, <code>video.upload</code> and <code>video.publish</code>.</li>
-  <li>List and reply to comments via <code>comment.list</code> and <code>comment.reply</code>.</li>
-  <li>Maintain security and comply with TikTok Developer policies.</li>
+  <li>Authenticate invited users and enforce team permissions.</li>
+  <li>Publish and schedule the content you submit to the accounts you connected.</li>
+  <li>Display analytics and manage comments only with the permissions you granted on each platform.</li>
+  <li>Provide support, bill memberships, and keep the service secure.</li>
 </ul>
+<p class="legal-prose">We do not use connected-platform data for third-party advertising or to train models unrelated to {{ site_name }}.</p>
 <h2>4. Sharing</h2>
-<p class="legal-prose">We do <strong>not</strong> sell personal data. We share data with TikTok when calling their API and with infrastructure providers as needed to host the service.</p>
+<p class="legal-prose">
+  We do <strong>not</strong> sell personal data. We share data with the social platform you connect (to perform the action you requested),
+  with infrastructure providers needed to host the service, and, if applicable, with the payment processor.
+  We do not sell or rent user lists.
+</p>
 <h2>5. Retention &amp; deletion</h2>
-<p class="legal-prose">Data is kept while your account or TikTok connection is active. Revoke access in TikTok settings or request deletion at <a href="/data-deletion">{{ t('footer.deletion') }}</a>.</p>
+<p class="legal-prose">
+  We keep data while your account or a platform connection is active, plus any longer period required by law
+  (for example billing records). You can disconnect an account in the panel, revoke access in that social network's
+  settings, and request full deletion at
+  <a href="/data-deletion">{{ t('footer.deletion') }}</a>.
+</p>
 <h2>6. Your rights</h2>
-<p class="legal-prose">You may request access, correction, or deletion by emailing <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
-<h2>7. Contact</h2>
-<p class="legal-prose"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
+<p class="legal-prose">
+  Depending on your jurisdiction, you may request access, correction, portability, or deletion by emailing
+  <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>. You may also withdraw consent by disconnecting
+  accounts or stopping use of the service.
+</p>
+<h2>7. Children</h2>
+<p class="legal-prose">The service is not directed at children under 13. You must also meet the minimum age of each platform you connect.</p>
+<h2>8. Security</h2>
+<p class="legal-prose">We apply reasonable measures (encryption in transit, hashed passwords, restricted token storage). No system is 100% secure.</p>
+<h2>9. Contact</h2>
+<p class="legal-prose"><a href="mailto:{{ contact_email }}">{{ contact_email }}</a> · <a href="/support">{{ t('footer.support') }}</a></p>
 {% endif %}
 {% endblock %}

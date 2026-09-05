@@ -2,57 +2,62 @@
 {% block legal_body %}
 {% if lang == 'es' %}
 <p class="legal-prose">
-  <strong>{{ company_name }}</strong> opera <strong>{{ site_name }}</strong>, una plataforma web privada
-  para creadores y equipos autorizados que gestionan su presencia en TikTok de forma profesional.
+  <strong>{{ company_name }}</strong> opera <strong>{{ site_name }}</strong>, un espacio de trabajo privado
+  para personas y equipos que quieren crecer en redes sociales: planificar contenido, medir resultados
+  y atender a su comunidad desde un solo panel.
 </p>
 <h2>Nuestra misión</h2>
 <p class="legal-prose">
-  Ayudamos a creadores y sus equipos a ver métricas de rendimiento, publicar videos y gestionar comentarios
-  usando la API oficial de
-  <a href="https://developers.tiktok.com/" rel="noopener noreferrer" target="_blank">TikTok for Developers</a>.
+  Ayudamos a creadores, marcas y equipos autorizados a gestionar su presencia en las plataformas
+  sociales que elijan conectar, con herramientas de publicación, analíticas y comentarios.
+  El acceso se otorga por invitación; no somos una red social pública ni un directorio abierto.
 </p>
 <h2>Para quién es</h2>
 <p class="legal-prose">
-  El acceso está restringido a usuarios invitados por {{ company_name }} (administradores, supervisores y
-  colaboradores con permisos asignados). No es una red social pública.
+  El servicio está pensado para usuarios invitados por {{ company_name }} (administradores, supervisores
+  y colaboradores con permisos asignados) que buscan crecer de forma profesional en redes sociales.
 </p>
 <h2>Funciones principales</h2>
 <ul class="legal-list">
-  <li><strong>Analíticas:</strong> vistas, engagement y rendimiento de la cuenta (solo alcances autorizados).</li>
-  <li><strong>Publicación:</strong> subir y publicar videos en cuentas TikTok conectadas.</li>
-  <li><strong>Comentarios:</strong> bandeja para leer y responder comentarios en tus publicaciones.</li>
+  <li><strong>Publicación:</strong> programar y publicar contenido en las cuentas sociales que conectes.</li>
+  <li><strong>Analíticas:</strong> ver rendimiento, engagement y evolución de audiencia en las cuentas autorizadas.</li>
+  <li><strong>Comunidad:</strong> leer y responder comentarios desde el mismo panel.</li>
 </ul>
-<h2>Relación con TikTok</h2>
+<h2>Independencia</h2>
 <p class="legal-prose">
-  {{ site_name }} no está afiliado ni respaldado por TikTok Inc. TikTok es una marca registrada de sus respectivos
-  propietarios. El uso de datos de TikTok se rige por los Términos de Servicio y Términos para Desarrolladores de TikTok.
+  {{ site_name }} es un servicio independiente. No estamos afiliados, respaldados ni operados por ninguna
+  red social. Cada plataforma conectada sigue siendo de sus respectivos titulares; nosotros solo actuamos
+  con el permiso que tú otorgas mediante el inicio de sesión oficial (OAuth) de esa plataforma.
 </p>
 <p class="legal-prose">Contacto: <a href="mailto:{{ support_email }}">{{ support_email }}</a></p>
 {% else %}
 <p class="legal-prose">
-  <strong>{{ company_name }}</strong> operates <strong>{{ site_name }}</strong>, a private web platform
-  for creators and authorized teams managing TikTok presence professionally.
+  <strong>{{ company_name }}</strong> operates <strong>{{ site_name }}</strong>, a private workspace
+  for people and teams who want to grow on social media: plan content, measure results, and engage
+  their community from a single dashboard.
 </p>
 <h2>Our mission</h2>
 <p class="legal-prose">
-  We help creators and their teams view performance metrics, publish videos, and manage comments using
-  the official <a href="https://developers.tiktok.com/" rel="noopener noreferrer" target="_blank">TikTok for Developers</a> API.
+  We help creators, brands, and authorized teams manage their presence on the social platforms they
+  choose to connect, with publishing, analytics, and comment tools. Access is by invitation;
+  we are not a public social network or an open directory.
 </p>
 <h2>Who this is for</h2>
 <p class="legal-prose">
-  Access is restricted to users invited by {{ company_name }} (admins, supervisors, and collaborators with assigned permissions).
-  This is not a public social network.
+  The service is for users invited by {{ company_name }} (admins, supervisors, and collaborators with
+  assigned permissions) who want to grow professionally on social media.
 </p>
 <h2>Core features</h2>
 <ul class="legal-list">
-  <li><strong>Analytics:</strong> views, engagement, and account performance (authorized scopes only).</li>
-  <li><strong>Publishing:</strong> upload and publish videos to connected TikTok accounts.</li>
-  <li><strong>Comments:</strong> inbox to read and reply to comments on your posts.</li>
+  <li><strong>Publishing:</strong> schedule and publish content to the social accounts you connect.</li>
+  <li><strong>Analytics:</strong> view performance, engagement, and audience trends on authorized accounts.</li>
+  <li><strong>Community:</strong> read and reply to comments from the same panel.</li>
 </ul>
-<h2>Relationship with TikTok</h2>
+<h2>Independence</h2>
 <p class="legal-prose">
-  {{ site_name }} is not affiliated with or endorsed by TikTok Inc. TikTok is a trademark of its respective owners.
-  Use of TikTok data is governed by TikTok's Terms of Service and Developer Terms.
+  {{ site_name }} is an independent service. We are not affiliated with, endorsed by, or operated by
+  any social network. Each connected platform remains owned by its respective rights holders; we act
+  only with the permission you grant through that platform's official login (OAuth).
 </p>
 <p class="legal-prose">Contact: <a href="mailto:{{ support_email }}">{{ support_email }}</a></p>
 {% endif %}

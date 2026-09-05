@@ -2,10 +2,6 @@
 {% block body %}
 <div class="public-page">
   <header class="public-header public-header--landing">
-    <a href="/" class="public-header__brand public-header__brand--lg" aria-label="{{ site_name }} home">
-      <span class="brand-mark brand-mark--lg">C</span>
-      <span class="public-header__title">{{ site_name }}</span>
-    </a>
     <nav class="public-header__nav" aria-label="Main">
       {% include "_lang_switcher.html" %}
       <a href="/login" class="btn btn-accent btn-sm public-header__signin">{{ t('nav.sign_in') }}</a>
@@ -15,7 +11,6 @@
   <main class="public-main public-main--landing">
     {% block public_content %}{% endblock %}
   </main>
-
-  {% include "_footer.html" %}
 </div>
+{% include "_public_chat.html" %}
 {% endblock %}

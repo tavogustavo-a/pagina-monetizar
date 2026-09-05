@@ -1518,32 +1518,36 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "footer.support": {"en": "Support", "es": "Soporte"},
     "footer.not_affiliated": {
-        "en": "Not affiliated with TikTok Inc.",
-        "es": "No afiliado a TikTok Inc.",
+        "en": "Independent service. Not affiliated with any social network.",
+        "es": "Servicio independiente. No afiliado a ninguna red social.",
     },
     "site.description": {
         "en": (
-            "Manage scheduled posts, track performance statistics, and grow your audience "
-            "from a single, powerful dashboard powered by the official TikTok API."
+            "Grow on social media from one dashboard: schedule posts, track performance, "
+            "and engage your audience with official, permission-based connections."
         ),
         "es": (
-            "Gestiona publicaciones programadas, sigue estadísticas de rendimiento y haz crecer "
-            "tu audiencia desde un solo panel potente con la API oficial de TikTok."
+            "Crece en redes sociales desde un solo panel: programa publicaciones, sigue el rendimiento "
+            "y atiende a tu audiencia con conexiones oficiales basadas en tu permiso."
         ),
     },
     "site.hero_title": {
-        "en": "Optimize Your TikTok Content & Analytics",
-        "es": "Optimiza tu contenido y analíticas de TikTok",
+        "en": "Grow your presence on social media",
+        "es": "Haz crecer tu presencia en redes sociales",
     },
     "site.hero_subtitle": {
         "en": (
-            "Manage scheduled posts, track performance statistics, and grow your audience "
+            "Schedule posts, track performance statistics, and grow your audience "
             "from a single, powerful dashboard."
         ),
         "es": (
-            "Gestiona publicaciones programadas, sigue estadísticas de rendimiento y haz crecer "
+            "Programa publicaciones, sigue estadísticas de rendimiento y haz crecer "
             "tu audiencia desde un solo panel."
         ),
+    },
+    "landing.title_suffix": {
+        "en": "Grow on social media",
+        "es": "Crece en redes sociales",
     },
     "landing.learn_more": {"en": "Learn more", "es": "Saber más"},
     "landing.built_for": {
@@ -1551,16 +1555,19 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Hecho para creadores y equipos",
     },
     "landing.feature1.title": {
-        "en": "Efficient Video Management",
-        "es": "Gestión eficiente de videos",
+        "en": "Efficient content management",
+        "es": "Gestión eficiente de contenido",
     },
     "landing.feature1.body": {
-        "en": "Schedule and publish your video content seamlessly across your connected TikTok accounts from one dashboard.",
-        "es": "Programa y publica tu contenido en video de forma fluida en tus cuentas TikTok conectadas desde un solo panel.",
+        "en": "Schedule and publish videos and posts to the social accounts you connect, from one dashboard.",
+        "es": "Programa y publica videos y publicaciones en las cuentas sociales que conectes, desde un solo panel.",
     },
-    "landing.feature1.scope": {"en": "Scopes:", "es": "Alcances:"},
+    "landing.feature1.scope": {
+        "en": "Publishing from one workspace",
+        "es": "Publicación desde un solo espacio",
+    },
     "landing.feature2.title": {
-        "en": "Performance Metrics & Insights",
+        "en": "Performance metrics & insights",
         "es": "Métricas e insights de rendimiento",
     },
     "landing.feature2.body": {
@@ -1568,32 +1575,37 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Sigue vistas, me gusta, compartidos y crecimiento de audiencia en tiempo real para optimizar tu estrategia de contenido.",
     },
     "landing.feature2.scope": {
-        "en": "Analytics via authorized TikTok API",
-        "es": "Analíticas vía API autorizada de TikTok",
+        "en": "Analytics from connected accounts",
+        "es": "Analíticas de cuentas conectadas",
     },
     "landing.feature3.title": {
-        "en": "Comment Inbox & Replies",
+        "en": "Comment inbox & replies",
         "es": "Bandeja de comentarios y respuestas",
     },
     "landing.feature3.body": {
         "en": "Read recent comments on your posts and reply directly from the panel without switching apps.",
         "es": "Lee comentarios recientes en tus publicaciones y responde directamente desde el panel sin cambiar de app.",
     },
-    "landing.feature3.scope": {"en": "Scopes:", "es": "Alcances:"},
+    "landing.feature3.scope": {
+        "en": "Community tools in one place",
+        "es": "Herramientas de comunidad en un solo lugar",
+    },
     "landing.api.title": {
-        "en": "Official TikTok API integration",
-        "es": "Integración oficial con la API de TikTok",
+        "en": "Official connections, your permission",
+        "es": "Conexiones oficiales, con tu permiso",
     },
     "landing.api.p1": {
         "en": (
-            "{site_name} uses <strong>TikTok for Developers</strong> (Login Kit and approved products) "
-            "only after the account owner grants permission. Access is limited to authorized team members. "
-            "Data from TikTok is used solely to provide the features above and is never sold to third parties."
+            "{site_name} connects to the social platforms you choose using each network's "
+            "<strong>official login (OAuth)</strong>, only after the account owner grants permission. "
+            "Access is limited to invited team members. Data from connected platforms is used solely "
+            "to provide the features above and is never sold to third parties."
         ),
         "es": (
-            "{site_name} usa <strong>TikTok for Developers</strong> (Login Kit y productos aprobados) "
-            "solo después de que el titular de la cuenta otorgue permiso. El acceso está limitado a "
-            "miembros autorizados del equipo. Los datos de TikTok se usan únicamente para ofrecer las "
+            "{site_name} se conecta a las plataformas sociales que elijas usando el "
+            "<strong>inicio de sesión oficial (OAuth)</strong> de cada red, solo después de que el "
+            "titular de la cuenta otorgue permiso. El acceso está limitado a miembros invitados del "
+            "equipo. Los datos de las plataformas conectadas se usan únicamente para ofrecer las "
             "funciones anteriores y nunca se venden a terceros."
         ),
     },
@@ -1601,10 +1613,13 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Read our Privacy Policy and Terms of Service.",
         "es": "Lee nuestra Política de privacidad y Términos de servicio.",
     },
-    "login.dashboard": {"en": "Creator Dashboard.", "es": "Panel de creador."},
+    "login.dashboard": {
+        "en": "Grow on social media.",
+        "es": "Crece en redes sociales.",
+    },
     "login.tagline": {
-        "en": "Manage your TikTok presence effortlessly. Schedule videos, monitor analytics, and engage with your community, all in one place.",
-        "es": "Gestiona tu presencia en TikTok sin complicaciones. Programa videos, monitoriza analíticas e interactúa con tu comunidad, todo en un solo lugar.",
+        "en": "Schedule content, monitor analytics, and engage your community — all in one place.",
+        "es": "Programa contenido, sigue analíticas e interactúa con tu comunidad, todo en un solo lugar.",
     },
     "login.title": {"en": "Sign In", "es": "Iniciar sesión"},
     "login.welcome": {
@@ -1740,14 +1755,17 @@ MESSAGES: dict[str, dict[str, str]] = {
     "support.you_label": {"en": "You", "es": "Tú"},
     "support.chats_title": {"en": "Chats", "es": "Chats"},
     "support.chats_intro": {
-        "en": "Conversations with your users. Unread messages show a badge.",
-        "es": "Conversaciones con tus usuarios. Los mensajes sin leer muestran una insignia.",
+        "en": "Conversations with registered users and anonymous visitors from the public site. Unread messages show a badge.",
+        "es": "Conversaciones con usuarios registrados y visitantes anónimos del sitio público. Los mensajes sin leer muestran una insignia.",
     },
     "support.chats_info_btn": {
         "en": "About support chats",
         "es": "Información sobre chats de soporte",
     },
-    "support.search_ph": {"en": "Search user…", "es": "Buscar usuario…"},
+    "support.search_ph": {
+        "en": "Search user or anonymous…",
+        "es": "Buscar usuario o anónimo…",
+    },
     "support.no_threads": {
         "en": "No conversations yet.",
         "es": "Aún no hay conversaciones.",
@@ -1825,6 +1843,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Cancellation Policy",
         "es": "Política de cancelamiento",
     },
+    "legal.support_title": {"en": "Support", "es": "Soporte"},
     "feed.empty_title": {"en": "The feed is empty", "es": "El feed está vacío"},
     "feed.empty_hint": {
         "en": "Published content will appear here.",

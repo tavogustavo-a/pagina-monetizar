@@ -1,7 +1,8 @@
-"""Public site configuration (legal, TikTok app review)."""
+"""Public site configuration (legal, app review)."""
 from __future__ import annotations
 
 import os
+from datetime import datetime
 
 SITE_NAME = os.environ.get("SITE_NAME", "Creator Hub").strip() or "Creator Hub"
 COMPANY_NAME = os.environ.get("COMPANY_NAME", SITE_NAME).strip() or SITE_NAME
@@ -52,15 +53,15 @@ SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "").strip().replace(" ", "")
 SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER or CONTACT_EMAIL).strip()
 SMTP_USE_TLS = os.environ.get("SMTP_USE_TLS", "0").strip().lower() in ("1", "true", "yes")
 SITE_DESCRIPTION = (
-    "Manage scheduled posts, track performance statistics, and grow your audience "
-    "from a single, powerful dashboard powered by the official TikTok API."
+    "Grow on social media from one dashboard: schedule posts, track performance, "
+    "and engage your audience with official, permission-based connections."
 )
 HERO_TITLE = os.environ.get(
-    "HERO_TITLE", "Optimize Your TikTok Content & Analytics"
+    "HERO_TITLE", "Grow your presence on social media"
 )
 HERO_SUBTITLE = os.environ.get(
     "HERO_SUBTITLE",
-    "Manage scheduled posts, track performance statistics, and grow your audience "
+    "Schedule posts, track performance statistics, and grow your audience "
     "from a single, powerful dashboard.",
 )
 
@@ -101,4 +102,5 @@ def legal_context() -> dict[str, str]:
         "site_description": SITE_DESCRIPTION,
         "hero_title": HERO_TITLE,
         "hero_subtitle": HERO_SUBTITLE,
+        "current_year": str(datetime.now().year),
     }

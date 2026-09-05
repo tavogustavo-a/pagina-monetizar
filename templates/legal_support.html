@@ -1,0 +1,54 @@
+{% extends "legal_page.html" %}
+{% block legal_body %}
+{% if lang == 'es' %}
+<p class="legal-prose">
+  Si necesitas ayuda con {{ site_name }}, escríbenos. Atendemos cuentas, membresías, conexiones de plataformas
+  y solicitudes de privacidad.
+</p>
+<h2>Correo</h2>
+<p class="legal-prose">
+  <a href="mailto:{{ support_email }}">{{ support_email }}</a>
+</p>
+<h2>Chat del panel</h2>
+<p class="legal-prose">
+  Si ya tienes sesión, abre <strong>Soporte</strong> en el menú del panel. Es el canal más rápido para
+  usuarios invitados.
+</p>
+<h2>Privacidad y baja</h2>
+<p class="legal-prose">
+  Para ejercer derechos sobre tus datos o pedir el borrado de tokens y de la cuenta, usa
+  <a href="/data-deletion">{{ t('footer.deletion') }}</a> o escribe a
+  <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.
+</p>
+<h2>Tiempo de respuesta</h2>
+<p class="legal-prose">
+  Procuramos responder en un plazo de 2 días hábiles. Las solicitudes de eliminación se procesan según la
+  <a href="/data-deletion">{{ t('footer.deletion') }}</a> (hasta 30 días).
+</p>
+{% else %}
+<p class="legal-prose">
+  If you need help with {{ site_name }}, contact us. We handle accounts, memberships, platform connections,
+  and privacy requests.
+</p>
+<h2>Email</h2>
+<p class="legal-prose">
+  <a href="mailto:{{ support_email }}">{{ support_email }}</a>
+</p>
+<h2>In-app chat</h2>
+<p class="legal-prose">
+  If you are signed in, open <strong>Support</strong> in the panel menu. That is the fastest channel for
+  invited users.
+</p>
+<h2>Privacy and account removal</h2>
+<p class="legal-prose">
+  To exercise data rights or request deletion of tokens and your account, use
+  <a href="/data-deletion">{{ t('footer.deletion') }}</a> or email
+  <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.
+</p>
+<h2>Response time</h2>
+<p class="legal-prose">
+  We aim to reply within 2 business days. Deletion requests are processed under
+  <a href="/data-deletion">{{ t('footer.deletion') }}</a> (up to 30 days).
+</p>
+{% endif %}
+{% endblock %}
