@@ -7,7 +7,13 @@
   <main class="main main--scroll">
     <div class="dashboard">
       <div id="stats-page-root">
-      <form method="get" action="/admin" class="stats-filters" id="stats-filters-form" style="margin-bottom: 1rem">
+      {% if show_stats_filters %}
+      {% if not membership_usage.unlimited %}
+      <p class="sub membership-quota-line membership-quota-line--stats">{{ t('membresias.quota_stats', used=membership_usage.stats_used, limit=membership_usage.stats_limit) }}</p>
+      {% endif %}
+      <form method="get" action="/admin" class="stats-filters{% if not show_account_filter %} stats-filters--no-account{% endif %}" id="stats-filters-form" style="margin-bottom: 1rem">
+        <input type="hidden" name="consult" id="stats-consult-flag" value="{{ '1' if stats_consulted else '' }}" />
+        <input type="hidden" name="spend" id="stats-spend-flag" value="" />
         <div class="field stats-filters__field stats-filter-field">
           <span>{{ t('admin.platform') }}</span>
           <input type="hidden" name="platform" id="stats-platform-id" value="{{ selected_platform }}" />
@@ -30,7 +36,7 @@
             <span class="stats-picker__chevron" aria-hidden="true">▾</span>
           </button>
         </div>
-        {% if show_account_filter and (user_has_admin_privileges(user) or tiktok_stat_choices) %}
+        {% if show_account_filter %}
         <div class="field stats-filters__field stats-filter-field">
           <span>{{ account_filter_label }}</span>
           <input type="hidden" name="account" id="stats-account-id" value="{{ selected_tiktoker }}" />
@@ -49,11 +55,21 @@
           </button>
         </div>
         {% endif %}
+        <div class="stats-filters__actions">
+          <button type="submit" class="btn btn-primary stats-filters__consult" id="stats-consult-btn"{% if not membership_usage.can_query_stats and not stats_consulted %} disabled{% endif %}>
+            {{ t('admin.stats_consult') }}
+          </button>
+        </div>
       </form>
+      {% endif %}
 
-      {% if not user_has_admin_privileges(user) and not tiktok_stat_choices %}
-      <p class="sub" style="margin-bottom: 1rem">
+      {% if not show_stats_filters and not tiktok_stat_choices %}
+      <p class="sub stats-empty-hint">
+        {% if user_is_tiktok_mode(user) %}
+        {{ t('admin.no_tiktok_accounts_panel') }}
+        {% else %}
         {{ t('admin.no_server_account_linked') }}
+        {% endif %}
       </p>
       {% endif %}
 
@@ -194,6 +210,7 @@
       <form method="get" action="/admin" class="stats-video-filter" id="stats-video-filter-form" style="margin-bottom: 1.5rem">
         <input type="hidden" name="platform" value="{{ selected_platform }}" />
         <input type="hidden" name="account" value="{{ selected_tiktoker }}" />
+        {% if stats_consulted %}<input type="hidden" name="consult" value="1" />{% endif %}
         <div class="field stats-filter-field">
           <span>{{ t('admin.per_video_metrics') }}</span>
           <input type="hidden" name="video" id="stats-video-id" value="{{ selected_video }}" />
@@ -216,21 +233,22 @@
       {% endif %}
       <script type="application/json" id="stats-pickers-config">
         {
+          {% if show_stats_filters %}
           "platform": {
             "selectedId": {{ selected_platform | tojson }},
             "choices": [
-              { "id": "all", "name": {{ t('admin.all') | tojson }}, "icon": "" }{% for p in platform_choices %},
-              { "id": {{ p.id | tojson }}, "name": {{ p.name | tojson }}, "icon": {{ p.icon | tojson }} }{% endfor %}
+              {% if show_stats_all_option %}{ "id": "all", "name": {{ t('admin.all') | tojson }}, "icon": "" }{% if platform_choices %},{% endif %}{% endif %}{% for p in platform_choices %}
+              { "id": {{ p.id | tojson }}, "name": {{ p.name | tojson }}, "icon": {{ p.icon | tojson }} }{% if not loop.last %},{% endif %}{% endfor %}
             ],
             "pickLabel": {{ t('admin.stats_platform_pick') | tojson }}
-          }{% if show_account_filter and (user_has_admin_privileges(user) or tiktok_stat_choices) %},
+          }{% if show_account_filter %},
           "account": {
             "selectedId": {{ selected_tiktoker | tojson }},
             "choices": {{ tiktok_stat_choices | tojson }},
             "pickLabel": {{ t('admin.stats_account_pick') | tojson }},
             "kindGroup": {{ t('admin.stats_kind_group') | tojson }},
             "kindAccount": {{ t('admin.stats_kind_account') | tojson }}
-          }{% endif %}{% if video_options and selected_tiktoker and show_account_filter %},
+          }{% endif %}{% endif %}{% if video_options and selected_tiktoker and show_account_filter %}{% if show_stats_filters %},{% endif %}
           "video": {
             "selectedId": {{ selected_video | tojson }},
             "choices": [
@@ -246,6 +264,7 @@
   </main>
 </div>
 
+{% if show_stats_filters %}
 <div id="stats-platform-modal" class="equipo-modal stats-picker-modal stats-picker-modal--compact" aria-hidden="true">
   <div class="equipo-modal__backdrop" data-close-stats-picker="stats-platform-modal"></div>
   <div class="equipo-modal__panel server-modal__panel stats-picker-modal__panel" role="dialog" aria-modal="true" aria-labelledby="stats-platform-modal-title">
@@ -264,8 +283,9 @@
     </div>
   </div>
 </div>
+{% endif %}
 
-{% if show_account_filter and (user_has_admin_privileges(user) or tiktok_stat_choices) %}
+{% if show_stats_filters and show_account_filter %}
 <div id="stats-account-modal" class="equipo-modal stats-picker-modal stats-picker-modal--compact" aria-hidden="true">
   <div class="equipo-modal__backdrop" data-close-stats-picker="stats-account-modal"></div>
   <div class="equipo-modal__panel server-modal__panel stats-picker-modal__panel" role="dialog" aria-modal="true" aria-labelledby="stats-account-modal-title">
@@ -309,7 +329,7 @@
 {% endif %}
 
 <script src="/static/js/ajax-search.js?v=1"></script>
-<script src="/static/stats-pickers.js?v=11"></script>
+<script src="/static/stats-pickers.js?v=12"></script>
 <script>
   (function () {
     function readStatsPickersConfig() {
@@ -346,6 +366,7 @@
           history.pushState(null, "", url);
           var cfg = readStatsPickersConfig();
           if (cfg && window.initStatsPickers) window.initStatsPickers(cfg);
+          wireStatsConsultButton();
         })
         .catch(function () {
           window.location.href = url;
@@ -355,8 +376,21 @@
         });
     };
 
+    function wireStatsConsultButton() {
+      var consultBtn = document.getElementById("stats-consult-btn");
+      var consultFlag = document.getElementById("stats-consult-flag");
+      if (!consultBtn || !consultFlag || consultBtn.dataset.statsConsultWired === "1") return;
+      consultBtn.dataset.statsConsultWired = "1";
+      consultBtn.addEventListener("click", function () {
+        consultFlag.value = "1";
+        var spendFlag = document.getElementById("stats-spend-flag");
+        if (spendFlag) spendFlag.value = "1";
+      });
+    }
+
     var cfg = readStatsPickersConfig();
     if (cfg && window.initStatsPickers) window.initStatsPickers(cfg);
+    wireStatsConsultButton();
   })();
 </script>
 {% endblock %}

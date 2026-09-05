@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}{{ t('support.title') }}{% endblock %}
+{% block body %}
+<div class="layout">
+  {% include "_sidebar.html" %}
+
+  <main class="main main--scroll">
+    <div class="admin-layout">
+      <div class="admin-inner admin-inner--narrow">
+        <section class="section dashboard-section support-chat-section">
+          <header class="admin-head admin-head--title support-head">
+            <h1>{{ t('support.title') }}</h1>
+          </header>
+          <p class="sub support-chat-section__intro">{{ t('support.intro') }}</p>
+
+          <div class="support-chat-panel">
+          <div class="chat-box" id="chat-box" aria-live="polite">
+            <div class="chat-empty" id="chat-empty">{{ t('support.empty') }}</div>
+          </div>
+
+          <form class="chat-compose support-chat-compose" id="chat-form">
+            <div class="chat-compose__field">
+              <textarea
+                id="chat-input"
+                class="chat-compose__input"
+                rows="2"
+                maxlength="2000"
+                placeholder="{{ t('support.placeholder') }}"
+                aria-label="{{ t('support.placeholder') }}"
+              ></textarea>
+            </div>
+            <button type="submit" class="btn btn-accent chat-compose__send" aria-label="{{ t('support.send') }}" title="{{ t('support.send') }}">{% include '_icon_send.html' %}</button>
+          </form>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  (function () {
+    var box = document.getElementById("chat-box");
+    var empty = document.getElementById("chat-empty");
+    var form = document.getElementById("chat-form");
+    var input = document.getElementById("chat-input");
+    var adminLabel = {{ t('support.admin_label') | tojson }};
+    var userLabel = {{ user.username | tojson }};
+    var lastCount = -1;
+    var poll = null;
+
+    function renderMessages(messages) {
+      if (messages.length === lastCount) return;
+      lastCount = messages.length;
+      box.querySelectorAll(".chat-msg").forEach(function (n) { n.remove(); });
+      empty.hidden = messages.length > 0;
+      messages.forEach(function (m) {
+        var wrap = document.createElement("div");
+        wrap.className = "chat-msg " + (m.sender === "user" ? "chat-msg--mine" : "chat-msg--theirs");
+        var who = document.createElement("div");
+        who.className = "chat-msg__who";
+        who.textContent = m.sender === "user" ? userLabel : adminLabel;
+        var body = document.createElement("div");
+        body.className = "chat-msg__body";
+        body.textContent = m.body;
+        wrap.appendChild(who);
+        wrap.appendChild(body);
+        box.appendChild(wrap);
+      });
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function load() {
+      fetch("/admin/api/soporte/mensajes", { headers: { Accept: "application/json" } })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data && data.ok) renderMessages(data.messages || []);
+        })
+        .catch(function () {});
+    }
+
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      fetch("/admin/api/soporte/mensajes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ body: text }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function () { lastCount = -1; load(); })
+        .catch(function () {});
+    });
+
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" && !ev.shiftKey) {
+        ev.preventDefault();
+        form.dispatchEvent(new Event("submit", { cancelable: true }));
+      }
+    });
+
+    load();
+    setInterval(load, 5000);
+  })();
+</script>
+{% endblock %}

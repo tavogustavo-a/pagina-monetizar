@@ -36,14 +36,14 @@ def client_secret() -> str:
     )
 
 
-def redirect_uri() -> str:
+def redirect_uri(request=None) -> str:
     env = (os.environ.get("BILIBILI_REDIRECT_URI") or "").strip()
     if env:
         return env
     try:
-        from site_config import SITE_URL
+        from site_config import oauth_callback_url
 
-        return f"{SITE_URL}/oauth/bilibili/callback"
+        return oauth_callback_url("bilibili", request)
     except Exception:
         return "http://127.0.0.1:8000/oauth/bilibili/callback"
 
@@ -60,10 +60,11 @@ def new_csrf_state() -> str:
     return secrets.token_urlsafe(32)
 
 
-def build_authorize_url(*, state: str) -> str:
+def build_authorize_url(*, state: str, redirect_uri_value: str | None = None) -> str:
+    ru = (redirect_uri_value or "").strip() or redirect_uri()
     params = {
         "client_id": client_id(),
-        "gourl": redirect_uri(),
+        "gourl": ru,
         "state": state,
     }
     return AUTH_URL + "?" + urllib.parse.urlencode(params)

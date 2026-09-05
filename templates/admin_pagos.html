@@ -1,0 +1,916 @@
+{% extends "base.html" %}
+{% block title %}{{ t('pagos.head_title') }}{% endblock %}
+{% block body %}
+<div class="layout">
+  {% include "_sidebar.html" %}
+
+  <main class="main main--scroll">
+    <div class="admin-layout">
+      <div class="admin-inner admin-inner--wide">
+        <section class="section dashboard-section pagos-section">
+          <header class="admin-head admin-head--title pagos-head">
+            <h1 class="admin-head__title-row">
+              {{ t('pagos.head_title') }}
+              <button
+                type="button"
+                class="servers-info-btn panel-info-btn admin-head__info-btn js-panel-info-open"
+                data-info-title="{{ t('pagos.head_title') }}"
+                data-info-text="{% if can_manage_payments %}{{ t('pagos.admin_intro') }}{% else %}{{ t('pagos.intro') }}{% endif %}"
+                aria-label="{{ t('pagos.info_btn') }}"
+                title="{{ t('pagos.info_btn') }}"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h.008v.008H11.25v-.008zM12 17.25h.01M12 21a9 9 0 100-18 9 9 0 000 18z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v.008M12 11.25V16.5" />
+                </svg>
+              </button>
+            </h1>
+          </header>
+
+          <div class="pagos-wallet">
+            <div class="pagos-recharge-bar">
+              <label class="pagos-recharge-bar__field">
+                <input
+                  type="number"
+                  id="pagos-recharge-amount"
+                  class="pagos-recharge-bar__input"
+                  min="1"
+                  max="10000"
+                  step="1"
+                  inputmode="numeric"
+                  placeholder="0"
+                  aria-label="{{ t('pagos.recharge_amount') }}"
+                />
+              </label>
+              <div class="pagos-recharge-bar__field">
+                <input type="hidden" id="pagos-recharge-method-id" value="" />
+                <button
+                  type="button"
+                  class="stats-picker__trigger pagos-recharge-bar__picker"
+                  id="pagos-recharge-method-open"
+                  aria-haspopup="dialog"
+                  aria-controls="pagos-method-picker-modal"
+                  aria-expanded="false"
+                >
+                  <span class="stats-picker__value">
+                    <span class="stats-picker__text" id="pagos-recharge-method-label">{{ t('pagos.recharge_method_pick') }}</span>
+                  </span>
+                  <span class="stats-picker__chevron" aria-hidden="true">▾</span>
+                </button>
+              </div>
+              <div class="pagos-recharge-bar__field pagos-recharge-bar__field--submit">
+                <button type="button" class="pagos-recharge-bar__submit" id="pagos-recharge-submit">
+                  {{ t('pagos.recharge') }}
+                </button>
+              </div>
+            </div>
+            <p id="pagos-recharge-error" class="alert-error pagos-recharge-error" hidden></p>
+          </div>
+          <div id="pagos-ledger-wrap" hidden>
+            <h2 class="pagos-ledger-title">{{ t('pagos.ledger_title') }}</h2>
+            <ul id="pagos-ledger" class="pagos-list pagos-ledger" role="list"></ul>
+          </div>
+
+          <div class="pagos-filters" id="pagos-filters">
+            <button type="button" class="pagos-filter is-active" data-status="pending">{{ t('pagos.status.pending') }}</button>
+            <button type="button" class="pagos-filter" data-status="paid">{{ t('pagos.filter_paid') }}</button>
+            <button type="button" class="pagos-filter" data-status="rejected">{{ t('pagos.status.rejected') }}</button>
+          </div>
+
+          <ul id="pagos-list" class="pagos-list" role="list"></ul>
+        </section>
+
+        {% if can_manage_payments %}
+        <section class="section dashboard-section pagos-methods-section">
+          <div class="equipo-members-head">
+            <div class="equipo-members-head__title">
+              <h2>{{ t('pagos.methods_title') }}</h2>
+            </div>
+            <button type="button" class="btn btn-accent btn-sm" id="pagos-add-method">{{ t('pagos.add_method') }}</button>
+          </div>
+          <ul id="pagos-methods-list" class="user-list proxys-list pagos-methods-list" role="list"></ul>
+        </section>
+        {% endif %}
+      </div>
+    </div>
+  </main>
+</div>
+
+{% if can_manage_payments %}
+<div id="pagos-method-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-method-modal tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel" role="dialog" aria-modal="true" aria-labelledby="pagos-method-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div><h2 id="pagos-method-title">{{ t('pagos.modal_create') }}</h2></div>
+      <button type="button" class="equipo-modal__close" data-close-method-modal aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <form id="pagos-method-form" class="server-modal__body proxys-form">
+      <label class="field">
+        <span class="field__label">{{ t('pagos.field_kind') }}</span>
+        <select id="pagos-method-kind" name="kind"></select>
+      </label>
+      <label class="field">
+        <span class="field__label">{{ t('pagos.field_name') }}</span>
+        <input type="text" id="pagos-method-name" required autocomplete="off" />
+      </label>
+      <label class="field">
+        <span class="field__label">{{ t('pagos.field_pay_to') }}</span>
+        <input type="text" id="pagos-method-payto" autocomplete="off" />
+      </label>
+      <label class="field">
+        <span class="field__label">{{ t('pagos.field_instructions') }}</span>
+        <textarea id="pagos-method-instructions" rows="3"></textarea>
+      </label>
+      <label class="field">
+        <span class="field__label">{{ t('pagos.field_notes') }}</span>
+        <input type="text" id="pagos-method-notes" autocomplete="off" />
+      </label>
+      <p id="pagos-method-error" class="alert-error" hidden></p>
+      <div class="proxys-form__actions">
+        <button type="button" class="btn btn-ghost" data-close-method-modal>{{ t('pagos.cancel') }}</button>
+        <button type="submit" class="btn btn-accent">{{ t('pagos.save') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="pagos-method-delete" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-method-delete tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel extractor-confirm__panel" role="dialog" aria-modal="true" aria-labelledby="pagos-method-delete-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div><h2 id="pagos-method-delete-title">{{ t('pagos.confirm_delete_title') }}</h2></div>
+      <button type="button" class="equipo-modal__close" data-close-method-delete aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body">
+      <p class="extractor-confirm__body">{{ t('pagos.confirm_delete_body') }}</p>
+      <div class="extractor-confirm__actions">
+        <button type="button" class="btn btn-ghost" data-close-method-delete>{{ t('pagos.cancel') }}</button>
+        <button type="button" class="btn extractor-confirm__delete btn-user-delete" id="pagos-method-delete-confirm" aria-label="{{ t('pagos.delete') }}" title="{{ t('pagos.delete') }}">{% include '_icon_trash.html' %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div id="pagos-method-picker-modal" class="equipo-modal stats-picker-modal stats-picker-modal--compact" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-method-picker tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel stats-picker-modal__panel" role="dialog" aria-modal="true" aria-labelledby="pagos-method-picker-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div><h2 id="pagos-method-picker-title">{{ t('pagos.recharge_method') }}</h2></div>
+      <button type="button" class="equipo-modal__close" data-close-method-picker aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body stats-picker-modal__body">
+      <p id="pagos-method-picker-empty" class="sub stats-picker-modal__empty" hidden>{{ t('pagos.methods_empty') }}</p>
+      <ul class="stats-picker-modal__list" id="pagos-method-picker-list" role="listbox" aria-label="{{ t('pagos.recharge_method') }}"></ul>
+    </div>
+  </div>
+</div>
+
+<div id="pagos-checkout-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-checkout tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel plan-checkout__panel" role="dialog" aria-modal="true" aria-labelledby="pagos-checkout-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div><h2 id="pagos-checkout-title">{{ t('pagos.recharge_checkout_title') }}</h2></div>
+      <button type="button" class="equipo-modal__close" data-close-checkout aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body plan-checkout">
+      <p class="plan-checkout__amount" id="pagos-checkout-amount"></p>
+      <p class="sub pagos-checkout-method" id="pagos-checkout-method"></p>
+      <ul id="pagos-checkout-quote" class="plan-checkout__quote"></ul>
+      <div id="pagos-checkout-detail" class="plan-checkout__detail">
+        <p class="plan-checkout__payto-label">{{ t('membresias.pay_to') }}</p>
+        <div class="plan-checkout__payto">
+          <code id="pagos-checkout-payto"></code>
+          <button type="button" class="btn btn-ghost btn-sm" id="pagos-checkout-copy">{{ t('membresias.copy') }}</button>
+        </div>
+        <p class="sub" id="pagos-checkout-instructions"></p>
+      </div>
+      <p id="pagos-checkout-error" class="alert-error" hidden></p>
+      <div class="proxys-form__actions plan-checkout__actions">
+        <button type="button" class="btn btn-ghost" data-close-checkout>{{ t('pagos.cancel') }}</button>
+        <button type="button" class="btn btn-accent" id="pagos-checkout-confirm">{{ t('pagos.recharge_confirm') }}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var list = document.getElementById("pagos-list");
+  var isAdmin = {{ 'true' if can_manage_payments else 'false' }};
+  var filter = "pending";
+  var planNames = {
+    guest: {{ t('membresias.plan.guest.name') | tojson }},
+    standard: {{ t('membresias.plan.standard.name') | tojson }},
+    plus: {{ t('membresias.plan.plus.name') | tojson }},
+    enterprise: {{ t('membresias.plan.enterprise.name') | tojson }},
+    premium: {{ t('membresias.plan.premium.name') | tojson }},
+    ultra: {{ t('membresias.plan.ultra.name') | tojson }},
+  };
+  var statusLabels = {
+    pending: {{ t('pagos.status.pending') | tojson }},
+    paid: {{ t('pagos.status.paid') | tojson }},
+    rejected: {{ t('pagos.status.rejected') | tojson }},
+    cancelled: {{ t('pagos.status.cancelled') | tojson }},
+  };
+  var i18n = {
+    markPaid: {{ t('pagos.mark_paid') | tojson }},
+    markRejected: {{ t('pagos.mark_rejected') | tojson }},
+    edit: {{ t('pagos.edit') | tojson }},
+    delete: {{ t('pagos.delete') | tojson }},
+    modalCreate: {{ t('pagos.modal_create') | tojson }},
+    modalEdit: {{ t('pagos.modal_edit') | tojson }},
+    walletName: {{ t('pagos.kind.wallet') | tojson }},
+    topupName: {{ t('pagos.kind_wallet_topup') | tojson }},
+    rechargeOk: {{ t('pagos.recharge_ok') | tojson }},
+    methodRequired: {{ t('pagos.recharge_method_required') | tojson }},
+    methodPick: {{ t('pagos.recharge_method_pick') | tojson }},
+    copy: {{ t('membresias.copy') | tojson }},
+    copied: {{ t('membresias.copied') | tojson }},
+    quoteDue: {{ t('membresias.quote_due') | tojson }},
+    reasonAdmin: {{ t('pagos.reason.admin_credit') | tojson }},
+    reasonUnused: {{ t('pagos.reason.plan_unused') | tojson }},
+    reasonPay: {{ t('pagos.reason.plan_pay') | tojson }},
+    reasonCancel: {{ t('pagos.reason.plan_cancel') | tojson }},
+    reasonRecharge: {{ t('pagos.reason.recharge') | tojson }},
+    active: {{ t('proxys.active') | tojson }},
+    inactive: {{ t('proxys.inactive') | tojson }},
+  };
+  var ICON_EDIT =
+    '<svg class="icon-edit" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
+    '<path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />' +
+    "</svg>";
+  var ICON_TRASH =
+    '<svg class="icon-trash" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
+    '<path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />' +
+    "</svg>";
+
+  function escapeHtml(v) {
+    return String(v || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+  function fmtDate(iso) {
+    if (!iso) return "—";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleString();
+  }
+  var modalReturnFocus = new Map();
+
+  function releaseModalFocus(modalEl, returnFocusEl) {
+    var active = document.activeElement;
+    if (!active || !modalEl || !modalEl.contains(active)) return;
+    if (returnFocusEl && typeof returnFocusEl.focus === "function") {
+      returnFocusEl.focus();
+    } else {
+      active.blur();
+    }
+  }
+
+  function blurModalFocus(modalEl) {
+    if (!modalEl) return;
+    var active = document.activeElement;
+    if (active && modalEl.contains(active)) {
+      active.blur();
+    }
+  }
+
+  function openModal(el, trigger) {
+    if (!el) return;
+    if (trigger) modalReturnFocus.set(el, trigger);
+    el.classList.add("is-open");
+    el.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeModal(el) {
+    if (!el) return;
+    var returnFocus = modalReturnFocus.get(el);
+    releaseModalFocus(el, returnFocus);
+    blurModalFocus(el);
+    el.classList.remove("is-open");
+    el.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+    modalReturnFocus.delete(el);
+  }
+
+  function renderPurchases(rows) {
+    list.innerHTML = "";
+    rows.forEach(function (p) {
+      var li = document.createElement("li");
+      li.className = "pagos-card pagos-card--" + (p.status || "pending");
+      var head = document.createElement("div");
+      head.className = "pagos-card__head";
+      var plan = document.createElement("strong");
+      var planLabel = planNames[p.plan_id] || p.plan_id;
+      if (p.kind === "wallet" || p.plan_id === "wallet") planLabel = i18n.topupName;
+      plan.textContent = planLabel;
+      var st = document.createElement("span");
+      st.className = "pagos-card__status";
+      st.textContent = statusLabels[p.status] || p.status;
+      head.appendChild(plan);
+      head.appendChild(st);
+
+      var meta = document.createElement("p");
+      meta.className = "pagos-card__meta";
+      var methodLabel = p.payment_method_name || "";
+      if (p.payment_method_id === "wallet" || methodLabel === "wallet") methodLabel = i18n.walletName;
+      var bits = ["USD " + p.amount_usd, methodLabel, fmtDate(p.created_at)];
+      if (isAdmin && p.username) bits.unshift(p.username);
+      meta.textContent = bits.filter(Boolean).join(" · ");
+
+      li.appendChild(head);
+      li.appendChild(meta);
+      if (p.note) {
+        var note = document.createElement("p");
+        note.className = "sub pagos-card__note";
+        note.textContent = p.note;
+        li.appendChild(note);
+      }
+      if (isAdmin && p.status === "pending") {
+        var actions = document.createElement("div");
+        actions.className = "pagos-card__actions";
+        var paid = document.createElement("button");
+        paid.type = "button";
+        paid.className = "btn btn-accent btn-sm";
+        paid.textContent = i18n.markPaid;
+        paid.addEventListener("click", function () { setStatus(p.id, "paid"); });
+        var rej = document.createElement("button");
+        rej.type = "button";
+        rej.className = "btn btn-ghost btn-sm";
+        rej.textContent = i18n.markRejected;
+        rej.addEventListener("click", function () { setStatus(p.id, "rejected"); });
+        actions.appendChild(paid);
+        actions.appendChild(rej);
+        li.appendChild(actions);
+      }
+      list.appendChild(li);
+    });
+  }
+
+  function reasonLabel(reason) {
+    var map = {
+      admin_credit: i18n.reasonAdmin,
+      plan_unused: i18n.reasonUnused,
+      plan_pay: i18n.reasonPay,
+      plan_cancel: i18n.reasonCancel,
+      recharge: i18n.reasonRecharge,
+    };
+    return map[reason] || reason;
+  }
+
+  function renderLedger(rows) {
+    var box = document.getElementById("pagos-ledger");
+    var wrap = document.getElementById("pagos-ledger-wrap");
+    if (!box) return;
+    box.innerHTML = "";
+    if (wrap) wrap.hidden = !rows.length;
+    rows.forEach(function (m) {
+      var li = document.createElement("li");
+      li.className = "pagos-card";
+      var head = document.createElement("div");
+      head.className = "pagos-card__head";
+      var strong = document.createElement("strong");
+      var amt = Number(m.amount_usd || 0);
+      strong.textContent = (amt > 0 ? "+" : "") + "USD " + amt;
+      var st = document.createElement("span");
+      st.className = "pagos-card__status";
+      st.textContent = reasonLabel(m.reason);
+      head.appendChild(strong);
+      head.appendChild(st);
+      var meta = document.createElement("p");
+      meta.className = "pagos-card__meta";
+      meta.textContent = [m.note || "", fmtDate(m.created_at)].filter(Boolean).join(" · ");
+      li.appendChild(head);
+      li.appendChild(meta);
+      box.appendChild(li);
+    });
+  }
+
+  function loadPurchases() {
+    var url = "/admin/api/pagos/compras" + (filter ? "?status=" + encodeURIComponent(filter) : "");
+    fetch(url, { headers: { Accept: "application/json" } })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data && data.ok) {
+          renderPurchases(data.purchases || []);
+          renderLedger(data.ledger || []);
+          document.dispatchEvent(
+            new CustomEvent("pagos-wallet-updated", {
+              detail: { wallet_balance_usd: Number(data.wallet_balance_usd || 0) },
+            })
+          );
+        }
+      });
+  }
+
+  function setStatus(id, status) {
+    fetch("/admin/api/pagos/compras/" + encodeURIComponent(id) + "/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ status: status }),
+    }).then(function () { loadPurchases(); });
+  }
+
+  document.querySelectorAll(".pagos-filter").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll(".pagos-filter").forEach(function (b) { b.classList.remove("is-active"); });
+      btn.classList.add("is-active");
+      filter = btn.getAttribute("data-status") || "";
+      loadPurchases();
+    });
+  });
+
+  loadPurchases();
+
+  (function wireRecharge() {
+    var amountInput = document.getElementById("pagos-recharge-amount");
+    var methodIdInput = document.getElementById("pagos-recharge-method-id");
+    var methodLabel = document.getElementById("pagos-recharge-method-label");
+    var methodOpen = document.getElementById("pagos-recharge-method-open");
+    var methodPickerModal = document.getElementById("pagos-method-picker-modal");
+    var methodPickerList = document.getElementById("pagos-method-picker-list");
+    var methodPickerEmpty = document.getElementById("pagos-method-picker-empty");
+    var submitBtn = document.getElementById("pagos-recharge-submit");
+    var checkoutModal = document.getElementById("pagos-checkout-modal");
+    var checkoutAmount = document.getElementById("pagos-checkout-amount");
+    var checkoutMethod = document.getElementById("pagos-checkout-method");
+    var checkoutPayTo = document.getElementById("pagos-checkout-payto");
+    var checkoutInstr = document.getElementById("pagos-checkout-instructions");
+    var checkoutCopy = document.getElementById("pagos-checkout-copy");
+    var checkoutConfirm = document.getElementById("pagos-checkout-confirm");
+    var checkoutErr = document.getElementById("pagos-checkout-error");
+    var checkoutQuote = document.getElementById("pagos-checkout-quote");
+    var checkoutDetail = document.getElementById("pagos-checkout-detail");
+    var errR = document.getElementById("pagos-recharge-error");
+    var payMethods = [];
+    var pendingAmount = 0;
+    var pendingMethod = null;
+
+    function fillTpl(tpl, n) {
+      return String(tpl || "").replace("{n}", String(n));
+    }
+
+    function renderCheckoutQuote() {
+      var amount = pendingAmount;
+      if (checkoutQuote) {
+        checkoutQuote.innerHTML = "";
+        var li = document.createElement("li");
+        li.textContent = fillTpl(i18n.quoteDue, amount);
+        checkoutQuote.appendChild(li);
+      }
+      if (checkoutDetail) checkoutDetail.hidden = false;
+    }
+
+    function selectedMethod() {
+      var id = (methodIdInput && methodIdInput.value) || "";
+      return payMethods.find(function (m) { return m.id === id; }) || null;
+    }
+
+    function setSelectedMethod(m) {
+      if (!methodIdInput || !methodLabel) return;
+      if (!m) {
+        methodIdInput.value = "";
+        methodLabel.textContent = i18n.methodPick;
+        if (methodOpen) methodOpen.classList.remove("has-selection");
+        return;
+      }
+      methodIdInput.value = m.id;
+      methodLabel.textContent = m.name || m.id;
+      if (methodOpen) methodOpen.classList.add("has-selection");
+    }
+
+    function openCheckoutModal(amount, method) {
+      pendingAmount = amount;
+      pendingMethod = method;
+      if (checkoutAmount) checkoutAmount.textContent = "USD " + amount;
+      if (checkoutMethod) checkoutMethod.textContent = method.name || "";
+      if (checkoutPayTo) checkoutPayTo.textContent = method.pay_to || "—";
+      if (checkoutInstr) checkoutInstr.textContent = method.instructions || "";
+      if (checkoutErr) checkoutErr.hidden = true;
+      renderCheckoutQuote();
+      openModal(checkoutModal, submitBtn);
+    }
+
+    function submitRecharge() {
+      if (!pendingMethod || !pendingAmount) return;
+      if (checkoutConfirm) checkoutConfirm.disabled = true;
+      if (checkoutErr) checkoutErr.hidden = true;
+      fetch("/admin/api/pagos/recarga", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          amount_usd: pendingAmount,
+          payment_method_id: pendingMethod.id,
+          use_wallet: false,
+        }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (checkoutConfirm) checkoutConfirm.disabled = false;
+          if (data && data.ok) {
+            closeModal(checkoutModal);
+            pendingAmount = 0;
+            pendingMethod = null;
+            if (amountInput) amountInput.value = "";
+            if (errR) {
+              errR.textContent = i18n.rechargeOk;
+              errR.hidden = false;
+            }
+            loadPurchases();
+            return;
+          }
+          if (checkoutErr) {
+            checkoutErr.textContent = (data && data.error) || "";
+            checkoutErr.hidden = false;
+          }
+        })
+        .catch(function () {
+          if (checkoutConfirm) checkoutConfirm.disabled = false;
+        });
+    }
+
+    function renderMethodPicker() {
+      if (!methodPickerList) return;
+      methodPickerList.innerHTML = "";
+      if (methodPickerEmpty) methodPickerEmpty.hidden = payMethods.length > 0;
+      payMethods.forEach(function (m) {
+        var li = document.createElement("li");
+        li.setAttribute("role", "option");
+        li.tabIndex = 0;
+        li.className =
+          "stats-picker-modal__option" +
+          (m.id === methodIdInput.value ? " is-selected" : "");
+        li.setAttribute("aria-selected", m.id === methodIdInput.value ? "true" : "false");
+        var main = document.createElement("span");
+        main.className = "stats-picker-modal__option-main";
+        var name = document.createElement("span");
+        name.className = "stats-picker-modal__name";
+        name.textContent = m.name || "";
+        main.appendChild(name);
+        li.appendChild(main);
+        li.addEventListener("click", function () {
+          setSelectedMethod(m);
+          closeModal(methodPickerModal);
+          if (methodOpen) methodOpen.setAttribute("aria-expanded", "false");
+        });
+        methodPickerList.appendChild(li);
+      });
+    }
+
+    function loadMethods() {
+      return fetch("/admin/api/pagos/medios", { headers: { Accept: "application/json" } })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          payMethods = ((data && data.methods) || []).filter(function (m) {
+            return m.active && m.id !== "wallet" && m.kind !== "wallet";
+          });
+          if (methodIdInput && methodIdInput.value === "wallet") {
+            methodIdInput.value = "";
+          }
+          if (!methodIdInput.value && payMethods.length) {
+            setSelectedMethod(payMethods[0]);
+          } else {
+            var current = selectedMethod();
+            if (current) setSelectedMethod(current);
+            else if (payMethods.length) setSelectedMethod(payMethods[0]);
+          }
+          renderMethodPicker();
+        });
+    }
+
+    if (methodOpen) {
+      methodOpen.addEventListener("click", function () {
+        if (errR) errR.hidden = true;
+        loadMethods().then(function () {
+          openModal(methodPickerModal, methodOpen);
+          methodOpen.setAttribute("aria-expanded", "true");
+        });
+      });
+    }
+    document.querySelectorAll("[data-close-method-picker]").forEach(function (el) {
+      el.addEventListener("click", function () {
+        closeModal(methodPickerModal);
+        if (methodOpen) methodOpen.setAttribute("aria-expanded", "false");
+      });
+    });
+
+    if (submitBtn) {
+      submitBtn.addEventListener("click", function () {
+        if (errR) errR.hidden = true;
+        var amount = parseInt(amountInput && amountInput.value, 10);
+        var method = selectedMethod();
+        if (!amount || amount < 1) {
+          if (amountInput) amountInput.focus();
+          return;
+        }
+        if (!method) {
+          if (errR) {
+            errR.textContent = i18n.methodRequired;
+            errR.hidden = false;
+          }
+          if (methodOpen) methodOpen.click();
+          return;
+        }
+        loadMethods().then(function () {
+          openCheckoutModal(amount, method);
+        });
+      });
+    }
+
+    if (checkoutConfirm) {
+      checkoutConfirm.addEventListener("click", submitRecharge);
+    }
+
+    if (checkoutCopy && checkoutPayTo) {
+      checkoutCopy.addEventListener("click", function () {
+        var text = checkoutPayTo.textContent || "";
+        if (!text || text === "—") return;
+        navigator.clipboard.writeText(text).then(function () {
+          checkoutCopy.textContent = i18n.copied;
+          setTimeout(function () { checkoutCopy.textContent = i18n.copy; }, 1400);
+        });
+      });
+    }
+
+    document.querySelectorAll("[data-close-checkout]").forEach(function (el) {
+      el.addEventListener("click", function () {
+        closeModal(checkoutModal);
+      });
+    });
+
+    loadMethods();
+  })();
+
+  if (!isAdmin) return;
+
+  var methodsList = document.getElementById("pagos-methods-list");
+  var methodModal = document.getElementById("pagos-method-modal");
+  var methodForm = document.getElementById("pagos-method-form");
+  var methodTitle = document.getElementById("pagos-method-title");
+  var kindSelect = document.getElementById("pagos-method-kind");
+  var nameInput = document.getElementById("pagos-method-name");
+  var payToInput = document.getElementById("pagos-method-payto");
+  var instrInput = document.getElementById("pagos-method-instructions");
+  var notesInput = document.getElementById("pagos-method-notes");
+  var methodErr = document.getElementById("pagos-method-error");
+  var deleteModal = document.getElementById("pagos-method-delete");
+  var kinds = [];
+  var editingId = "";
+  var pendingDelete = "";
+
+  function fillKinds() {
+    kindSelect.innerHTML = kinds.map(function (k) {
+      return '<option value="' + escapeHtml(k.id) + '">' + escapeHtml((k.icon || "") + " " + k.name) + "</option>";
+    }).join("");
+  }
+
+  function renderMethods(rows) {
+    methodsList.innerHTML = "";
+    var shown = (rows || []).filter(function (m) { return m.id !== "wallet" && m.kind !== "wallet"; });
+    shown.forEach(function (m) {
+      var li = document.createElement("li");
+      li.className = "user-list__row proxys-row" + (m.active ? "" : " proxys-row--inactive");
+
+      var main = document.createElement("div");
+      main.className = "proxys-row__main";
+
+      var label = document.createElement("strong");
+      label.className = "proxys-row__label";
+      label.textContent = m.name || "";
+
+      var display = document.createElement("code");
+      display.className = "proxys-row__display";
+      display.textContent = m.pay_to || "";
+
+      main.appendChild(label);
+      main.appendChild(display);
+      if (m.instructions) {
+        var status = document.createElement("span");
+        status.className = "sub proxys-row__status";
+        status.textContent = m.instructions;
+        main.appendChild(status);
+      }
+
+      var actions = document.createElement("div");
+      actions.className = "proxys-row__actions";
+
+      var edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "btn btn-ghost btn-sm proxys-row__icon-btn proxys-row__edit";
+      edit.setAttribute("aria-label", i18n.edit);
+      edit.setAttribute("title", i18n.edit);
+      edit.innerHTML = ICON_EDIT;
+      edit.addEventListener("click", function () { openEdit(m, edit); });
+
+      var del = document.createElement("button");
+      del.type = "button";
+      del.className = "btn btn-ghost btn-sm proxys-row__icon-btn proxys-row__delete btn-user-delete";
+      del.setAttribute("aria-label", i18n.delete);
+      del.setAttribute("title", i18n.delete);
+      del.innerHTML = ICON_TRASH;
+      del.addEventListener("click", function () {
+        pendingDelete = m.id;
+        openModal(deleteModal, del);
+      });
+
+      var toggleWrap = document.createElement("label");
+      toggleWrap.className = "user-active-toggle";
+      toggleWrap.setAttribute("title", m.active ? i18n.active : i18n.inactive);
+      var toggle = document.createElement("input");
+      toggle.type = "checkbox";
+      toggle.className = "user-active-toggle__input";
+      toggle.checked = !!m.active;
+      toggle.setAttribute("aria-label", m.active ? i18n.active : i18n.inactive);
+      toggle.addEventListener("change", function () {
+        fetch("/admin/api/pagos/medios/" + encodeURIComponent(m.id) + "/active", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ active: toggle.checked }),
+        }).catch(function () {
+          toggle.checked = !toggle.checked;
+        });
+      });
+      var ui = document.createElement("span");
+      ui.className = "user-active-toggle__ui";
+      ui.setAttribute("aria-hidden", "true");
+      toggleWrap.appendChild(toggle);
+      toggleWrap.appendChild(ui);
+
+      actions.appendChild(edit);
+      actions.appendChild(del);
+      actions.appendChild(toggleWrap);
+      li.appendChild(main);
+      li.appendChild(actions);
+      methodsList.appendChild(li);
+    });
+  }
+
+  function loadMethods() {
+    fetch("/admin/api/pagos/medios", { headers: { Accept: "application/json" } })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        kinds = (data && data.kinds) || [];
+        fillKinds();
+        renderMethods((data && data.methods) || []);
+      });
+  }
+
+  function openCreate(trigger) {
+    editingId = "";
+    methodTitle.textContent = i18n.modalCreate;
+    methodForm.reset();
+    methodErr.hidden = true;
+    if (kinds[0]) {
+      kindSelect.value = kinds[0].id;
+      nameInput.value = kinds[0].name;
+    }
+    openModal(methodModal, trigger);
+  }
+  function openEdit(m, trigger) {
+    editingId = m.id;
+    methodTitle.textContent = i18n.modalEdit;
+    methodErr.hidden = true;
+    kindSelect.value = m.kind;
+    nameInput.value = m.name || "";
+    payToInput.value = m.pay_to || "";
+    instrInput.value = m.instructions || "";
+    notesInput.value = m.notes || "";
+    openModal(methodModal, trigger);
+  }
+
+  if (kindSelect) {
+    kindSelect.addEventListener("change", function () {
+      if (editingId) return;
+      var k = kinds.find(function (x) { return x.id === kindSelect.value; });
+      if (k) nameInput.value = k.name;
+    });
+  }
+
+  document.getElementById("pagos-add-method").addEventListener("click", function (e) {
+    openCreate(e.currentTarget);
+  });
+  methodForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    methodErr.hidden = true;
+    var payload = {
+      kind: kindSelect.value,
+      name: nameInput.value.trim(),
+      pay_to: payToInput.value.trim(),
+      instructions: instrInput.value.trim(),
+      notes: notesInput.value.trim(),
+      active: true,
+    };
+    var url = editingId
+      ? "/admin/api/pagos/medios/" + encodeURIComponent(editingId)
+      : "/admin/api/pagos/medios";
+    fetch(url, {
+      method: editingId ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data && data.ok) {
+          closeModal(methodModal);
+          loadMethods();
+          return;
+        }
+        methodErr.textContent = (data && data.error) || "";
+        methodErr.hidden = false;
+      });
+  });
+
+  document.getElementById("pagos-method-delete-confirm").addEventListener("click", function () {
+    if (!pendingDelete) return;
+    fetch("/admin/api/pagos/medios/" + encodeURIComponent(pendingDelete), { method: "DELETE" })
+      .then(function () {
+        pendingDelete = "";
+        closeModal(deleteModal);
+        loadMethods();
+      });
+  });
+  document.querySelectorAll("[data-close-method-modal]").forEach(function (el) {
+    el.addEventListener("click", function () { closeModal(methodModal); });
+  });
+  document.querySelectorAll("[data-close-method-delete]").forEach(function (el) {
+    el.addEventListener("click", function () {
+      pendingDelete = "";
+      closeModal(deleteModal);
+    });
+  });
+  loadMethods();
+})();
+</script>
+
+<div id="panel-info-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-panel-info></div>
+  <div class="equipo-modal__panel panel-info-modal__panel" role="dialog" aria-modal="true" aria-labelledby="panel-info-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div>
+        <h2 id="panel-info-modal-title"></h2>
+      </div>
+      <button type="button" class="equipo-modal__close" data-close-panel-info aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body">
+      <p class="sub panel-info-modal__text" id="panel-info-modal-text"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var modal = document.getElementById("panel-info-modal");
+    var titleEl = document.getElementById("panel-info-modal-title");
+    var textEl = document.getElementById("panel-info-modal-text");
+    var lastTrigger = null;
+
+    if (!modal || !titleEl || !textEl) return;
+
+    function releaseModalFocus(returnFocusEl) {
+      var active = document.activeElement;
+      if (!active || !modal.contains(active)) return;
+      if (returnFocusEl && typeof returnFocusEl.focus === "function") {
+        returnFocusEl.focus();
+      } else {
+        active.blur();
+      }
+    }
+
+    function openInfo(btn) {
+      lastTrigger = btn;
+      titleEl.textContent = btn.getAttribute("data-info-title") || "";
+      textEl.textContent = btn.getAttribute("data-info-text") || "";
+      modal.classList.add("is-open");
+      modal.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+    }
+
+    function closeInfo() {
+      releaseModalFocus(lastTrigger);
+      modal.classList.remove("is-open");
+      modal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+      lastTrigger = null;
+    }
+
+    document.querySelectorAll(".js-panel-info-open").forEach(function (btn) {
+      btn.addEventListener("click", function () { openInfo(btn); });
+    });
+    document.querySelectorAll("[data-close-panel-info]").forEach(function (el) {
+      el.addEventListener("click", closeInfo);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && modal.classList.contains("is-open")) closeInfo();
+    });
+  })();
+</script>
+{% endblock %}

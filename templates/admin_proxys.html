@@ -1,0 +1,727 @@
+{% extends "base.html" %}
+{% block title %}{{ t('proxys.title') }}{% endblock %}
+{% block body %}
+<div class="layout">
+  {% include "_sidebar.html" %}
+
+  <main class="main main--scroll">
+    <div class="admin-layout">
+      <div class="admin-inner admin-inner--wide">
+        <section class="section dashboard-section proxys-section">
+          <header class="admin-head admin-head--title proxys-section__title-head">
+            <h1 class="admin-head__title-row">
+              {{ t('proxys.title') }}
+              <button
+                type="button"
+                class="servers-info-btn panel-info-btn admin-head__info-btn js-panel-info-open"
+                data-info-title="{{ t('proxys.title') }}"
+                data-info-text="{{ t('proxys.intro') }}"
+                aria-label="{{ t('proxys.info_btn') }}"
+                title="{{ t('proxys.info_btn') }}"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h.008v.008H11.25v-.008zM12 17.25h.01M12 21a9 9 0 100-18 9 9 0 000 18z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v.008M12 11.25V16.5" />
+                </svg>
+              </button>
+            </h1>
+          </header>
+
+          <div class="equipo-members-head proxys-section__head">
+            <div class="equipo-members-toolbar proxys-section__toolbar">
+              <div class="equipo-search-wrap panel-search-wrap--highlight proxys-section__search">
+                <input
+                  type="search"
+                  id="proxys-search"
+                  class="equipo-search-input panel-search-input--highlight"
+                  placeholder="{{ t('proxys.search') }}"
+                  aria-label="{{ t('proxys.search') }}"
+                  autocomplete="off"
+                />
+                <button
+                  type="button"
+                  id="proxys-search-clear"
+                  class="equipo-search-clear"
+                  aria-label="{{ t('team.search_clear') }}"
+                  title="{{ t('team.search_clear') }}"
+                  hidden
+                >
+                  ×
+                </button>
+              </div>
+              <button type="button" class="btn btn-accent btn-sm" id="proxys-add">
+                {{ t('proxys.add') }}
+              </button>
+            </div>
+          </div>
+
+          <p id="proxys-msg" class="proxys-section__msg" hidden></p>
+          <ul id="proxys-list" class="user-list proxys-list" role="list"></ul>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="proxy-form-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-proxy-modal></div>
+  <div class="equipo-modal__panel server-modal__panel" role="dialog" aria-modal="true" aria-labelledby="proxy-form-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div>
+        <h2 id="proxy-form-modal-title">{{ t('proxys.modal_create') }}</h2>
+      </div>
+      <button type="button" class="equipo-modal__close" data-close-proxy-modal aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <form id="proxy-form" class="server-modal__body proxys-form">
+      <label class="field proxys-links-field" id="proxy-links-field" hidden>
+        <span class="field__label">{{ t('proxys.field_links') }}</span>
+        <p class="proxys-links-selected" id="proxy-links-selected">{{ t('proxys.links_none') }}</p>
+        <div class="proxys-links-search-wrap">
+          <input
+            type="text"
+            id="proxy-links-search"
+            autocomplete="off"
+            placeholder="{{ t('proxys.links_search') }}"
+            aria-label="{{ t('proxys.links_search') }}"
+          />
+          <div id="proxy-links-suggest" class="proxys-links-suggest" hidden></div>
+        </div>
+        <p class="sub proxys-links-hint">{{ t('proxys.links_hint') }}</p>
+      </label>
+      <p class="sub proxys-form__hint">{{ t('proxys.formats_hint') }}</p>
+      <label class="field">
+        <span class="field__label">{{ t('proxys.field_label') }}</span>
+        <input type="text" id="proxy-label" name="label" autocomplete="off" />
+      </label>
+      <label class="field">
+        <span class="field__label">{{ t('proxys.field_proxy') }}</span>
+        <textarea id="proxy-line" name="proxy" rows="3" required spellcheck="false" autocomplete="off" placeholder="host:port"></textarea>
+      </label>
+      <p id="proxy-form-error" class="alert-error proxys-form__error" hidden></p>
+      <div class="proxys-form__actions">
+        <button type="button" class="btn btn-ghost" data-close-proxy-modal>{{ t('proxys.cancel') }}</button>
+        <button type="submit" class="btn btn-accent" id="proxy-form-save">{{ t('proxys.save') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="proxy-delete-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-proxy-delete></div>
+  <div class="equipo-modal__panel server-modal__panel extractor-confirm__panel" role="dialog" aria-modal="true" aria-labelledby="proxy-delete-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div><h2 id="proxy-delete-modal-title">{{ t('proxys.confirm_delete_title') }}</h2></div>
+      <button type="button" class="equipo-modal__close" data-close-proxy-delete aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body">
+      <p class="extractor-confirm__body" id="proxy-delete-body">{{ t('proxys.confirm_delete_body') }}</p>
+      <div class="extractor-confirm__actions">
+        <button type="button" class="btn btn-ghost" data-close-proxy-delete>{{ t('proxys.cancel') }}</button>
+        <button type="button" class="btn extractor-confirm__delete btn-user-delete" id="proxy-delete-confirm" aria-label="{{ t('proxys.delete') }}" title="{{ t('proxys.delete') }}">{% include '_icon_trash.html' %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var list = document.getElementById("proxys-list");
+  var search = document.getElementById("proxys-search");
+  var searchClear = document.getElementById("proxys-search-clear");
+  var msg = document.getElementById("proxys-msg");
+  var addBtn = document.getElementById("proxys-add");
+  var formModal = document.getElementById("proxy-form-modal");
+  var form = document.getElementById("proxy-form");
+  var formTitle = document.getElementById("proxy-form-modal-title");
+  var formError = document.getElementById("proxy-form-error");
+  var labelInput = document.getElementById("proxy-label");
+  var lineInput = document.getElementById("proxy-line");
+  var linksSelected = document.getElementById("proxy-links-selected");
+  var linksField = document.getElementById("proxy-links-field");
+  var linksSearch = document.getElementById("proxy-links-search");
+  var linksSuggest = document.getElementById("proxy-links-suggest");
+  var deleteModal = document.getElementById("proxy-delete-modal");
+  var deleteConfirm = document.getElementById("proxy-delete-confirm");
+  var pendingDeleteId = "";
+  var editingId = "";
+  var searchTimer = null;
+  var linksTimer = null;
+  var selectedLinks = [];
+  var lastFormTrigger = null;
+  var lastDeleteTrigger = null;
+
+  var i18n = {
+    modalCreate: {{ t('proxys.modal_create') | tojson }},
+    modalEdit: {{ t('proxys.modal_edit') | tojson }},
+    test: {{ t('proxys.test') | tojson }},
+    testing: {{ t('proxys.testing') | tojson }},
+    edit: {{ t('proxys.edit') | tojson }},
+    delete: {{ t('proxys.delete') | tojson }},
+    checkOk: {{ t('proxys.check_ok') | tojson }},
+    checkFail: {{ t('proxys.check_fail') | tojson }},
+    active: {{ t('proxys.active') | tojson }},
+    inactive: {{ t('proxys.inactive') | tojson }},
+    confirmDeleteBody: {{ t('proxys.confirm_delete_body') | tojson }},
+    linksNone: {{ t('proxys.links_none') | tojson }},
+  };
+
+  var ICON_EDIT =
+    '<svg class="icon-edit" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
+    '<path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />' +
+    "</svg>";
+  var ICON_TRASH =
+    '<svg class="icon-trash" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
+    '<path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />' +
+    "</svg>";
+  var ICON_TEST =
+    '<svg class="icon-test" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
+    '<path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 0 1 0 1.971l-11.54 6.347a1.125 1.125 0 0 1-1.667-.985V5.653Z" />' +
+    "</svg>";
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function countryFlag(code) {
+    var c = String(code || "").toUpperCase();
+    if (c.length !== 2) return "";
+    return String.fromCodePoint(
+      0x1f1e6 + c.charCodeAt(0) - 65,
+      0x1f1e6 + c.charCodeAt(1) - 65
+    );
+  }
+
+  function countryLabel(p) {
+    if (p.last_check_ok !== true) return "";
+    if (p.country_name) return countryFlag(p.country_code) + " " + p.country_name;
+    if (p.country_code) return countryFlag(p.country_code) + " " + p.country_code;
+    if (p.last_check_ip) return p.last_check_ip;
+    return "";
+  }
+
+  function checkLabel(p) {
+    if (p.last_check_ok === true) return i18n.checkOk;
+    if (p.last_check_ok === false) return i18n.checkFail;
+    return "";
+  }
+
+  function setLinksFieldVisible(visible) {
+    if (linksField) linksField.hidden = !visible;
+  }
+
+  function showMsg(text, ok) {
+    if (!msg) return;
+    msg.textContent = text || "";
+    msg.hidden = !text;
+    msg.className = "proxys-section__msg " + (ok ? "alert-ok" : "alert-error");
+  }
+
+  function releaseModalFocus(modalEl, returnFocusEl) {
+    var active = document.activeElement;
+    if (!active || !modalEl || !modalEl.contains(active)) return;
+    if (returnFocusEl && typeof returnFocusEl.focus === "function") {
+      returnFocusEl.focus();
+    } else {
+      active.blur();
+    }
+  }
+
+  function blurModalFocus(modalEl) {
+    if (!modalEl) return;
+    var active = document.activeElement;
+    if (active && modalEl.contains(active)) {
+      active.blur();
+    }
+  }
+
+  function openModal(el, trigger) {
+    if (!el) return;
+    if (el === formModal) lastFormTrigger = trigger || lastFormTrigger;
+    if (el === deleteModal) lastDeleteTrigger = trigger || lastDeleteTrigger;
+    el.setAttribute("aria-hidden", "false");
+    el.classList.add("is-open");
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeModal(el) {
+    if (!el) return;
+    var returnFocus =
+      el === formModal ? lastFormTrigger :
+      el === deleteModal ? lastDeleteTrigger : null;
+    releaseModalFocus(el, returnFocus);
+    blurModalFocus(el);
+    el.classList.remove("is-open");
+    el.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+    if (linksSuggest) linksSuggest.hidden = true;
+    if (el === formModal) lastFormTrigger = null;
+    if (el === deleteModal) lastDeleteTrigger = null;
+  }
+
+  function renderSelectedLinks() {
+    if (!linksSelected) return;
+    if (!selectedLinks.length) {
+      linksSelected.textContent = i18n.linksNone;
+      linksSelected.classList.add("is-empty");
+      return;
+    }
+    linksSelected.classList.remove("is-empty");
+    linksSelected.innerHTML = selectedLinks.map(function (item, idx) {
+      var sep = idx > 0 ? '<span class="proxys-links-selected__sep">, </span>' : "";
+      return (
+        sep +
+        '<button type="button" class="proxys-links-chip" data-link-token="' +
+        escapeHtml(item.token) +
+        '" title="' + escapeHtml(item.label || item.name) + '">' +
+        escapeHtml(item.name) +
+        '<span aria-hidden="true">×</span></button>'
+      );
+    }).join("");
+    linksSelected.querySelectorAll(".proxys-links-chip").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var token = btn.getAttribute("data-link-token") || "";
+        selectedLinks = selectedLinks.filter(function (item) { return item.token !== token; });
+        renderSelectedLinks();
+      });
+    });
+  }
+
+  function addSelectedLink(choice) {
+    if (!choice || !choice.token) return;
+    if (selectedLinks.some(function (item) { return item.token === choice.token; })) return;
+    selectedLinks.push({
+      token: choice.token,
+      name: choice.name || choice.label || choice.token,
+      label: choice.label || choice.name || choice.token,
+    });
+    renderSelectedLinks();
+    if (linksSearch) {
+      linksSearch.value = "";
+      linksSearch.focus();
+    }
+    if (linksSuggest) linksSuggest.hidden = true;
+  }
+
+  function resetSelectedLinks(links) {
+    selectedLinks = (links || []).map(function (item) {
+      return {
+        token: item.token || "",
+        name: item.name || "",
+        label: item.label || item.name || "",
+      };
+    }).filter(function (item) { return item.token; });
+    renderSelectedLinks();
+    if (linksSearch) linksSearch.value = "";
+    if (linksSuggest) linksSuggest.hidden = true;
+  }
+
+  function loadLinkChoices(q) {
+    var url = "/admin/api/proxys/link-choices?q=" + encodeURIComponent(q || "");
+    fetch(url, { headers: { Accept: "application/json" } })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!linksSuggest) return;
+        var choices = (data && data.choices) || [];
+        linksSuggest.innerHTML = "";
+        if (!choices.length) {
+          linksSuggest.hidden = true;
+          return;
+        }
+        choices.forEach(function (choice) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "proxys-links-suggest__item";
+          btn.textContent = choice.label || choice.name || "";
+          btn.addEventListener("click", function () { addSelectedLink(choice); });
+          linksSuggest.appendChild(btn);
+        });
+        linksSuggest.hidden = false;
+      })
+      .catch(function () {
+        if (linksSuggest) linksSuggest.hidden = true;
+      });
+  }
+
+  function load() {
+    var q = search ? search.value.trim() : "";
+    var url = "/admin/api/proxys" + (q ? "?q=" + encodeURIComponent(q) : "");
+    fetch(url, { headers: { Accept: "application/json" } })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data && data.ok) render(data.proxies || []);
+      })
+      .catch(function () {});
+  }
+
+  function render(proxies) {
+    if (!list) return;
+    list.innerHTML = "";
+    proxies.forEach(function (p) {
+      var li = document.createElement("li");
+      li.className = "user-list__row proxys-row" + (p.active ? "" : " proxys-row--inactive");
+      li.dataset.proxyId = p.id;
+
+      var main = document.createElement("div");
+      main.className = "proxys-row__main";
+
+      var countryText = countryLabel(p);
+      var country = null;
+      if (countryText) {
+        country = document.createElement("span");
+        country.className = "proxys-row__country";
+        country.textContent = countryText;
+      }
+
+      var label = document.createElement("strong");
+      label.className = "proxys-row__label";
+      label.textContent = p.label || p.host + ":" + p.port;
+
+      var display = document.createElement("code");
+      display.className = "proxys-row__display";
+      display.textContent = p.display || "";
+
+      var status = document.createElement("span");
+      status.className = "sub proxys-row__status";
+      var statusText = checkLabel(p);
+      var statusHtml = "";
+      if (statusText) {
+        var checkCls = "proxys-row__check";
+        if (p.last_check_ok === true) checkCls += " proxys-row__check--ok";
+        else if (p.last_check_ok === false) checkCls += " proxys-row__check--fail";
+        statusHtml = '<span class="' + checkCls + '">' + escapeHtml(statusText) + "</span>";
+      }
+      if (p.last_check_message) {
+        statusHtml += (statusHtml ? " · " : "") + escapeHtml(p.last_check_message);
+      }
+      if (statusHtml) {
+        status.innerHTML = statusHtml;
+      }
+      if (country) main.appendChild(country);
+      main.appendChild(label);
+      main.appendChild(display);
+      if (statusHtml) main.appendChild(status);
+
+      var actions = document.createElement("div");
+      actions.className = "proxys-row__actions";
+
+      var testBtn = document.createElement("button");
+      testBtn.type = "button";
+      testBtn.className = "btn btn-ghost btn-sm proxys-row__icon-btn proxys-row__test";
+      testBtn.setAttribute("aria-label", i18n.test);
+      testBtn.setAttribute("title", i18n.test);
+      testBtn.innerHTML = ICON_TEST;
+      testBtn.addEventListener("click", function () { testProxy(p.id, testBtn); });
+
+      var editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "btn btn-ghost btn-sm proxys-row__icon-btn proxys-row__edit";
+      editBtn.setAttribute("aria-label", i18n.edit);
+      editBtn.setAttribute("title", i18n.edit);
+      editBtn.innerHTML = ICON_EDIT;
+      editBtn.addEventListener("click", function () { openEdit(p.id, editBtn); });
+
+      var delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "btn btn-ghost btn-sm proxys-row__icon-btn proxys-row__delete btn-user-delete";
+      delBtn.setAttribute("aria-label", i18n.delete);
+      delBtn.setAttribute("title", i18n.delete);
+      delBtn.innerHTML = ICON_TRASH;
+      delBtn.addEventListener("click", function () { openDelete(p.id, p.label || p.display, delBtn); });
+
+      var toggleWrap = document.createElement("label");
+      toggleWrap.className = "user-active-toggle";
+      toggleWrap.setAttribute("title", p.active ? i18n.active : i18n.inactive);
+      var toggle = document.createElement("input");
+      toggle.type = "checkbox";
+      toggle.className = "user-active-toggle__input";
+      toggle.checked = !!p.active;
+      toggle.setAttribute("aria-label", p.active ? i18n.active : i18n.inactive);
+      toggle.addEventListener("change", function () {
+        fetch("/admin/api/proxys/" + encodeURIComponent(p.id) + "/active", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ active: toggle.checked }),
+        }).catch(function () {
+          toggle.checked = !toggle.checked;
+        });
+      });
+      var toggleUi = document.createElement("span");
+      toggleUi.className = "user-active-toggle__ui";
+      toggleUi.setAttribute("aria-hidden", "true");
+      toggleWrap.appendChild(toggle);
+      toggleWrap.appendChild(toggleUi);
+
+      actions.appendChild(testBtn);
+      actions.appendChild(editBtn);
+      actions.appendChild(delBtn);
+      actions.appendChild(toggleWrap);
+
+      li.appendChild(main);
+      li.appendChild(actions);
+      list.appendChild(li);
+    });
+  }
+
+  function testProxy(id, btn) {
+    if (!id) return;
+    var prev = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = "…";
+    fetch("/admin/api/proxys/" + encodeURIComponent(id) + "/test", {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data && data.message) showMsg(data.message, !!(data && data.ok));
+        load();
+      })
+      .catch(function () {
+        showMsg(i18n.checkFail, false);
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.innerHTML = prev;
+      });
+  }
+
+  function openCreate() {
+    editingId = "";
+    formTitle.textContent = i18n.modalCreate;
+    labelInput.value = "";
+    lineInput.value = "";
+    resetSelectedLinks([]);
+    setLinksFieldVisible(false);
+    formError.hidden = true;
+    formError.textContent = "";
+    openModal(formModal, addBtn);
+    lineInput.focus();
+  }
+
+  function openEdit(id, trigger) {
+    editingId = id;
+    lastFormTrigger = trigger || lastFormTrigger;
+    formTitle.textContent = i18n.modalEdit;
+    setLinksFieldVisible(true);
+    formError.hidden = true;
+    formError.textContent = "";
+    fetch("/admin/api/proxys/" + encodeURIComponent(id), { headers: { Accept: "application/json" } })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data || !data.ok || !data.proxy) return;
+        var p = data.proxy;
+        labelInput.value = p.label || "";
+        lineInput.value = p.proxy_line || p.proxy_url || "";
+        resetSelectedLinks(p.links || []);
+        openModal(formModal, trigger);
+        lineInput.focus();
+      })
+      .catch(function () {});
+  }
+
+  function openDelete(id, name, trigger) {
+    pendingDeleteId = id;
+    lastDeleteTrigger = trigger || lastDeleteTrigger;
+    var body = document.getElementById("proxy-delete-body");
+    if (body) {
+      body.textContent = i18n.confirmDeleteBody + (name ? " (" + name + ")" : "");
+    }
+    openModal(deleteModal, trigger);
+  }
+
+  if (addBtn) addBtn.addEventListener("click", openCreate);
+
+  if (form) {
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      formError.hidden = true;
+      var payload = {
+        label: labelInput.value.trim(),
+        proxy: lineInput.value.trim(),
+        notes: "",
+        links: selectedLinks.map(function (item) { return item.token; }),
+      };
+      var url = editingId
+        ? "/admin/api/proxys/" + encodeURIComponent(editingId)
+        : "/admin/api/proxys";
+      var method = editingId ? "PUT" : "POST";
+      fetch(url, {
+        method: method,
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload),
+      })
+        .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+        .then(function (res) {
+          if (res.data && res.data.ok) {
+            closeModal(formModal);
+            load();
+            return;
+          }
+          formError.textContent = (res.data && res.data.error) || i18n.checkFail;
+          formError.hidden = false;
+        })
+        .catch(function () {
+          formError.textContent = i18n.checkFail;
+          formError.hidden = false;
+        });
+    });
+  }
+
+  if (deleteConfirm) {
+    deleteConfirm.addEventListener("click", function () {
+      if (!pendingDeleteId) return;
+      fetch("/admin/api/proxys/" + encodeURIComponent(pendingDeleteId), { method: "DELETE" })
+        .then(function () {
+          pendingDeleteId = "";
+          closeModal(deleteModal);
+          load();
+        })
+        .catch(function () {});
+    });
+  }
+
+  document.querySelectorAll("[data-close-proxy-modal]").forEach(function (el) {
+    el.addEventListener("click", function () { closeModal(formModal); });
+  });
+  document.querySelectorAll("[data-close-proxy-delete]").forEach(function (el) {
+    el.addEventListener("click", function () {
+      pendingDeleteId = "";
+      closeModal(deleteModal);
+    });
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    if (formModal && formModal.classList.contains("is-open")) {
+      closeModal(formModal);
+      return;
+    }
+    if (deleteModal && deleteModal.classList.contains("is-open")) {
+      pendingDeleteId = "";
+      closeModal(deleteModal);
+    }
+  });
+
+  if (search) {
+    search.addEventListener("input", function () {
+      if (searchClear) searchClear.hidden = !search.value;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(load, 220);
+    });
+  }
+  if (searchClear) {
+    searchClear.addEventListener("click", function () {
+      search.value = "";
+      searchClear.hidden = true;
+      load();
+      search.focus();
+    });
+  }
+
+  if (linksSearch) {
+    linksSearch.addEventListener("input", function () {
+      var q = linksSearch.value.trim();
+      clearTimeout(linksTimer);
+      if (!q) {
+        if (linksSuggest) {
+          linksSuggest.innerHTML = "";
+          linksSuggest.hidden = true;
+        }
+        return;
+      }
+      linksTimer = setTimeout(function () {
+        loadLinkChoices(q);
+      }, 180);
+    });
+  }
+
+  document.addEventListener("click", function (e) {
+    if (!linksSuggest || !linksSearch) return;
+    if (linksSuggest.contains(e.target) || linksSearch.contains(e.target)) return;
+    linksSuggest.hidden = true;
+  });
+
+  load();
+})();
+</script>
+
+<div id="panel-info-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-panel-info></div>
+  <div class="equipo-modal__panel panel-info-modal__panel" role="dialog" aria-modal="true" aria-labelledby="panel-info-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div>
+        <h2 id="panel-info-modal-title"></h2>
+      </div>
+      <button type="button" class="equipo-modal__close" data-close-panel-info aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body">
+      <p class="sub panel-info-modal__text" id="panel-info-modal-text"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var modal = document.getElementById("panel-info-modal");
+    var titleEl = document.getElementById("panel-info-modal-title");
+    var textEl = document.getElementById("panel-info-modal-text");
+    var lastTrigger = null;
+
+    if (!modal || !titleEl || !textEl) return;
+
+    function releaseModalFocus(returnFocusEl) {
+      var active = document.activeElement;
+      if (!active || !modal.contains(active)) return;
+      if (returnFocusEl && typeof returnFocusEl.focus === "function") {
+        returnFocusEl.focus();
+      } else {
+        active.blur();
+      }
+    }
+
+    function openPanelInfo(btn) {
+      var title = btn.getAttribute("data-info-title") || "";
+      var text = btn.getAttribute("data-info-text") || "";
+      lastTrigger = btn;
+      titleEl.textContent = title;
+      textEl.textContent = text;
+      modal.classList.add("is-open");
+      modal.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+      var closeBtn = modal.querySelector(".equipo-modal__close");
+      if (closeBtn) closeBtn.focus();
+    }
+
+    function closePanelInfo() {
+      releaseModalFocus(lastTrigger);
+      modal.classList.remove("is-open");
+      modal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+      lastTrigger = null;
+    }
+
+    document.querySelectorAll(".js-panel-info-open").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        openPanelInfo(btn);
+      });
+    });
+
+    modal.querySelectorAll("[data-close-panel-info]").forEach(function (el) {
+      el.addEventListener("click", closePanelInfo);
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && modal.classList.contains("is-open")) {
+        closePanelInfo();
+      }
+    });
+  })();
+</script>
+{% endblock %}

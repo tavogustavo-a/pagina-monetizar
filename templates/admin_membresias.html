@@ -1,0 +1,406 @@
+{% extends "base.html" %}
+{% block title %}{{ t('membresias.title') }}{% endblock %}
+{% block body %}
+{% set current_name = t('membresias.plan.' ~ current_plan ~ '.name') if current_plan else t('membresias.no_plan') %}
+<div class="layout">
+  {% include "_sidebar.html" %}
+
+  <main class="main main--scroll">
+    <div class="admin-layout">
+      <div class="admin-inner admin-inner--plans">
+        <section class="section dashboard-section plans-section">
+          <header class="admin-head admin-head--title plans-head">
+            <h1>{{ t('membresias.title') }}</h1>
+            <div class="plans-head-chips">
+            <span class="plans-current-chip" title="{{ t('membresias.current') }}">
+              <span class="plans-current-chip__label">{{ t('membresias.current') }}</span>
+              <strong>{{ current_name if current_plan else t('membresias.no_plan') }}</strong>
+            </span>
+            {% if wallet_balance_usd %}
+            <span class="plans-current-chip" title="{{ t('membresias.wallet') }}">
+              <span class="plans-current-chip__label">{{ t('membresias.wallet') }}</span>
+              <strong>USD {{ wallet_balance_usd }}</strong>
+            </span>
+            {% endif %}
+            </div>
+          </header>
+          <p class="sub plans-section__intro">{{ t('membresias.intro') }}</p>
+          <p id="plans-msg" class="plans-section__msg" hidden></p>
+
+          <div class="plans-grid">
+            {% for plan in plans %}
+            <article
+              class="plan-card plan-card--{{ plan.accent }} {% if plan.featured %}plan-card--featured{% endif %} {% if plan.invite_only %}plan-card--invite{% endif %} {% if current_plan == plan.id %}is-current{% elif not plan.invite_only %}plan-card--selectable js-plan-card{% endif %}"
+              {% if not plan.invite_only and current_plan != plan.id %}
+              role="button"
+              tabindex="0"
+              aria-pressed="false"
+              data-plan-id="{{ plan.id }}"
+              data-plan-name="{{ plan.name }}"
+              data-plan-price="{{ plan.price_usd }}"
+              {% endif %}
+            >
+              {% if plan.featured %}
+              <span class="plan-card__ribbon">{{ t('membresias.featured') }}</span>
+              {% endif %}
+              <header class="plan-card__head">
+                <h2>{{ plan.name }}</h2>
+                <p class="plan-card__tagline">{{ plan.tagline }}</p>
+              </header>
+              <p class="plan-card__price{% if plan.invite_only %} plan-card__price--free{% endif %}">
+                {% if plan.invite_only %}
+                <strong>{{ t('membresias.free') }}</strong>
+                {% else %}
+                <span class="plan-card__currency">USD</span>
+                <strong>{{ plan.price_usd }}</strong>
+                <span class="plan-card__period">{{ t('membresias.per_month') }}</span>
+                {% endif %}
+              </p>
+              <ul class="plan-card__feats">
+                <li>{{ t('membresias.videos', n=plan.videos) }}</li>
+                <li>{{ t('membresias.stats', n=plan.stats) }}</li>
+                <li>{{ t('membresias.any_platform') }}</li>
+                <li>{{ t('membresias.cancel_anytime') }}</li>
+              </ul>
+              {% if current_plan == plan.id %}
+              <span class="plan-card__current">{{ t('membresias.current_badge') }}</span>
+              {% if plan.price_usd > 0 %}
+              <button type="button" class="btn btn-ghost plan-card__cta js-cancel-plan" data-plan-id="{{ plan.id }}">
+                {{ t('membresias.cancel_plan') }}
+              </button>
+              {% endif %}
+              {% elif not plan.invite_only %}
+              <span class="plan-card__selected-badge">{{ t('membresias.selected_badge') }}</span>
+              <button
+                type="button"
+                class="btn btn-accent plan-card__cta js-choose-plan"
+                data-plan-id="{{ plan.id }}"
+                data-plan-name="{{ plan.name }}"
+                data-plan-price="{{ plan.price_usd }}"
+              >
+                {{ t('membresias.choose') }}
+              </button>
+              {% endif %}
+            </article>
+            {% endfor %}
+          </div>
+
+          <div id="plan-checkout-panel" class="plan-checkout plan-checkout--inline" hidden>
+            <div class="plan-checkout__accent" aria-hidden="true"></div>
+            <header class="plan-checkout__head">
+              <p class="plan-checkout__kicker">{{ t('membresias.checkout_step') }}</p>
+              <h2 class="plan-checkout__plan" id="plan-checkout-plan"></h2>
+            </header>
+            <p class="plan-checkout__amount" id="plan-checkout-amount"></p>
+            <ul id="plan-checkout-quote" class="plan-checkout__quote"></ul>
+            <label class="field plan-checkout__wallet" id="plan-checkout-wallet-wrap"{% if not wallet_balance_usd %} hidden{% endif %}>
+              <span class="field__label">
+                <input type="checkbox" id="plan-checkout-use-wallet" checked />
+                {{ t('membresias.use_wallet') }}
+              </span>
+            </label>
+            <p id="plan-checkout-covered" class="sub" hidden>{{ t('membresias.pay_covered') }}</p>
+            <div id="plan-checkout-methods" class="plan-checkout__methods"></div>
+            <div id="plan-checkout-detail" class="plan-checkout__detail" hidden>
+              <p class="plan-checkout__payto-label">{{ t('membresias.pay_to') }}</p>
+              <div class="plan-checkout__payto">
+                <code id="plan-checkout-payto"></code>
+                <button type="button" class="btn btn-ghost btn-sm" id="plan-checkout-copy">{{ t('membresias.copy') }}</button>
+              </div>
+              <p class="sub" id="plan-checkout-instructions"></p>
+            </div>
+            <p id="plan-checkout-error" class="alert-error" hidden></p>
+            <div class="proxys-form__actions plan-checkout__actions">
+              <button type="button" class="btn btn-accent" id="plan-checkout-submit">{{ t('membresias.submit_purchase') }}</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  var panel = document.getElementById("plan-checkout-panel");
+  var planTitle = document.getElementById("plan-checkout-plan");
+  var amount = document.getElementById("plan-checkout-amount");
+  var methodsBox = document.getElementById("plan-checkout-methods");
+  var detail = document.getElementById("plan-checkout-detail");
+  var payTo = document.getElementById("plan-checkout-payto");
+  var instructions = document.getElementById("plan-checkout-instructions");
+  var copyBtn = document.getElementById("plan-checkout-copy");
+  var err = document.getElementById("plan-checkout-error");
+  var submit = document.getElementById("plan-checkout-submit");
+  var msg = document.getElementById("plans-msg");
+  var quoteBox = document.getElementById("plan-checkout-quote");
+  var useWallet = document.getElementById("plan-checkout-use-wallet");
+  var covered = document.getElementById("plan-checkout-covered");
+  var methods = [];
+  var quotes = {};
+  var walletBalance = {{ wallet_balance_usd | int }};
+  var selectedId = "";
+  var pendingPlan = "";
+  var plansGrid = document.querySelector(".plans-grid");
+  var i18n = {
+    copy: {{ t('membresias.copy') | tojson }},
+    copied: {{ t('membresias.copied') | tojson }},
+    choose: {{ t('membresias.choose') | tojson }},
+    selectedBadge: {{ t('membresias.selected_badge') | tojson }},
+    perMonth: {{ t('membresias.per_month') | tojson }},
+    purchaseOk: {{ t('pagos.purchase_ok') | tojson }},
+    instantOk: {{ t('membresias.checkout_instant_ok') | tojson }},
+    cancelOk: {{ t('membresias.cancel_ok') | tojson }},
+    quoteCredit: {{ t('membresias.quote_credit') | tojson }},
+    quoteWallet: {{ t('membresias.quote_wallet') | tojson }},
+    quoteDue: {{ t('membresias.quote_due') | tojson }},
+    quoteLeftover: {{ t('membresias.quote_leftover') | tojson }},
+  };
+
+  function showMsg(text, ok) {
+    if (!msg) return;
+    msg.textContent = text || "";
+    msg.hidden = !text;
+    msg.className = "plans-section__msg " + (ok ? "alert-ok" : "alert-error");
+  }
+  function fmtUsd(n) {
+    return "USD " + String(n == null ? 0 : n);
+  }
+  function fillTpl(tpl, n) {
+    return String(tpl || "").replace("{n}", String(n));
+  }
+  function currentQuote() {
+    var q = quotes[pendingPlan];
+    if (!q) return null;
+    var credit = Number(q.credit_usd || 0);
+    var price = Number(q.price_usd || 0);
+    var due = Math.max(0, price - credit);
+    var leftover = Math.max(0, credit - price);
+    var walletUsed = useWallet && useWallet.checked ? Math.min(walletBalance, due) : 0;
+    var remainder = Math.max(0, due - walletUsed);
+    return {
+      price_usd: price,
+      credit_usd: credit,
+      leftover_credit_usd: leftover,
+      wallet_used_usd: walletUsed,
+      remainder_usd: remainder,
+    };
+  }
+  function renderQuote() {
+    if (!quoteBox) return;
+    var q = currentQuote();
+    quoteBox.innerHTML = "";
+    if (!q) return;
+    function add(text) {
+      var li = document.createElement("li");
+      li.textContent = text;
+      quoteBox.appendChild(li);
+    }
+    if (q.credit_usd > 0) add(fillTpl(i18n.quoteCredit, q.credit_usd));
+    if (q.wallet_used_usd > 0) add(fillTpl(i18n.quoteWallet, q.wallet_used_usd));
+    if (q.leftover_credit_usd > 0) add(fillTpl(i18n.quoteLeftover, q.leftover_credit_usd));
+    if (q.remainder_usd > 0) add(fillTpl(i18n.quoteDue, q.remainder_usd));
+    if (covered) covered.hidden = q.remainder_usd > 0;
+    var walletWrap = document.getElementById("plan-checkout-wallet-wrap");
+    if (walletWrap) walletWrap.hidden = !(walletBalance > 0);
+    renderMethods();
+  }
+  function selectedMethod() {
+    return methods.find(function (m) { return m.id === selectedId; }) || null;
+  }
+  function payMethods() {
+    return methods.filter(function (m) { return m.active && m.id !== "wallet" && m.kind !== "wallet"; });
+  }
+  function renderMethods() {
+    methodsBox.innerHTML = "";
+    var q = currentQuote();
+    var remainder = q ? q.remainder_usd : 1;
+    var active = remainder > 0 ? payMethods() : [];
+    if (remainder <= 0) {
+      selectedId = "wallet";
+      submit.disabled = false;
+      detail.hidden = true;
+      return;
+    }
+    submit.disabled = active.length === 0;
+    if (!active.some(function (m) { return m.id === selectedId; })) {
+      selectedId = active.length ? active[0].id : "";
+    }
+    active.forEach(function (m) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "plan-method" + (m.id === selectedId ? " is-selected" : "");
+      btn.innerHTML = "<strong>" + (m.name || "") + "</strong>";
+      btn.addEventListener("click", function () {
+        selectedId = m.id;
+        renderMethods();
+        showDetail(m);
+      });
+      methodsBox.appendChild(btn);
+    });
+    if (selectedId) showDetail(selectedMethod());
+    else detail.hidden = true;
+  }
+  function showDetail(m) {
+    if (!m) {
+      detail.hidden = true;
+      return;
+    }
+    payTo.textContent = m.pay_to || "—";
+    instructions.textContent = m.instructions || "";
+    detail.hidden = false;
+  }
+  function loadCheckoutData() {
+    return Promise.all([
+      fetch("/admin/api/pagos/medios", { headers: { Accept: "application/json" } }).then(function (r) { return r.json(); }),
+      fetch("/admin/api/membresias/planes", { headers: { Accept: "application/json" } }).then(function (r) { return r.json(); }),
+    ]).then(function (pair) {
+      methods = (pair[0] && pair[0].methods) || [];
+      quotes = (pair[1] && pair[1].quotes) || {};
+      walletBalance = Number((pair[1] && pair[1].wallet_balance_usd) || walletBalance || 0);
+      selectedId = "";
+      renderQuote();
+    });
+  }
+
+  function selectPlan(planId, name, price) {
+    pendingPlan = planId || "";
+    document.querySelectorAll(".js-plan-card").forEach(function (card) {
+      var selected = card.getAttribute("data-plan-id") === pendingPlan;
+      card.classList.toggle("is-selected", selected);
+      card.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+    if (plansGrid) plansGrid.classList.toggle("plans-grid--has-selection", !!pendingPlan);
+    document.querySelectorAll(".js-choose-plan").forEach(function (btn) {
+      var card = btn.closest(".js-plan-card");
+      var selected = !!(card && card.classList.contains("is-selected"));
+      btn.textContent = selected ? i18n.selectedBadge : i18n.choose;
+      btn.classList.toggle("is-selected", selected);
+      btn.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+    if (!pendingPlan && panel) panel.hidden = true;
+  }
+
+  function openCheckout(name, price) {
+    if (!pendingPlan) return;
+    if (planTitle) planTitle.textContent = name || "";
+    amount.textContent = "USD " + price + " " + i18n.perMonth;
+    err.hidden = true;
+    if (useWallet) useWallet.checked = true;
+    if (panel) panel.hidden = false;
+    loadCheckoutData();
+    if (panel) panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function onPlanCardActivate(card) {
+    if (!card || card.classList.contains("is-current")) return;
+    var planId = card.getAttribute("data-plan-id") || "";
+    var already = card.classList.contains("is-selected");
+    if (already) {
+      selectPlan("", "", "");
+      return;
+    }
+    selectPlan(
+      planId,
+      card.getAttribute("data-plan-name") || "",
+      card.getAttribute("data-plan-price") || ""
+    );
+  }
+
+  document.querySelectorAll(".js-plan-card").forEach(function (card) {
+    card.addEventListener("click", function (e) {
+      if (e.target.closest(".js-cancel-plan") || e.target.closest(".js-choose-plan")) return;
+      onPlanCardActivate(card);
+    });
+    card.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onPlanCardActivate(card);
+      }
+    });
+  });
+
+  document.querySelectorAll(".js-choose-plan").forEach(function (btn) {
+    btn.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var card = btn.closest(".js-plan-card");
+      if (!card) return;
+      var planId = btn.getAttribute("data-plan-id") || "";
+      var name = btn.getAttribute("data-plan-name") || "";
+      var price = btn.getAttribute("data-plan-price") || "";
+      selectPlan(planId, name, price);
+      openCheckout(name, price);
+    });
+  });
+
+  if (copyBtn) {
+    copyBtn.addEventListener("click", function () {
+      var text = payTo.textContent || "";
+      if (!text || text === "—") return;
+      navigator.clipboard && navigator.clipboard.writeText(text);
+      copyBtn.textContent = i18n.copied;
+      setTimeout(function () { copyBtn.textContent = i18n.copy; }, 1400);
+    });
+  }
+
+  if (submit) {
+    submit.addEventListener("click", function () {
+      err.hidden = true;
+      if (!pendingPlan) return;
+      var q = currentQuote();
+      var remainder = q ? q.remainder_usd : 1;
+      if (remainder > 0 && !selectedId) return;
+      submit.disabled = true;
+      fetch("/admin/api/pagos/compras", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          plan_id: pendingPlan,
+          payment_method_id: remainder > 0 ? selectedId : "wallet",
+          use_wallet: !!(useWallet && useWallet.checked),
+        }),
+      })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+        .then(function (res) {
+          if (res.data && res.data.ok) {
+            var paidNow = res.data.purchase && res.data.purchase.status === "paid";
+            showMsg(paidNow ? i18n.instantOk : i18n.purchaseOk, true);
+            window.location.reload();
+            return;
+          }
+          err.textContent = (res.data && res.data.error) || "";
+          err.hidden = false;
+        })
+        .finally(function () { submit.disabled = false; });
+    });
+  }
+
+  if (useWallet) {
+    useWallet.addEventListener("change", function () { renderQuote(); });
+  }
+
+  document.querySelectorAll(".js-cancel-plan").forEach(function (btn) {
+    btn.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      btn.disabled = true;
+      fetch("/admin/api/membresias/cancel", {
+        method: "POST",
+        headers: { Accept: "application/json" },
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data && data.ok) {
+            showMsg(i18n.cancelOk, true);
+            window.location.reload();
+            return;
+          }
+          showMsg((data && data.error) || "", false);
+        })
+        .finally(function () { btn.disabled = false; });
+    });
+  });
+})();
+</script>
+{% endblock %}

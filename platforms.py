@@ -253,3 +253,28 @@ def api_document_rows(lang: str) -> list[dict[str, Any]]:
             }
         )
     return rows
+
+
+def server_conditions_rows(lang: str) -> list[dict[str, Any]]:
+    """Límites reales de cada API: cuota, ventana de tiempo y uso seguro."""
+    from i18n import t
+
+    rows: list[dict[str, Any]] = []
+    for p in PLATFORMS:
+        pid = str(p["id"])
+        kind = str(p.get("api_kind") or ("oauth" if p.get("has_api") else "none"))
+        rows.append(
+            {
+                "id": pid,
+                "icon": str(p.get("icon") or ""),
+                "name": t(f"platform.{pid}", lang),
+                "api_kind": kind,
+                "api_label": t(f"apidoc.api.{kind}", lang),
+                "cap": t(f"cond.{pid}.cap", lang),
+                "window": t(f"cond.{pid}.window", lang),
+                "rate": t(f"cond.{pid}.rate", lang),
+                "safe": t(f"cond.{pid}.safe", lang),
+                "detail": t(f"cond.{pid}.detail", lang),
+            }
+        )
+    return rows

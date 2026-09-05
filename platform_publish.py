@@ -252,6 +252,33 @@ def publish_to_platform(
     tiktok_config_id: str | None = None,
     account_link_id: str | None = None,
 ) -> tuple[bool, str]:
+    import proxy_util
+
+    proxy_url = db.get_active_proxy_url_for_account(account_link_id)
+    with proxy_util.using_proxy(proxy_url):
+        return _publish_to_platform(
+            platform_id,
+            file_path=file_path,
+            content_type=content_type,
+            title=title,
+            description=description,
+            lang=lang,
+            tiktok_config_id=tiktok_config_id,
+            account_link_id=account_link_id,
+        )
+
+
+def _publish_to_platform(
+    platform_id: str,
+    *,
+    file_path: Path,
+    content_type: str,
+    title: str,
+    description: str,
+    lang: str = "es",
+    tiktok_config_id: str | None = None,
+    account_link_id: str | None = None,
+) -> tuple[bool, str]:
     pid = (platform_id or "").strip()
     if pid not in platforms.PLATFORM_IDS:
         from i18n import t

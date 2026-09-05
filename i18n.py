@@ -20,17 +20,87 @@ MESSAGES: dict[str, dict[str, str]] = {
     "nav.toggle_expand": {"en": "Expand menu", "es": "Expandir menú"},
     "nav.toggle_collapse": {"en": "Collapse menu", "es": "Contraer menú"},
     "nav.statistics": {"en": "Statistics", "es": "Estadísticas"},
-    "nav.api_docs": {"en": "API Document", "es": "API Documento"},
+    "nav.api_docs": {"en": "API webs", "es": "API webs"},
+    "nav.server_conditions": {"en": "Server conditions", "es": "Condiciones de servidores"},
     "nav.publications": {"en": "Publications", "es": "Publicaciones"},
     "nav.team": {"en": "Team", "es": "Equipo"},
     "nav.tiktok_accounts": {"en": "TikTok Accounts", "es": "Cuentas TikTok"},
     "nav.servers": {"en": "Servers", "es": "Servidores"},
     "nav.panel": {"en": "Panel", "es": "Panel"},
+    "nav.support": {"en": "Support", "es": "Soporte"},
+    "nav.support_chats": {"en": "Chats", "es": "Chats"},
     "panel.title": {"en": "Admin panel", "es": "Panel de administración"},
     "panel.title_prefix": {"en": "Panel of", "es": "Panel de"},
     "panel.page_hint": {
         "en": "Notification email: used for password reset and publication failure alerts. Password: we send a reset link to that email.",
         "es": "Correo de notificaciones: se usa para cambiar contraseña y alertas si falla una publicación. Contraseña: enviamos el enlace de restablecimiento a ese correo.",
+    },
+    "panel.tiktok_title": {"en": "TikTok account", "es": "Cuenta TikTok"},
+    "panel.accounts_title": {"en": "Accounts", "es": "Cuenta"},
+    "panel.accounts_intro": {
+        "en": "Connect your social accounts with official OAuth to publish from the panel. You can renew login or revoke access at any time.",
+        "es": "Conecta tus cuentas con OAuth oficial para publicar desde el panel. Puedes renovar el inicio de sesión o revocar el acceso cuando quieras.",
+    },
+    "panel.accounts_info_btn": {
+        "en": "About connected accounts",
+        "es": "Información sobre cuentas conectadas",
+    },
+    "panel.account_none": {
+        "en": "No {platform} account connected.",
+        "es": "No hay cuenta de {platform} conectada.",
+    },
+    "panel.renew_login": {"en": "Renew login", "es": "Renovar inicio de sesión"},
+    "panel.revoke": {"en": "Revoke connection", "es": "Revocar conexión"},
+    "panel.revoke_confirm": {
+        "en": "Revoke this connection?",
+        "es": "¿Revocar esta conexión?",
+    },
+    "panel.configure_api": {
+        "en": "Configure API",
+        "es": "Configurar API",
+    },
+    "panel.edit_api": {
+        "en": "Edit API keys",
+        "es": "Editar API",
+    },
+    "panel.in_production": {
+        "en": "In production",
+        "es": "En producción",
+    },
+    "panel.implementing_note": {
+        "en": "This integration is still being implemented.",
+        "es": "Esta integración se está implementando.",
+    },
+    "panel.api_modal_title": {
+        "en": "API credentials — {platform}",
+        "es": "Credenciales API — {platform}",
+    },
+    "panel.save": {"en": "Save", "es": "Guardar"},
+    "panel.test_connection": {
+        "en": "Test connection",
+        "es": "Probar conexión",
+    },
+    "panel.platform.facebook": {"en": "Facebook Page", "es": "Facebook Página"},
+    "panel.tiktok_intro": {
+        "en": "Connect your TikTok with the official OAuth flow so you can publish from the panel. You can revoke the connection at any time.",
+        "es": "Conecta tu TikTok con el flujo oficial OAuth para publicar desde el panel. Puedes revocar la conexión cuando quieras.",
+    },
+    "panel.tiktok_oauth_missing": {
+        "en": "TikTok is not configured on the server yet. Ask the site administrator to save the Client Key and Secret in Servers.",
+        "es": "TikTok aún no está configurado en el servidor. Pide al administrador que guarde el Client Key y el Secret en Servidores.",
+    },
+    "panel.tiktok_none": {
+        "en": "No TikTok account connected yet.",
+        "es": "No hay cuenta TikTok conectada.",
+    },
+    "panel.tiktok_revoke": {"en": "Revoke connection", "es": "Revocar conexión"},
+    "panel.tiktok_info_btn": {
+        "en": "About TikTok connection",
+        "es": "Información sobre la conexión TikTok",
+    },
+    "panel.tiktok_revoke_confirm": {
+        "en": "Revoke this TikTok connection? The app will lose access until you connect again.",
+        "es": "¿Revocar esta conexión de TikTok? La app perderá el acceso hasta que vuelvas a conectar.",
     },
     "panel.current_user": {"en": "User", "es": "Usuario"},
     "panel.email_section": {"en": "Notification email", "es": "Correo de notificaciones"},
@@ -39,11 +109,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "¿Para qué sirve este correo?",
     },
     "panel.email_hint": {
-        "en": "This is the email address where the panel sends important messages: links to reset your password and alerts when a scheduled publication fails. Use an inbox you check regularly.",
-        "es": "Es el correo donde el panel te envía avisos importantes: enlaces para restablecer tu contraseña y alertas si falla una publicación programada. Usa una bandeja que revises con frecuencia.",
+        "en": "This is the email where the panel sends important messages. You must confirm it from the link we email you (valid 24 hours).",
+        "es": "Es el correo donde el panel te envía avisos importantes. Debes confirmarlo con el enlace que te enviamos (válido 24 horas).",
     },
     "panel.email_ph": {"en": "admin@example.com", "es": "admin@ejemplo.com"},
     "panel.email_save": {"en": "Save", "es": "Guardar"},
+    "panel.email_resend": {"en": "Resend email", "es": "Reenviar correo"},
+    "panel.email_verified": {"en": "Confirmed", "es": "Confirmado"},
+    "panel.email_pending": {"en": "Pending confirmation", "es": "Pendiente de confirmación"},
+    "panel.email_pending_resend": {
+        "en": "Pending confirmation Resend email",
+        "es": "Pendiente de confirmación Reenviar correo",
+    },
     "panel.email_current_none": {
         "en": "No email configured yet.",
         "es": "Aún no hay correo configurado.",
@@ -60,8 +137,16 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "panel.password_section": {"en": "Change password", "es": "Cambiar contraseña"},
     "panel.password_hint": {
-        "en": "We will send a reset link to your notification email.",
-        "es": "Enviaremos un enlace de restablecimiento a tu correo de notificaciones.",
+        "en": "We will send a reset link to your confirmed notification email.",
+        "es": "Enviaremos un enlace de restablecimiento a tu correo confirmado.",
+    },
+    "panel.password_requires_email": {
+        "en": "Confirm your email before changing your password.",
+        "es": "Confirma tu correo antes de cambiar la contraseña.",
+    },
+    "panel.password_info_btn": {
+        "en": "About password reset",
+        "es": "Información sobre cambiar contraseña",
     },
     "panel.password_send": {
         "en": "Send link to change password",
@@ -72,8 +157,32 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Introduce un correo válido.",
     },
     "panel.flash.email_saved": {
-        "en": "Email saved.",
-        "es": "Correo guardado.",
+        "en": "Confirmation link sent to {email}.",
+        "es": "Enlace de confirmación enviado a {email}.",
+    },
+    "panel.flash.email_verified": {
+        "en": "Email confirmed successfully.",
+        "es": "Correo confirmado correctamente.",
+    },
+    "panel.flash.verification_invalid": {
+        "en": "This confirmation link is invalid or has expired. Resend the email from your panel.",
+        "es": "Este enlace no es válido o ha expirado. Reenvía el correo desde tu panel.",
+    },
+    "panel.flash.no_pending_email": {
+        "en": "There is no email pending confirmation.",
+        "es": "No hay un correo pendiente de confirmación.",
+    },
+    "panel.flash.email_must_confirm": {
+        "en": "Confirm your email before resetting your password.",
+        "es": "Confirma tu correo antes de restablecer la contraseña.",
+    },
+    "panel.flash.email_already_verified": {
+        "en": "This email is already confirmed.",
+        "es": "Este correo ya está confirmado.",
+    },
+    "panel.flash.email_taken": {
+        "en": "That email is already used by another account.",
+        "es": "Ese correo ya está en uso por otra cuenta.",
     },
     "panel.flash.no_email": {
         "en": "Set a notification email first.",
@@ -93,8 +202,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "panel.reset.title": {"en": "New password", "es": "Nueva contraseña"},
     "panel.reset.subtitle": {
-        "en": "Choose a new administrator password.",
-        "es": "Elige una nueva contraseña de administrador.",
+        "en": "Choose a new password for your account.",
+        "es": "Elige una nueva contraseña para tu cuenta.",
     },
     "panel.reset.password": {"en": "New password", "es": "Nueva contraseña"},
     "panel.reset.password_confirm": {
@@ -651,6 +760,46 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "api.http_fail": {"en": "Server error (HTTP {status}).", "es": "Error del servidor (HTTP {status})."},
     "api.graph_fail": {"en": "API error: {error}", "es": "Error de API: {error}"},
+    "api.err.generic": {
+        "en": "Could not verify the connection. Check your credentials and try again.",
+        "es": "No se pudo verificar la conexión. Revisa las credenciales e inténtalo de nuevo.",
+    },
+    "api.err.token_expired": {
+        "en": "The {platform} session is invalid or expired. Reconnect the account from the panel.",
+        "es": "La sesión de {platform} no es válida o expiró. Vuelve a conectar la cuenta desde el panel.",
+    },
+    "api.err.bad_client": {
+        "en": "The {platform} Client ID or secret is incorrect. Copy them from the developer console.",
+        "es": "El Client ID o el secreto de {platform} no son correctos. Cópialos desde la consola del desarrollador.",
+    },
+    "api.err.invalid_credentials": {
+        "en": "These credentials do not look valid. Check the Client ID and secret.",
+        "es": "Las credenciales no parecen válidas. Revisa el Client ID y el secreto.",
+    },
+    "api.err.need_secret": {
+        "en": "Client secret is missing. Fill it in and try again.",
+        "es": "Falta el Client secret. Complétalo y vuelve a probar.",
+    },
+    "api.err.permission_denied": {
+        "en": "{platform} denied access. Check the app permissions in the developer console.",
+        "es": "{platform} rechazó el acceso. Revisa los permisos de la app en la consola.",
+    },
+    "api.err.redirect_mismatch": {
+        "en": "The redirect URI does not match the one registered in the developer console.",
+        "es": "La URI de redirección no coincide con la registrada en la consola.",
+    },
+    "api.err.rate_limit": {
+        "en": "Request limit reached. Wait a few minutes and try again.",
+        "es": "Se alcanzó el límite de peticiones. Espera unos minutos y vuelve a intentar.",
+    },
+    "api.err.network": {
+        "en": "Could not reach the server. Check your connection and try again.",
+        "es": "No se pudo contactar con el servidor. Revisa tu conexión e inténtalo de nuevo.",
+    },
+    "api.err.detail": {
+        "en": "{detail}",
+        "es": "{detail}",
+    },
     "api.tiktok.token_ok": {
         "en": "Linked TikTok account works (@{name}).",
         "es": "La cuenta TikTok vinculada funciona (@{name}).",
@@ -739,6 +888,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Create accounts in {servers}, then link them to this user in {team}.",
         "es": "Crea cuentas en {servers} y vincúlalas a este usuario en {team}.",
     },
+    "pub.no_accounts_tiktok_hint": {
+        "en": "Connect your platforms to publish.",
+        "es": "Conecta tus plataformas para publicar.",
+    },
     "pub.no_accounts_title": {
         "en": "No accounts registered",
         "es": "No hay cuentas registradas",
@@ -780,6 +933,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Arrastra y suelta tu video aquí",
     },
     "pub.browse_files": {"en": "Browse files", "es": "Explorar archivos"},
+    "pub.captions_uploading": {
+        "en": "Uploading temporary video…",
+        "es": "Subiendo video temporal…",
+    },
+    "pub.captions_upload_fail": {
+        "en": "Could not upload the video. Try again.",
+        "es": "No se pudo subir el video. Inténtalo de nuevo.",
+    },
     "pub.field_video": {"en": "Video file", "es": "Archivo de video"},
     "pub.caption": {"en": "Caption", "es": "Descripción"},
     "pub.caption_ph": {
@@ -850,8 +1011,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "{n} comentarios",
     },
     "pub.comments_scopes": {
-        "en": "Requires <code>comment.list</code> and <code>comment.reply</code> scopes.",
-        "es": "Requiere los alcances <code>comment.list</code> y <code>comment.reply</code>.",
+        "en": "View and reply to comments on your published videos from this panel. The connected account must have permission to read and reply to comments.",
+        "es": "Aquí puedes ver y responder comentarios de tus videos publicados. La cuenta conectada debe tener permiso para leer y responder comentarios.",
+    },
+    "pub.comments_info_btn": {
+        "en": "About comments",
+        "es": "Información sobre comentarios",
     },
     "pub.filter_account": {"en": "Filter by account", "es": "Filtrar por cuenta"},
     "pub.recent_inbox": {"en": "Recent inbox", "es": "Bandeja reciente"},
@@ -882,8 +1047,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Tu cuenta no puede subir videos.",
     },
     "pub.flash.file_too_large": {
-        "en": "File exceeds the maximum size (100 MB).",
-        "es": "El archivo supera el tamaño máximo (100 MB).",
+        "en": "File exceeds the maximum size ({max_mb} MB).",
+        "es": "El archivo supera el tamaño máximo ({max_mb} MB).",
     },
     "pub.flash.no_comments": {
         "en": "Your account cannot manage comments.",
@@ -895,8 +1060,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Comentario de ejemplo añadido.",
     },
     "pub.flash.no_accounts_registered": {
-        "en": "No TikTok accounts are registered. Connect one under Servers.",
-        "es": "No hay cuentas TikTok registradas. Conecta una en Servidores.",
+        "en": "No accounts registered. Connect one in the panel.",
+        "es": "No hay cuentas registradas. Conecta una en el panel.",
     },
     "pub.flash.no_user_assigned": {
         "en": "That TikTok account has no internal user assigned. Link a team member under Team.",
@@ -988,8 +1153,19 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pub.log_col_status": {"en": "Status", "es": "Estado"},
     "pub.log_col_message": {"en": "Message", "es": "Mensaje"},
     "pub.log_col_date": {"en": "Date", "es": "Fecha"},
+    "pub.log_col_user": {"en": "User", "es": "Usuario"},
     "pub.log_status_ok": {"en": "OK", "es": "OK"},
     "pub.log_status_fail": {"en": "Failed", "es": "Falló"},
+    "pub.log_status_mixed": {"en": "Mixed", "es": "Mixto"},
+    "pub.log_status_skipped": {"en": "Skipped", "es": "Omitido"},
+    "pub.log_view": {"en": "View", "es": "Ver"},
+    "pub.log_modal_platforms": {"en": "Platforms", "es": "Plataformas"},
+    "pub.log_modal_status": {"en": "Status", "es": "Estado"},
+    "pub.log_modal_errors": {"en": "Errors", "es": "Errores"},
+    "pub.log_platforms_n": {
+        "en": "{n} platforms",
+        "es": "{n} plataformas",
+    },
     "log.purge_from": {"en": "From", "es": "Desde"},
     "log.purge_to": {"en": "To", "es": "Hasta"},
     "log.purge_delete": {"en": "Delete", "es": "Eliminar"},
@@ -1016,6 +1192,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     "log.purge_confirm_events": {
         "en": "Delete {n} extractor log entries from {from} to {to}?",
         "es": "¿Eliminar {n} entradas del registro del extractor del {from} al {to}?",
+    },
+    "log.purge_confirm_chat": {
+        "en": "Delete {n} support chat messages from {from} to {to}? Threads with no remaining messages disappear.",
+        "es": "¿Eliminar {n} mensajes del chat de soporte del {from} al {to}? Los hilos sin mensajes restantes desaparecen.",
+    },
+    "log.purge_confirm_invites": {
+        "en": "Delete {n} invitation codes from {from} to {to}? Users who already registered keep their accounts.",
+        "es": "¿Eliminar {n} códigos de invitación del {from} al {to}? Quienes ya se registraron conservan su cuenta.",
     },
     "log.purge_ok": {
         "en": "{n} records deleted.",
@@ -1328,6 +1512,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "footer.privacy": {"en": "Privacy Policy", "es": "Política de privacidad"},
     "footer.terms": {"en": "Terms of Service", "es": "Términos de servicio"},
     "footer.deletion": {"en": "Data Deletion", "es": "Eliminación de datos"},
+    "footer.cancellation": {
+        "en": "Cancellation Policy",
+        "es": "Política de cancelamiento",
+    },
     "footer.support": {"en": "Support", "es": "Soporte"},
     "footer.not_affiliated": {
         "en": "Not affiliated with TikTok Inc.",
@@ -1430,6 +1618,200 @@ MESSAGES: dict[str, dict[str, str]] = {
     "login.submit": {"en": "Sign In", "es": "Iniciar sesión"},
     "login.show_password": {"en": "Show password", "es": "Mostrar contraseña"},
     "login.hide_password": {"en": "Hide password", "es": "Ocultar contraseña"},
+    "login.register_hint": {
+        "en": "Have an invitation code?",
+        "es": "¿Tienes un código de invitación?",
+    },
+    "login.register_link": {"en": "Create your account", "es": "Crea tu cuenta"},
+    "login.forgot_link": {"en": "Forgot your password?", "es": "¿Olvidaste tu contraseña?"},
+    "login.forgot.title": {"en": "Forgot password", "es": "Olvidé mi contraseña"},
+    "login.forgot.headline": {
+        "en": "Reset your password",
+        "es": "Restablece tu contraseña",
+    },
+    "login.forgot.tagline": {
+        "en": "Enter the email linked to your account. We will send you a link to choose a new password.",
+        "es": "Introduce el correo asociado a tu cuenta. Te enviaremos un enlace para elegir una nueva contraseña.",
+    },
+    "login.forgot.welcome": {
+        "en": "Use the notification email saved in your account settings.",
+        "es": "Usa el correo de notificaciones guardado en la configuración de tu cuenta.",
+    },
+    "login.forgot.email": {"en": "Email", "es": "Correo"},
+    "login.forgot.email_ph": {
+        "en": "you@example.com",
+        "es": "tu@ejemplo.com",
+    },
+    "login.forgot.submit": {"en": "Send reset link", "es": "Enviar enlace"},
+    "login.forgot.back": {"en": "Back to sign in", "es": "Volver al inicio de sesión"},
+    "login.forgot.invalid_email": {
+        "en": "Enter a valid email address.",
+        "es": "Introduce un correo válido.",
+    },
+    "login.forgot.sent_generic": {
+        "en": "If an account exists with that email, you will receive a reset link shortly.",
+        "es": "Si existe una cuenta con ese correo, recibirás un enlace de restablecimiento en breve.",
+    },
+    "register.title": {"en": "Create account", "es": "Crear cuenta"},
+    "register.headline": {
+        "en": "Join with your invitation",
+        "es": "Únete con tu invitación",
+    },
+    "register.tagline": {
+        "en": "Registration is by invitation only. Enter the code you received from our support team.",
+        "es": "El registro es solo con invitación. Ingresa el código que recibiste de nuestro equipo de soporte.",
+    },
+    "register.welcome": {
+        "en": "Enter your invitation code and choose your credentials.",
+        "es": "Ingresa tu código de invitación y elige tus credenciales.",
+    },
+    "register.code": {"en": "Invitation code", "es": "Código de invitación"},
+    "register.code_ph": {"en": "e.g. AB12CD34", "es": "p. ej. AB12CD34"},
+    "register.password2": {"en": "Confirm password", "es": "Confirmar contraseña"},
+    "register.email": {"en": "Email", "es": "Correo electrónico"},
+    "register.email_ph": {"en": "you@example.com", "es": "tu@ejemplo.com"},
+    "register.submit": {"en": "Create account", "es": "Crear cuenta"},
+    "register.no_code_hint": {
+        "en": "Don't have a code? Contact our support team to request an invitation.",
+        "es": "¿No tienes código? Contacta a nuestro equipo de soporte para pedir una invitación.",
+    },
+    "register.have_account": {
+        "en": "Already have an account?",
+        "es": "¿Ya tienes una cuenta?",
+    },
+    "register.login_link": {"en": "Sign in", "es": "Inicia sesión"},
+    "register.err.code_required": {
+        "en": "Enter your invitation code.",
+        "es": "Ingresa tu código de invitación.",
+    },
+    "register.err.code_invalid": {
+        "en": "That invitation code is not valid.",
+        "es": "Ese código de invitación no es válido.",
+    },
+    "register.err.code_used": {
+        "en": "That invitation code was already used.",
+        "es": "Ese código de invitación ya fue usado.",
+    },
+    "register.err.username_short": {
+        "en": "Username must be at least 2 characters.",
+        "es": "El usuario debe tener al menos 2 caracteres.",
+    },
+    "register.err.password_short": {
+        "en": "Password must be at least 4 characters.",
+        "es": "La contraseña debe tener al menos 4 caracteres.",
+    },
+    "register.err.username_taken": {
+        "en": "That username is already taken.",
+        "es": "Ese usuario ya está en uso.",
+    },
+    "register.err.password_mismatch": {
+        "en": "Passwords do not match.",
+        "es": "Las contraseñas no coinciden.",
+    },
+    "register.err.invalid_email": {
+        "en": "Enter a valid email address.",
+        "es": "Introduce un correo válido.",
+    },
+    "register.err.email_taken": {
+        "en": "That email is already in use.",
+        "es": "Ese correo ya está en uso.",
+    },
+    "register.flash.verify_email": {
+        "en": "Account created. Check your email to confirm your address (link valid 24 hours).",
+        "es": "Cuenta creada. Revisa tu correo para confirmar tu dirección (enlace válido 24 horas).",
+    },
+    "register.err.generic": {
+        "en": "Could not create the account. Please try again.",
+        "es": "No se pudo crear la cuenta. Inténtalo de nuevo.",
+    },
+    "support.title": {"en": "Support", "es": "Soporte"},
+    "support.intro": {
+        "en": "Write to our team. We answer here as soon as possible.",
+        "es": "Escríbenos a nuestro equipo. Respondemos aquí lo antes posible.",
+    },
+    "support.empty": {
+        "en": "No messages yet. Say hello!",
+        "es": "Aún no hay mensajes. ¡Saluda!",
+    },
+    "support.placeholder": {"en": "Type your message…", "es": "Escribe tu mensaje…"},
+    "support.send": {"en": "Send", "es": "Enviar"},
+    "support.admin_label": {"en": "Support", "es": "Soporte"},
+    "support.anonymous_label": {"en": "Anonymous", "es": "Anónimo"},
+    "support.you_label": {"en": "You", "es": "Tú"},
+    "support.chats_title": {"en": "Chats", "es": "Chats"},
+    "support.chats_intro": {
+        "en": "Conversations with your users. Unread messages show a badge.",
+        "es": "Conversaciones con tus usuarios. Los mensajes sin leer muestran una insignia.",
+    },
+    "support.chats_info_btn": {
+        "en": "About support chats",
+        "es": "Información sobre chats de soporte",
+    },
+    "support.search_ph": {"en": "Search user…", "es": "Buscar usuario…"},
+    "support.no_threads": {
+        "en": "No conversations yet.",
+        "es": "Aún no hay conversaciones.",
+    },
+    "support.pick_thread": {
+        "en": "Select a user on the left.",
+        "es": "Selecciona un usuario.",
+    },
+    "support.threads_collapse": {
+        "en": "Hide conversations",
+        "es": "Ocultar conversaciones",
+    },
+    "support.threads_expand": {
+        "en": "Show conversations",
+        "es": "Mostrar conversaciones",
+    },
+    "support.threads_rail_label": {
+        "en": "Quick switch between chats",
+        "es": "Cambio rápido entre chats",
+    },
+    "support.reply_placeholder": {"en": "Type your reply…", "es": "Escribe tu respuesta…"},
+    "support.notify_new": {
+        "en": "You have a new support message",
+        "es": "Tienes un nuevo mensaje de soporte",
+    },
+    "support.notify_new_admin": {
+        "en": "New user message in support chat",
+        "es": "Nuevo mensaje de un usuario en el chat",
+    },
+    "support.unread_badge": {
+        "en": "Unread messages",
+        "es": "Mensajes sin leer",
+    },
+    "invites.title": {"en": "Invitation codes", "es": "Códigos invitación"},
+    "invites.generate": {"en": "Generate code", "es": "Generar código"},
+    "invites.hint": {
+        "en": "Share a code with someone so they can register at {register_path}. Each code works once.",
+        "es": "Comparte un código para que alguien se registre en {register_path}. Cada código sirve una vez.",
+    },
+    "invites.info_btn": {
+        "en": "About invitation codes",
+        "es": "Información sobre códigos de invitación",
+    },
+    "invites.empty": {"en": "No codes yet.", "es": "Aún no hay códigos."},
+    "invites.used_by": {"en": "Used by", "es": "Usado por"},
+    "invites.unused": {"en": "Available", "es": "Disponible"},
+    "invites.expired": {"en": "Expired", "es": "Expirado"},
+    "invites.expired_by": {
+        "en": "Expired by {user}",
+        "es": "Expirado por {user}",
+    },
+    "invites.delete": {"en": "Delete", "es": "Eliminar"},
+    "invites.copy": {"en": "Copy", "es": "Copiar"},
+    "invites.copied": {"en": "Copied!", "es": "¡Copiado!"},
+    "invites.info_title": {"en": "Invitation", "es": "Invitación"},
+    "invites.registered": {"en": "Registered", "es": "Se registró"},
+    "invites.code_used": {"en": "Invitation code", "es": "Código de invitación"},
+    "invites.no_code": {
+        "en": "Created from the panel (no invitation code).",
+        "es": "Creado desde el panel (sin código de invitación).",
+    },
+    "support.widget_open": {"en": "Chat with support", "es": "Chatea con soporte"},
+    "support.widget_title": {"en": "Support chat", "es": "Chat de soporte"},
+    "support.widget_close": {"en": "Close chat", "es": "Cerrar chat"},
     "login.error": {
         "en": "Invalid username or password",
         "es": "Usuario o contraseña incorrectos",
@@ -1439,6 +1821,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "legal.privacy_title": {"en": "Privacy Policy", "es": "Política de privacidad"},
     "legal.terms_title": {"en": "Terms of Service", "es": "Términos de servicio"},
     "legal.deletion_title": {"en": "Data Deletion", "es": "Eliminación de datos"},
+    "legal.cancellation_title": {
+        "en": "Cancellation Policy",
+        "es": "Política de cancelamiento",
+    },
     "feed.empty_title": {"en": "The feed is empty", "es": "El feed está vacío"},
     "feed.empty_hint": {
         "en": "Published content will appear here.",
@@ -1480,6 +1866,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "offline.banner": {"en": "No connection", "es": "Sin conexión"},
     "offline.restored": {"en": "Connection restored", "es": "Conexión restaurada"},
     "admin.platform_account": {"en": "{platform} account", "es": "Cuenta {platform}"},
+    "admin.stats_consult": {"en": "Query", "es": "Consultar"},
+    "admin.stats_tiktok_hint": {
+        "en": "If you query all accounts, each TikTok account counts as one stats query.",
+        "es": "Si consultas todas las cuentas, cada cuenta de TikTok cuenta como una consulta de estadísticas.",
+    },
     "admin.global_summary": {"en": "Global summary", "es": "Resumen global"},
     "admin.summary_platform": {
         "en": "Summary {platform}",
@@ -1524,8 +1915,12 @@ MESSAGES: dict[str, dict[str, str]] = {
     "admin.shares": {"en": "Shares", "es": "Compartidos"},
     "admin.followers_demo": {"en": "Followers (demo)", "es": "Seguidores (demo)"},
     "admin.no_tiktok_linked": {
-        "en": "No TikTok account is linked to your profile. Ask an administrator to assign one in Team.",
-        "es": "No hay cuenta TikTok vinculada a tu perfil. Pide a un administrador que te asigne una en Equipo.",
+        "en": "No TikTok account is linked to your profile.",
+        "es": "No hay cuenta TikTok vinculada a tu perfil.",
+    },
+    "admin.no_tiktok_accounts_panel": {
+        "en": "No accounts connected yet.",
+        "es": "Aún no tienes cuentas conectadas.",
     },
     "admin.no_server_account_linked": {
         "en": "No server account is linked to your profile. Ask an administrator to assign one in Team.",
@@ -1616,6 +2011,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "team.loading": {"en": "Loading members…", "es": "Cargando miembros…"},
     "mode.basic": {"en": "Basic mode", "es": "Modo básico"},
     "mode.admin": {"en": "Admin mode", "es": "Modo admin"},
+    "mode.tiktok": {"en": "TikTok user", "es": "Usuario TikTok"},
     "mode.supervisor": {"en": "Supervisor mode", "es": "Modo supervisor"},
     "mode.videos_only": {"en": "Videos only", "es": "Solo videos"},
     "mode.videos_comments": {"en": "Videos & comments", "es": "Videos y comentarios"},
@@ -1630,6 +2026,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "mode.admin.hint": {
         "en": "High permission level in the app (separate from site administrator account).",
         "es": "Nivel alto de permisos en la app (aparte de la cuenta administradora del sitio).",
+    },
+    "mode.tiktok.hint": {
+        "en": "Admin-like workspace: publish, stats and team, without server credentials.",
+        "es": "Espacio tipo admin: publicar, estadísticas y equipo, sin credenciales de servidores.",
     },
     "mode.supervisor.hint": {
         "en": "Content and workflow oversight.",
@@ -1701,6 +2101,200 @@ MESSAGES: dict[str, dict[str, str]] = {
     # ------------------------------------------------------------------
     # API Documento
     # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Condiciones de servidores (cuotas API)
+    # ------------------------------------------------------------------
+    "cond.intro": {
+        "en": "Official API limits for each connected account (YouTube is per Google Cloud project). Going over them can pause publishing or flag the account. The Safe column is a conservative pace so you do not abuse the API. Networks change these numbers; stay under Safe, not at the hard ceiling.",
+        "es": "Límites oficiales de la API de cada cuenta conectada (YouTube es por proyecto de Google Cloud). Pasarse puede pausar la publicación o marcar la cuenta. La columna Uso seguro es un ritmo conservador para no abusar. Las redes cambian estas cifras; quédate en Uso seguro, no en el tope máximo.",
+    },
+    "cond.col_server": {"en": "Server", "es": "Servidor"},
+    "cond.col_api": {"en": "API", "es": "API"},
+    "cond.col_cap": {"en": "Official cap", "es": "Tope oficial"},
+    "cond.col_window": {"en": "Time window", "es": "Ventana de tiempo"},
+    "cond.col_rate": {"en": "API pace", "es": "Ritmo de la API"},
+    "cond.col_safe": {"en": "Safe use", "es": "Uso seguro"},
+    "cond.col_detail": {"en": "Conditions", "es": "Condiciones"},
+    "cond.tiktok.cap": {
+        "en": "Daily post cap exists, number not published. Integrators usually see 15–25 videos per account/day. Error: spam_risk_too_many_posts.",
+        "es": "Hay tope diario de posts, pero TikTok no publica el número. Quien integra suele ver 15–25 videos por cuenta/día. Error: spam_risk_too_many_posts.",
+    },
+    "cond.tiktok.window": {
+        "en": "24 hours rolling per creator + 6 publish-init requests per minute per access token.",
+        "es": "24 horas corridas por creador + 6 inicios de publicación por minuto por token.",
+    },
+    "cond.tiktok.rate": {
+        "en": "6 requests/minute per user token on Direct Post / upload init.",
+        "es": "6 peticiones/minuto por token de usuario en Direct Post / inicio de subida.",
+    },
+    "cond.tiktok.safe": {
+        "en": "Up to 10 videos/day per TikTok account, 10–15 minutes apart. Never send bursts.",
+        "es": "Hasta 10 videos/día por cuenta de TikTok, con 10–15 minutos de separación. Nunca en ráfaga.",
+    },
+    "cond.tiktok.detail": {
+        "en": "Unaudited apps can only post private/self-only. Inbox upload: at most 5 pending shares in 24 hours. The app also has a daily cap of active publishing users (reached_active_user_cap). Limits are per creator account, shared across all apps that post for that user.",
+        "es": "Apps sin auditoría solo pueden publicar en privado/solo yo. Subida al inbox: como máximo 5 pendientes en 24 horas. La app también tiene cupo diario de usuarios activos publicando (reached_active_user_cap). El tope es por cuenta de creador, compartido entre todas las apps que publiquen por ese usuario.",
+    },
+    "cond.youtube.cap": {
+        "en": "Default 10,000 quota units/day per Google Cloud project. videos.insert costs ~1,600 units → about 6 uploads/day. Console may also show a separate videos.insert bucket (often 100/day).",
+        "es": "Por defecto 10.000 unidades/día por proyecto de Google Cloud. videos.insert gasta ~1.600 → unos 6 videos/día. En la consola puede haber un cupo aparte de videos.insert (a menudo 100/día).",
+    },
+    "cond.youtube.window": {
+        "en": "Quota resets at midnight Pacific Time (not midnight in your country).",
+        "es": "La cuota se reinicia a medianoche del Pacífico (no a las 00:00 de tu país).",
+    },
+    "cond.youtube.rate": {
+        "en": "Unit budget, not a posts-per-minute clock. Failed uploads still spend quota.",
+        "es": "Presupuesto de unidades, no un reloj de posts por minuto. Las subidas fallidas también gastan cuota.",
+    },
+    "cond.youtube.safe": {
+        "en": "4–5 videos/day per Google project, 20–30 minutes apart. Leave units for token refresh and metadata.",
+        "es": "4–5 videos/día por proyecto de Google, con 20–30 minutos de separación. Deja unidades para renovar token y metadatos.",
+    },
+    "cond.youtube.detail": {
+        "en": "Quota is per project, not per channel: several YouTube accounts on the same Client ID share the 10,000 units. YouTube also has a separate anti-spam upload limit per channel (not in the API docs). Clips of 3 minutes or less go up as Shorts in this panel. You can request more quota in Google Cloud; it is not guaranteed.",
+        "es": "La cuota es por proyecto, no por canal: varias cuentas de YouTube con el mismo Client ID comparten las 10.000 unidades. YouTube también tiene un tope anti-spam de subidas por canal (no está en la docs de la API). En este panel, los de 3 minutos o menos se suben como Shorts. Se puede pedir más cuota en Google Cloud; no está garantizado.",
+    },
+    "cond.instagram.cap": {
+        "en": "API-published posts: Meta docs say 100 per 24-hour moving window in one place and 50 in another. Live value: GET /{ig-user-id}/content_publishing_limit (quota_total is often 50). Max 50 unpublished containers at once.",
+        "es": "Posts vía API: Meta pone 100 por ventana móvil de 24 h en un sitio y 50 en otro. Valor real: GET /{ig-user-id}/content_publishing_limit (quota_total suele ser 50). Máximo 50 contenedores sin publicar a la vez.",
+    },
+    "cond.instagram.window": {
+        "en": "Rolling 24 hours per professional Instagram account (capacity returns 24 h after each post, not at midnight).",
+        "es": "24 horas corridas por cuenta profesional de Instagram (la capacidad vuelve 24 h después de cada post, no a medianoche).",
+    },
+    "cond.instagram.rate": {
+        "en": "Also Graph call budget (often ~200 calls/hour per user token) plus app-level Business Use Case limits.",
+        "es": "También hay cupo de llamadas Graph (suele ~200/hora por token de usuario) y límites de Business Use Case a nivel app.",
+    },
+    "cond.instagram.safe": {
+        "en": "Up to 15–20 Reels/photos per 24 h per Instagram account, 30+ minutes apart. Stay well under 50.",
+        "es": "Hasta 15–20 Reels/fotos por 24 h por cuenta de Instagram, con 30+ minutos de separación. Quédate bastante por debajo de 50.",
+    },
+    "cond.instagram.detail": {
+        "en": "Needs a professional account. Reels, feed photos and Stories share the publishing cap; a carousel counts as one post. Error 9 / 2207042 when the cap is hit. Photos in this panel need a public https SITE_URL (not localhost).",
+        "es": "Hace falta cuenta profesional. Reels, fotos del feed e Historias comparten el tope; un carrusel cuenta como un post. Error 9 / 2207042 al llegar al cupo. Las fotos en este panel necesitan un SITE_URL público https (no localhost).",
+    },
+    "cond.facebook.cap": {
+        "en": "Pages only (not personal profiles). Reels API: 30 API-published Reels per 24-hour moving window. Feed videos have no small official “X/day” like Instagram; Graph uses 200 × active users calls/hour.",
+        "es": "Solo Páginas (no perfiles personales). API de Reels: 30 Reels por API en ventana móvil de 24 h. Los videos del feed no tienen un “X/día” oficial pequeño como Instagram; Graph usa 200 × usuarios activos llamadas/hora.",
+    },
+    "cond.facebook.window": {
+        "en": "Reels: rolling 24 hours. Graph call budget: rolling 1 hour (and a 24 h Business Use Case window).",
+        "es": "Reels: 24 horas corridas. Cupo de llamadas Graph: 1 hora corrida (y ventana de 24 h de Business Use Case).",
+    },
+    "cond.facebook.rate": {
+        "en": "Calls/hour ≈ 200 × number of active app users. Watch X-App-Usage / X-Business-Use-Case-Usage headers.",
+        "es": "Llamadas/hora ≈ 200 × usuarios activos de la app. Mira las cabeceras X-App-Usage / X-Business-Use-Case-Usage.",
+    },
+    "cond.facebook.safe": {
+        "en": "Up to 10–12 videos/day per Page, 20+ minutes apart. If you publish Reels via API, stay under ~25/24 h.",
+        "es": "Hasta 10–12 videos/día por Página, con 20+ minutos de separación. Si publicas Reels por API, no pases de ~25/24 h.",
+    },
+    "cond.facebook.detail": {
+        "en": "Page quality and spam filters can still block bursts even with quota left. Photos and long videos share the Page; space everything. Tokens are Page tokens, renewed automatically in this panel.",
+        "es": "La calidad de la Página y el anti-spam pueden bloquear ráfagas aunque quede cupo. Fotos y videos largos comparten la Página; espacia todo. Los tokens son de Página; este panel los renueva solo.",
+    },
+    "cond.x.cap": {
+        "en": "POST /2/tweets: 10,000/24 h per app and 100/15 min per user (some docs also cite 300 posts+reposts / 3 h). Unverified X accounts: about 50 original posts/day on the platform (API + manual). Paid API access is required.",
+        "es": "POST /2/tweets: 10.000/24 h por app y 100/15 min por usuario (algunas docs también citan 300 posts+reposts / 3 h). Cuentas X sin verificar: unos 50 posts originales/día en la plataforma (API + a mano). Hace falta API de pago.",
+    },
+    "cond.x.window": {
+        "en": "15-minute and 24-hour rolling windows for the API. Account daily caps reset on X’s clock, with extra unofficial sub-limits during the day.",
+        "es": "Ventanas corridas de 15 minutos y 24 h en la API. El tope diario de la cuenta sigue el reloj de X, con sublímites extra no oficiales a lo largo del día.",
+    },
+    "cond.x.rate": {
+        "en": "Do not post faster than one every few minutes on one account. HTTP 429 if you burst.",
+        "es": "No publiques más rápido que uno cada varios minutos en la misma cuenta. HTTP 429 si vas en ráfaga.",
+    },
+    "cond.x.safe": {
+        "en": "10–15 posts/day per X account, 10+ minutes apart. Unverified: stay under 40/day including posts you make in the X app.",
+        "es": "10–15 posts/día por cuenta de X, con 10+ minutos de separación. Sin verificar: no pases de 40/día contando lo que publiques a mano en X.",
+    },
+    "cond.x.detail": {
+        "en": "This panel posts photos, GIF and short video. Premium/verified accounts are often exempt from the low 50/day account cap; the API 15-minute limit still applies. Media upload has its own 15-minute quotas (initialize/append/finalize).",
+        "es": "Este panel publica fotos, GIF y video corto. Las cuentas Premium/verificadas suelen estar exentas del tope bajo de 50/día; el límite de 15 minutos de la API sigue. La subida de media tiene cupos propios de 15 minutos (initialize/append/finalize).",
+    },
+    "cond.dailymotion.cap": {
+        "en": "No public “videos per day” quota like YouTube units. Partner/app rate limits apply (commonly around 60 requests/minute). The channel can still be throttled for spam.",
+        "es": "No hay un cupo público de “videos por día” como las unidades de YouTube. Sí hay rate limit de partner/app (suele ~60 peticiones/minuto). El canal igual puede frenarse por spam.",
+    },
+    "cond.dailymotion.window": {
+        "en": "Per-minute API window. No official midnight reset for uploads.",
+        "es": "Ventana de la API por minuto. No hay reinicio oficial a medianoche para las subidas.",
+    },
+    "cond.dailymotion.rate": {
+        "en": "Keep well under ~60 calls/minute (upload is several calls: create + send + publish).",
+        "es": "Quédate bastante por debajo de ~60 llamadas/minuto (una subida son varias: crear + enviar + publicar).",
+    },
+    "cond.dailymotion.safe": {
+        "en": "10–12 videos/day per Dailymotion channel, 15+ minutes apart.",
+        "es": "10–12 videos/día por canal de Dailymotion, con 15+ minutos de separación.",
+    },
+    "cond.dailymotion.detail": {
+        "en": "Uploads go to the connected channel. Partner terms can add extra caps. If a day of heavy posting starts failing, wait and drop volume; Dailymotion does not publish a single daily number.",
+        "es": "Las subidas van al canal conectado. El contrato de partner puede añadir topes extra. Si un día de mucho volumen empieza a fallar, espera y baja la cadencia; Dailymotion no publica un número diario único.",
+    },
+    "cond.bilibili.cap": {
+        "en": "Member level usually caps daily uploads (often about 5 videos/day on lower levels; higher levels get more). The open platform follows similar account rules.",
+        "es": "El nivel de miembro suele limitar las subidas diarias (a menudo unos 5 videos/día en niveles bajos; más en niveles altos). La open platform sigue reglas parecidas de la cuenta.",
+    },
+    "cond.bilibili.window": {
+        "en": "Calendar day on Bilibili (China time), not a rolling 24 h window like Instagram.",
+        "es": "Día natural en Bilibili (hora de China), no una ventana corrida de 24 h como Instagram.",
+    },
+    "cond.bilibili.rate": {
+        "en": "Space uploads; the API also rate-limits submit/cover calls. This panel needs ffmpeg for the cover.",
+        "es": "Separa las subidas; la API también limita submit/portada. Este panel necesita ffmpeg para la portada.",
+    },
+    "cond.bilibili.safe": {
+        "en": "3–5 videos/day per Bilibili account until you confirm that account’s member-level cap.",
+        "es": "3–5 videos/día por cuenta de Bilibili hasta confirmar el tope de nivel de esa cuenta.",
+    },
+    "cond.bilibili.detail": {
+        "en": "稿件 (video submissions) only in this panel. Duplicate or low-quality bursts get held for review. If an upload is rejected for frequency, wait until the next China calendar day.",
+        "es": "Solo 稿件 (envíos de video) en este panel. Las ráfagas duplicadas o de baja calidad se quedan en revisión. Si rechazan por frecuencia, espera al siguiente día natural de China.",
+    },
+    "cond.rumble.cap": {
+        "en": "Partner Upload API (token + Channel ID). Rumble does not publish a public daily video quota. Abuse is handled per channel/partner agreement.",
+        "es": "Upload API de partners (token + Channel ID). Rumble no publica un cupo diario público de videos. El abuso se gestiona por canal/contrato de partner.",
+    },
+    "cond.rumble.window": {
+        "en": "No official reset clock. Treat activity as a rolling day and space uploads.",
+        "es": "Sin reloj oficial de reinicio. Trata la actividad como un día corrido y separa las subidas.",
+    },
+    "cond.rumble.rate": {
+        "en": "One upload at a time per channel is safest; do not parallelize many simple-upload calls.",
+        "es": "Lo más seguro es una subida a la vez por canal; no paralelices muchas llamadas a simple-upload.",
+    },
+    "cond.rumble.safe": {
+        "en": "8–10 videos/day per Rumble channel, 15–20 minutes apart.",
+        "es": "8–10 videos/día por canal de Rumble, con 15–20 minutos de separación.",
+    },
+    "cond.rumble.detail": {
+        "en": "No public OAuth. Token and Channel ID come from Rumble as a partner. If uploads start returning errors after a burst, stop for several hours. Videos only.",
+        "es": "Sin OAuth público. El token y el Channel ID los da Rumble como partner. Si tras una ráfaga empiezan los errores, para varias horas. Solo video.",
+    },
+    "cond.snapchat.cap": {
+        "en": "Public Profile API. No simple public “X videos/day” number. Stories last 24 hours. Spotlight videos must be 6–60 s (this panel: MP4 5–60 s, min. 540×960).",
+        "es": "API de perfil público. No hay un “X videos/día” público simple. Las Stories duran 24 horas. Spotlight: 6–60 s (este panel: MP4 5–60 s, mín. 540×960).",
+    },
+    "cond.snapchat.window": {
+        "en": "Stories expire after 24 h. API rate limits are per app/profile (429 if you burst).",
+        "es": "Las Stories caducan a las 24 h. El rate limit de la API es por app/perfil (429 si vas en ráfaga).",
+    },
+    "cond.snapchat.rate": {
+        "en": "Needs OpenSSL for the request signing this panel uses. Serialize posts; wait between Story and Spotlight.",
+        "es": "Hace falta OpenSSL para la firma que usa este panel. Serializa los posts; espera entre Story y Spotlight.",
+    },
+    "cond.snapchat.safe": {
+        "en": "8–10 posts/day per public profile, 20+ minutes apart.",
+        "es": "8–10 posts/día por perfil público, con 20+ minutos de separación.",
+    },
+    "cond.snapchat.detail": {
+        "en": "Photos go as 24 h Stories; short vertical MP4 as Spotlight when it meets duration/size. Public profile required. Hitting 429 means wait, do not retry immediately.",
+        "es": "Las fotos van como Stories de 24 h; el MP4 vertical corto como Spotlight si cumple duración/tamaño. Hace falta perfil público. Si sale 429, espera; no reintentes al momento.",
+    },
     "apidoc.intro": {
         "en": "What each server needs so publishing works. All of these have a real API. Tokens marked Automatic are refreshed by the panel when you publish; you do not paste a new token by hand.",
         "es": "Qué hay que hacer en cada servidor para que la publicación funcione. Todas estas redes tienen API real. Si el token es Automático, el panel lo renueva al publicar; no hace falta pegar uno nuevo a mano.",
@@ -1871,9 +2465,388 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Hace falta OpenSSL instalado (AES-256-CBC). Fotos = Stories (24 h). Video: MP4 5–60 s (Spotlight 6–60 s, mín. 540×960).",
     },
     # ------------------------------------------------------------------
+    # Proxys
+    # ------------------------------------------------------------------
+    "proxys.title": {"en": "Proxies", "es": "Proxys"},
+    "proxys.intro": {
+        "en": "Add proxies in any common format. Test each one to detect its country.",
+        "es": "Añade proxys en cualquier formato habitual. Prueba cada uno para detectar su país.",
+    },
+    "proxys.info_btn": {"en": "About proxies", "es": "Información sobre proxys"},
+    "proxys.add": {"en": "Add proxy", "es": "Añadir proxy"},
+    "proxys.search": {"en": "Search proxies…", "es": "Buscar proxys…"},
+    "proxys.empty": {"en": "No proxies yet.", "es": "Aún no hay proxys."},
+    "proxys.modal_create": {"en": "New proxy", "es": "Nuevo proxy"},
+    "proxys.modal_edit": {"en": "Edit proxy", "es": "Editar proxy"},
+    "proxys.field_label": {"en": "Label (optional)", "es": "Etiqueta (opcional)"},
+    "proxys.field_proxy": {"en": "Proxy", "es": "Proxy"},
+    "proxys.field_notes": {"en": "Notes (optional)", "es": "Notas (opcional)"},
+    "proxys.field_links": {
+        "en": "Link to accounts",
+        "es": "Vincular a cuentas",
+    },
+    "proxys.links_search": {
+        "en": "Search account to add…",
+        "es": "Buscar cuenta para añadir…",
+    },
+    "proxys.links_hint": {
+        "en": "Only linked accounts appear here. Search to add more.",
+        "es": "Aquí solo se ven las cuentas vinculadas. Busca para añadir más.",
+    },
+    "proxys.link_group": {"en": "Group: {name}", "es": "Grupo: {name}"},
+    "proxys.link_account": {"en": "Account: {name}", "es": "Cuenta: {name}"},
+    "proxys.links_none": {"en": "No links", "es": "Sin vínculos"},
+    "proxys.formats_hint": {
+        "en": "HTTP, HTTPS, SOCKS4 and SOCKS5: host:port · user:pass@host:port · host:port:user:pass · user:pass:host:port · http(s)/socks://user:pass@host:port",
+        "es": "HTTP, HTTPS, SOCKS4 y SOCKS5: host:puerto · usuario:pass@host:puerto · host:puerto:usuario:pass · usuario:pass:host:puerto · http(s)/socks://usuario:pass@host:puerto",
+    },
+    "proxys.col_country": {"en": "Country", "es": "País"},
+    "proxys.col_proxy": {"en": "Proxy", "es": "Proxy"},
+    "proxys.col_status": {"en": "Status", "es": "Estado"},
+    "proxys.col_last_check": {"en": "Last check", "es": "Última prueba"},
+    "proxys.no_country": {"en": "Unknown", "es": "Desconocido"},
+    "proxys.active": {"en": "Active", "es": "Activo"},
+    "proxys.inactive": {"en": "Inactive", "es": "Inactivo"},
+    "proxys.test": {"en": "Test", "es": "Probar"},
+    "proxys.testing": {"en": "Testing…", "es": "Probando…"},
+    "proxys.edit": {"en": "Edit", "es": "Editar"},
+    "proxys.delete": {"en": "Delete", "es": "Eliminar"},
+    "proxys.save": {"en": "Save", "es": "Guardar"},
+    "proxys.cancel": {"en": "Cancel", "es": "Cancelar"},
+    "proxys.test_ok": {
+        "en": "OK — {country} ({ip})",
+        "es": "OK — {country} ({ip})",
+    },
+    "proxys.test_fail": {"en": "Test failed", "es": "Prueba fallida"},
+    "proxys.confirm_delete_title": {"en": "Delete proxy?", "es": "¿Eliminar proxy?"},
+    "proxys.confirm_delete_body": {
+        "en": "This proxy will be removed permanently.",
+        "es": "Este proxy se eliminará de forma permanente.",
+    },
+    "proxys.check_ok": {"en": "OK", "es": "OK"},
+    "proxys.check_fail": {"en": "Failed", "es": "Falló"},
+    "proxys.check_pending": {"en": "Not tested", "es": "Sin probar"},
+    "proxys.err.empty": {"en": "Proxy line is required.", "es": "La línea de proxy es obligatoria."},
+    "proxys.err.invalid_format": {
+        "en": "Unrecognized proxy format.",
+        "es": "Formato de proxy no reconocido.",
+    },
+    "proxys.err.generic": {"en": "Could not save proxy.", "es": "No se pudo guardar el proxy."},
+    "proxys.err.host_unresolved": {
+        "en": "Could not resolve the proxy host. Check the address.",
+        "es": "No se pudo resolver el host del proxy. Revisa la dirección.",
+    },
+    "proxys.err.timeout": {
+        "en": "The proxy did not respond in time.",
+        "es": "El proxy no respondió a tiempo.",
+    },
+    "proxys.err.refused": {
+        "en": "The proxy refused the connection.",
+        "es": "El proxy rechazó la conexión.",
+    },
+    "proxys.err.unreachable": {
+        "en": "The proxy is unreachable from this server.",
+        "es": "No hay ruta hacia el proxy desde este servidor.",
+    },
+    "proxys.err.reset": {
+        "en": "The proxy closed the connection.",
+        "es": "El proxy cerró la conexión.",
+    },
+    "proxys.err.auth": {
+        "en": "The proxy requires a valid username and password.",
+        "es": "El proxy pide un usuario y contraseña válidos.",
+    },
+    "proxys.err.denied": {
+        "en": "The proxy denied access.",
+        "es": "El proxy denegó el acceso.",
+    },
+    "proxys.err.ssl": {
+        "en": "Secure connection to the proxy failed.",
+        "es": "Falló la conexión segura con el proxy.",
+    },
+    "proxys.err.http_status": {
+        "en": "The proxy returned an HTTP error.",
+        "es": "El proxy devolvió un error HTTP.",
+    },
+    "proxys.err.socks_fail": {
+        "en": "The SOCKS handshake with the proxy failed.",
+        "es": "Falló el protocolo SOCKS con el proxy.",
+    },
+    "proxys.err.geo_failed": {
+        "en": "Connected, but the country could not be detected.",
+        "es": "Conectó, pero no se pudo detectar el país.",
+    },
+    "proxys.err.test_failed": {
+        "en": "The proxy did not work. Check host, port and credentials.",
+        "es": "El proxy no funcionó. Revisa host, puerto y credenciales.",
+    },
+    # ------------------------------------------------------------------
+    # Membresías
+    # ------------------------------------------------------------------
+    "membresias.title": {"en": "Pricing", "es": "Precio"},
+    "membresias.intro": {
+        "en": "Pick the monthly plan that fits your publishing volume.",
+        "es": "Elige el plan mensual que se ajusta a tu volumen de publicaciones.",
+    },
+    "membresias.current": {"en": "Your plan", "es": "Tu plan"},
+    "membresias.no_plan": {"en": "No plan yet", "es": "Sin plan aún"},
+    "membresias.per_month": {"en": "/ month", "es": "/ mes"},
+    "membresias.free": {"en": "Free", "es": "Gratis"},
+    "membresias.videos": {"en": "{n} videos", "es": "{n} videos"},
+    "membresias.stats": {"en": "{n} stats queries", "es": "{n} consultas de estadísticas"},
+    "membresias.any_platform": {
+        "en": "Any connected platform",
+        "es": "Cualquier plataforma conectada",
+    },
+    "membresias.cancel_anytime": {
+        "en": "Cancel subscription anytime",
+        "es": "Cancelar suscripción cuando quieras",
+    },
+    "membresias.featured": {"en": "Most chosen", "es": "Más elegido"},
+    "membresias.invite_only": {"en": "Invite only", "es": "Solo invitados"},
+    "membresias.choose": {"en": "Choose plan", "es": "Elegir plan"},
+    "membresias.selected_badge": {"en": "Selected", "es": "Seleccionado"},
+    "membresias.checkout_step": {
+        "en": "Confirm your plan",
+        "es": "Confirma tu plan",
+    },
+    "membresias.current_badge": {"en": "Current", "es": "Actual"},
+    "membresias.checkout_title": {"en": "Pay {name}", "es": "Pagar {name}"},
+    "membresias.checkout_hint": {
+        "en": "Pay with one of the methods below, then register the purchase. An admin will confirm it.",
+        "es": "Paga con uno de los métodos y registra la compra. Un admin la confirmará.",
+    },
+    "membresias.no_methods": {
+        "en": "No payment methods are available yet.",
+        "es": "Aún no hay medios de pago disponibles.",
+    },
+    "membresias.note": {"en": "Note (optional)", "es": "Nota (opcional)"},
+    "membresias.submit_purchase": {"en": "Register purchase", "es": "Registrar compra"},
+    "membresias.copied": {"en": "Copied", "es": "Copiado"},
+    "membresias.copy": {"en": "Copy", "es": "Copiar"},
+    "membresias.pay_to": {"en": "Pay to", "es": "Pagar a"},
+    "membresias.plan.guest.name": {"en": "Guest Invite Plan 0", "es": "Plan Invitados 0"},
+    "membresias.plan.guest.tagline": {
+        "en": "For invited users. A gentle start to publish and check stats.",
+        "es": "Para usuarios invitados. Un comienzo suave para publicar y ver estadísticas.",
+    },
+    "membresias.plan.standard.name": {"en": "Standard", "es": "Standard"},
+    "membresias.plan.standard.tagline": {
+        "en": "A solid monthly cadence for growing accounts.",
+        "es": "Un ritmo mensual sólido para cuentas en crecimiento.",
+    },
+    "membresias.plan.plus.name": {"en": "Plus", "es": "Plus"},
+    "membresias.plan.plus.tagline": {
+        "en": "More videos and more room to read your numbers.",
+        "es": "Más videos y más margen para leer tus números.",
+    },
+    "membresias.plan.enterprise.name": {"en": "Enterprise", "es": "Enterprise"},
+    "membresias.plan.enterprise.tagline": {
+        "en": "Serious volume for teams that publish every week.",
+        "es": "Volumen serio para equipos que publican cada semana.",
+    },
+    "membresias.plan.premium.name": {"en": "Premium", "es": "Premium"},
+    "membresias.plan.premium.tagline": {
+        "en": "High output with stats to steer the strategy.",
+        "es": "Alto rendimiento con estadísticas para dirigir la estrategia.",
+    },
+    "membresias.plan.ultra.name": {"en": "Ultra", "es": "Ultra"},
+    "membresias.plan.ultra.tagline": {
+        "en": "Maximum monthly capacity. No ceiling on ambition.",
+        "es": "Capacidad mensual máxima. Sin techo para la ambición.",
+    },
+    "membresias.err.generic": {"en": "Could not complete that action.", "es": "No se pudo completar esa acción."},
+    "membresias.err.name_required": {"en": "Name is required.", "es": "El nombre es obligatorio."},
+    "membresias.err.invalid_plan": {"en": "That plan cannot be purchased.", "es": "Ese plan no se puede comprar."},
+    "membresias.err.invalid_payment_method": {
+        "en": "Choose a valid payment method.",
+        "es": "Elige un medio de pago válido.",
+    },
+    "membresias.err.invalid_status": {"en": "Invalid status.", "es": "Estado no válido."},
+    "membresias.err.not_found": {"en": "Not found.", "es": "No encontrado."},
+    "membresias.err.create_failed": {"en": "Could not save.", "es": "No se pudo guardar."},
+    "membresias.err.insufficient_wallet": {
+        "en": "Not enough wallet balance.",
+        "es": "Saldo a favor insuficiente.",
+    },
+    "membresias.err.invalid_amount": {
+        "en": "Enter a valid USD amount.",
+        "es": "Introduce un importe en USD válido.",
+    },
+    "membresias.err.user_required": {"en": "User not found.", "es": "Usuario no encontrado."},
+    "membresias.err.no_plan": {
+        "en": "Choose a plan on Pricing before publishing or querying stats.",
+        "es": "Elige un plan en Precio para publicar o consultar estadísticas.",
+    },
+    "membresias.err.quota_videos": {
+        "en": "You have used all videos included in your plan for this period.",
+        "es": "Ya usaste todos los videos de tu plan en este periodo.",
+    },
+    "membresias.err.quota_stats": {
+        "en": "You have used all stats queries included in your plan for this period.",
+        "es": "Ya usaste todas las consultas de estadísticas de tu plan en este periodo.",
+    },
+    "membresias.quota_videos": {
+        "en": "Videos {used} / {limit}",
+        "es": "Videos {used} / {limit}",
+    },
+    "membresias.quota_stats": {
+        "en": "Stats queries {used} / {limit}",
+        "es": "Consultas {used} / {limit}",
+    },
+    "membresias.wallet": {"en": "Wallet", "es": "Saldo a favor"},
+    "membresias.wallet_balance": {"en": "Credit: USD {n}", "es": "Saldo a favor: USD {n}"},
+    "membresias.unused_credit": {
+        "en": "Unused plan value: USD {n}",
+        "es": "Valor no usado del plan: USD {n}",
+    },
+    "membresias.cancel_plan": {"en": "Cancel plan", "es": "Cancelar plan"},
+    "membresias.cancel_ok": {
+        "en": "Plan cancelled. Unused value was added to your wallet.",
+        "es": "Plan cancelado. El valor no usado pasó a tu saldo a favor.",
+    },
+    "membresias.quote_price": {"en": "Plan price: USD {n}", "es": "Precio del plan: USD {n}"},
+    "membresias.quote_credit": {
+        "en": "Credit from current plan: USD {n}",
+        "es": "Crédito del plan actual: USD {n}",
+    },
+    "membresias.quote_wallet": {
+        "en": "Wallet credit applied: USD {n}",
+        "es": "Saldo aplicado a favor: USD {n}",
+    },
+    "membresias.quote_due": {"en": "Amount to pay: USD {n}", "es": "Importe a pagar: USD {n}"},
+    "membresias.quote_leftover": {
+        "en": "Leftover credit to wallet: USD {n}",
+        "es": "Sobrante a saldo a favor: USD {n}",
+    },
+    "membresias.use_wallet": {"en": "Use wallet credit", "es": "Usar saldo a favor"},
+    "membresias.pay_covered": {
+        "en": "Covered by wallet. No extra payment needed.",
+        "es": "Cubierto con saldo a favor. No hace falta pagar de más.",
+    },
+    "membresias.checkout_instant_ok": {
+        "en": "Plan updated. Unused value was converted to wallet credit.",
+        "es": "Plan actualizado. El valor no usado se convirtió en saldo a favor.",
+    },
+    # ------------------------------------------------------------------
+    # Pagos
+    # ------------------------------------------------------------------
+    "pagos.title": {"en": "Payments", "es": "Pagos"},
+    "pagos.head_title": {"en": "Payments-Recharge (USD)", "es": "Pagos-Recarga (USD)"},
+    "pagos.intro": {
+        "en": "Purchase history for your memberships.",
+        "es": "Historial de compras de tus membresías.",
+    },
+    "pagos.admin_intro": {
+        "en": "Confirm payments and manage the methods customers can use.",
+        "es": "Confirma pagos y gestiona los medios que podrán usar los clientes.",
+    },
+    "pagos.info_btn": {"en": "About payments", "es": "Información sobre pagos"},
+    "pagos.empty": {"en": "No purchases yet.", "es": "Aún no hay compras."},
+    "pagos.methods_title": {"en": "Payment methods", "es": "Medios de pago"},
+    "pagos.methods_intro": {
+        "en": "Add the channels with the lightest requirements: Binance Pay, USDT, Stripe, PayPal…",
+        "es": "Añade los canales con menos requisitos: Binance Pay, USDT, Stripe, PayPal…",
+    },
+    "pagos.add_method": {"en": "Add method", "es": "Añadir medio"},
+    "pagos.modal_create": {"en": "New payment method", "es": "Nuevo medio de pago"},
+    "pagos.modal_edit": {"en": "Edit payment method", "es": "Editar medio de pago"},
+    "pagos.field_kind": {"en": "Type", "es": "Tipo"},
+    "pagos.field_name": {"en": "Display name", "es": "Nombre"},
+    "pagos.field_pay_to": {"en": "Pay to (wallet, Pay ID, email…)", "es": "Pagar a (wallet, Pay ID, email…)"},
+    "pagos.field_instructions": {"en": "Instructions", "es": "Instrucciones"},
+    "pagos.field_notes": {"en": "Internal notes", "es": "Notas internas"},
+    "pagos.save": {"en": "Save", "es": "Guardar"},
+    "pagos.cancel": {"en": "Cancel", "es": "Cancelar"},
+    "pagos.edit": {"en": "Edit", "es": "Editar"},
+    "pagos.delete": {"en": "Delete", "es": "Eliminar"},
+    "pagos.confirm_delete_title": {"en": "Delete payment method?", "es": "¿Eliminar medio de pago?"},
+    "pagos.confirm_delete_body": {
+        "en": "Customers will no longer see this method.",
+        "es": "Los clientes ya no verán este medio.",
+    },
+    "pagos.methods_empty": {"en": "No payment methods yet.", "es": "Aún no hay medios de pago."},
+    "pagos.status.pending": {"en": "Pending", "es": "Pendiente"},
+    "pagos.status.paid": {"en": "Paid", "es": "Pagado"},
+    "pagos.status.rejected": {"en": "Rejected", "es": "Rechazado"},
+    "pagos.status.cancelled": {"en": "Cancelled", "es": "Cancelado"},
+    "pagos.mark_paid": {"en": "Mark paid", "es": "Marcar pagado"},
+    "pagos.mark_rejected": {"en": "Reject", "es": "Rechazar"},
+    "pagos.col_when": {"en": "Date", "es": "Fecha"},
+    "pagos.col_plan": {"en": "Plan", "es": "Plan"},
+    "pagos.col_user": {"en": "User", "es": "Usuario"},
+    "pagos.col_method": {"en": "Method", "es": "Medio"},
+    "pagos.col_amount": {"en": "Amount", "es": "Importe"},
+    "pagos.col_status": {"en": "Status", "es": "Estado"},
+    "pagos.filter_paid": {"en": "Paid", "es": "Pagos"},
+    "pagos.kind.binance_pay": {"en": "Binance Pay", "es": "Binance Pay"},
+    "pagos.kind.binance_transfer": {
+        "en": "Binance transfer (Pay ID)",
+        "es": "Transferencia Binance (Pay ID)",
+    },
+    "pagos.kind.usdt_trc20": {"en": "USDT TRC-20", "es": "USDT TRC-20"},
+    "pagos.kind.usdt_bep20": {"en": "USDT BEP-20", "es": "USDT BEP-20"},
+    "pagos.kind.stripe": {"en": "Stripe (cards)", "es": "Stripe (tarjetas)"},
+    "pagos.kind.paypal": {"en": "PayPal", "es": "PayPal"},
+    "pagos.kind.wise": {"en": "Wise", "es": "Wise"},
+    "pagos.kind.custom": {"en": "Other", "es": "Otro"},
+    "pagos.kind.wallet": {"en": "Wallet", "es": "Saldo a favor"},
+    "pagos.wallet_hint": {
+        "en": "Your wallet credit is applied first. Pay only the remainder with another method.",
+        "es": "Tu saldo a favor se aplica primero. El resto se paga con otro medio.",
+    },
+    "pagos.wallet_title": {"en": "Wallet credit", "es": "Saldo a favor"},
+    "pagos.wallet_available": {"en": "Available balance", "es": "Saldo disponible"},
+    "pagos.wallet_balance": {"en": "Available: USD {n}", "es": "Saldo disponible: USD {n}"},
+    "pagos.use_wallet": {"en": "Use available balance", "es": "Usar saldo disponible"},
+    "pagos.recharge": {"en": "Recharge", "es": "Recargar"},
+    "pagos.recharge_title": {"en": "Add wallet credit", "es": "Recargar saldo a favor"},
+    "pagos.recharge_amount": {"en": "Recharge (USD)", "es": "Recarga (USD)"},
+    "pagos.recharge_method": {"en": "Payment method", "es": "Medio de pago"},
+    "pagos.recharge_method_pick": {
+        "en": "Select method",
+        "es": "Seleccionar medio",
+    },
+    "pagos.recharge_method_required": {
+        "en": "Select a payment method.",
+        "es": "Selecciona un medio de pago.",
+    },
+    "pagos.recharge_ok": {
+        "en": "Recharge registered. We’ll add the credit after confirming the payment.",
+        "es": "Recarga registrada. El saldo se añadirá al confirmar el pago.",
+    },
+    "pagos.recharge_checkout_title": {
+        "en": "Payment instructions",
+        "es": "Instrucciones de pago",
+    },
+    "pagos.recharge_confirm": {
+        "en": "I’ve paid — register",
+        "es": "Ya pagué — registrar",
+    },
+    "pagos.kind_wallet_topup": {"en": "Wallet top-up", "es": "Recarga de saldo"},
+    "pagos.ledger_title": {"en": "Wallet activity", "es": "Movimientos del saldo"},
+    "pagos.ledger_empty": {"en": "No wallet movements yet.", "es": "Aún no hay movimientos de saldo."},
+    "pagos.reason.admin_credit": {"en": "Admin adjustment", "es": "Ajuste de administrador"},
+    "pagos.reason.plan_unused": {"en": "Unused plan credit", "es": "Crédito de plan no usado"},
+    "pagos.reason.plan_pay": {"en": "Plan payment", "es": "Pago de plan"},
+    "pagos.reason.plan_cancel": {"en": "Plan cancellation", "es": "Cancelación de plan"},
+    "pagos.reason.recharge": {"en": "Top-up", "es": "Recarga"},
+    "team.add_credit": {"en": "Add credit", "es": "Añadir saldo"},
+    "team.add_credit_title": {"en": "Add wallet credit", "es": "Añadir saldo a favor"},
+    "team.add_credit_amount": {"en": "Amount (USD, + or −)", "es": "Importe (USD, + o −)"},
+    "team.add_credit_note": {"en": "Note", "es": "Nota"},
+    "team.add_credit_ok": {"en": "Wallet updated.", "es": "Saldo actualizado."},
+    "pagos.purchase_ok": {
+        "en": "Purchase registered. We’ll confirm it after checking the payment.",
+        "es": "Compra registrada. La confirmaremos al verificar el pago.",
+    },
+    # ------------------------------------------------------------------
     # Extractor
     # ------------------------------------------------------------------
     "nav.extractor": {"en": "Extractor", "es": "Extractor"},
+    "nav.proxys": {"en": "Proxies", "es": "Proxys"},
+    "nav.membresias": {"en": "Pricing", "es": "Precio"},
+    "nav.pagos": {"en": "Payments", "es": "Pagos"},
     "extractor.title": {"en": "Video extractor", "es": "Extractor de videos"},
     "extractor.subtitle": {
         "en": "Pull the videos from one server and spread them to the account's other servers, at your own pace.",
@@ -2143,16 +3116,16 @@ MESSAGES: dict[str, dict[str, str]] = {
 
 
 def resolve_lang(request: Request) -> str:
+    """Inglés por defecto. Solo cambia si eligió idioma (sesión)."""
     session_lang = request.session.get("lang")
     if session_lang in LANGUAGES:
         return session_lang
-
-    accept = request.headers.get("accept-language", "")
-    for part in accept.split(","):
-        code = part.split(";")[0].strip().lower()[:2]
-        if code in LANGUAGES:
-            return code
     return DEFAULT_LANG
+
+
+def register_path(lang: str | None = None) -> str:
+    code = lang if lang in LANGUAGES else DEFAULT_LANG
+    return "/registro" if code == "es" else "/register"
 
 
 def t(key: str, lang: str | None = None, **kwargs: object) -> str:
@@ -2172,6 +3145,7 @@ def page_context(request: Request, **extra: object) -> dict[str, object]:
         "lang": lang,
         "languages": LANGUAGES,
         "t": lambda key, **kw: t(key, lang, **kw),
+        "register_path": register_path(lang),
         "site_description": t("site.description", lang),
         "hero_title": t("site.hero_title", lang),
         "hero_subtitle": t("site.hero_subtitle", lang),

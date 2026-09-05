@@ -23,10 +23,27 @@ from starlette.middleware.sessions import SessionMiddleware
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-ALLOWED_VIDEO_EXT = {".mp4", ".webm", ".mov", ".mkv"}
+ALLOWED_VIDEO_EXT = {".mp4", ".webm", ".mov", ".mkv", ".m4v"}
 ALLOWED_PHOTO_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 ALLOWED_MEDIA_EXT = ALLOWED_VIDEO_EXT | ALLOWED_PHOTO_EXT
-MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+VIDEO_MIME_EXT = {
+    "video/mp4": ".mp4",
+    "video/webm": ".webm",
+    "video/quicktime": ".mov",
+    "video/x-matroska": ".mkv",
+    "video/mkv": ".mkv",
+    "video/x-m4v": ".m4v",
+}
+def _read_max_upload_mb() -> int:
+    raw = (os.environ.get("MAX_UPLOAD_MB") or "500").strip()
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 500
+
+
+MAX_UPLOAD_MB = _read_max_upload_mb()
+MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 COMMENT_INBOX_PER_PAGE = 15
 
 load_dotenv(BASE_DIR / ".env")
@@ -48,6 +65,9 @@ import dailymotion_oauth  # noqa: E402
 import bilibili_oauth  # noqa: E402
 import snapchat_oauth  # noqa: E402
 import publish_schedule  # noqa: E402
+import proxy_util  # noqa: E402
+import membership  # noqa: E402
+import video_temp_util  # noqa: E402
 import security_headers  # noqa: E402
 
 SECRET_KEY = os.environ.get("SESSION_SECRET", "dev-cambiar-en-produccion")
@@ -57,6 +77,7 @@ async def lifespan(app: FastAPI):
     db.init_db()
     db.seed_admin_if_missing()
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    video_temp_util.cleanup_stale(UPLOAD_DIR)
 
     async def scheduled_worker() -> None:
         while True:
@@ -81,10 +102,7 @@ async def lifespan(app: FastAPI):
     finally:
         for task in (worker, extractor_task):
             task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+        await asyncio.gather(worker, extractor_task, return_exceptions=True)
 
 
 app = FastAPI(lifespan=lifespan)
@@ -108,6 +126,10 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 templates.env.globals["user_can_access_publicaciones"] = db.user_can_access_publicaciones
 templates.env.globals["user_has_admin_privileges"] = db.user_has_admin_privileges
 templates.env.globals["user_is_site_admin"] = db.user_is_site_admin
+templates.env.globals["user_is_tiktok_mode"] = db.user_is_tiktok_mode
+templates.env.globals["user_can_access_servers"] = db.user_can_access_servers
+templates.env.globals["user_can_manage_panel_accounts"] = db.user_can_manage_panel_accounts
+templates.env.globals["support_unread_count"] = db.support_unread_count_for_viewer
 templates.env.globals["format_publish_schedule"] = publish_schedule.format_scheduled_local
 templates.env.filters["fromjson"] = json.loads
 templates.env.globals.update(site_config.legal_context())
@@ -142,7 +164,27 @@ def _session_user(request: Request) -> db.User | None:
     uid = request.session.get("user_id")
     if not uid:
         return None
-    return db.get_user_by_id(str(uid))
+    user = db.get_user_by_id(str(uid))
+    if not user:
+        return None
+    expected = db.get_user_auth_version(user.id)
+    session_ver = request.session.get("auth_version")
+    if session_ver is None:
+        request.session["auth_version"] = expected
+        return user
+    try:
+        if int(session_ver) != expected:
+            request.session.clear()
+            return None
+    except (TypeError, ValueError):
+        request.session.clear()
+        return None
+    return user
+
+
+def _establish_session(request: Request, user: db.User) -> None:
+    request.session["user_id"] = user.id
+    request.session["auth_version"] = db.get_user_auth_version(user.id)
 
 
 def require_user(request: Request) -> db.User:
@@ -162,6 +204,14 @@ def require_admin(request: Request) -> db.User:
 def require_admin_privileges(request: Request) -> db.User:
     user = require_user(request)
     if not db.user_has_admin_privileges(user):
+        raise PermissionError("forbidden")
+    return user
+
+
+def require_server_admin(request: Request) -> db.User:
+    """Servidores, extractor, API Documento y OAuth: excluye al Usuario TikTok."""
+    user = require_user(request)
+    if not db.user_can_access_servers(user):
         raise PermissionError("forbidden")
     return user
 
@@ -223,6 +273,30 @@ class ExtractorJobBody(BaseModel):
 class LogPurgeBody(BaseModel):
     date_from: str = ""
     date_to: str = ""
+
+
+def _require_user_json(request: Request) -> JSONResponse | None:
+    try:
+        require_user(request)
+    except PermissionError:
+        return JSONResponse(
+            {"ok": False, "error": "Sign in required."},
+            status_code=401,
+        )
+    return None
+
+
+def _require_server_admin_json(request: Request) -> JSONResponse | None:
+    try:
+        require_server_admin(request)
+    except PermissionError as e:
+        if str(e) == "login_required":
+            return JSONResponse(
+                {"ok": False, "error": "Sign in as an administrator."},
+                status_code=401,
+            )
+        return JSONResponse({"ok": False, "error": "Forbidden."}, status_code=403)
+    return None
 
 
 def _require_admin_json(request: Request) -> JSONResponse | None:
@@ -309,6 +383,24 @@ def _require_publicaciones_user(request: Request) -> db.User:
     return user
 
 
+def _require_publicaciones_user_json(request: Request) -> JSONResponse | db.User:
+    try:
+        user = _require_publicaciones_user(request)
+    except PermissionError as e:
+        if str(e) == "login_required":
+            return JSONResponse(
+                {"ok": False, "error": "Sign in required."},
+                status_code=401,
+            )
+        return JSONResponse({"ok": False, "error": "Forbidden."}, status_code=403)
+    if not db.user_can_upload_videos(user):
+        return JSONResponse(
+            {"ok": False, "error": "Upload not allowed."},
+            status_code=403,
+        )
+    return user
+
+
 
 
 def _error_home_url(request: Request) -> str:
@@ -355,6 +447,8 @@ def set_language(request: Request, lang_code: str):
 
     parsed = urlparse(referer)
     safe_next = parsed.path if parsed.path.startswith("/") else "/"
+    if safe_next in ("/register", "/registro"):
+        safe_next = i18n.register_path(code)
     if parsed.query:
         safe_next = f"{safe_next}?{parsed.query}"
     return RedirectResponse(url=safe_next, status_code=303)
@@ -388,6 +482,11 @@ def page_data_deletion(request: Request):
     return _render_legal(request, "legal_deletion.html", "legal.deletion_title")
 
 
+@app.get("/cancellation-policy", response_class=HTMLResponse, name="cancellation")
+def page_cancellation(request: Request):
+    return _render_legal(request, "legal_cancellation.html", "legal.cancellation_title")
+
+
 @app.get("/contact", response_class=HTMLResponse, name="contact")
 def page_contact(request: Request):
     return RedirectResponse(url=f"mailto:{site_config.SUPPORT_EMAIL}", status_code=303)
@@ -411,6 +510,11 @@ def redirect_terminos():
 @app.get("/eliminacion-de-datos")
 def redirect_eliminacion():
     return RedirectResponse(url="/data-deletion", status_code=301)
+
+
+@app.get("/politica-de-cancelamiento")
+def redirect_cancelacion():
+    return RedirectResponse(url="/cancellation-policy", status_code=301)
 
 
 @app.get("/contacto")
@@ -456,11 +560,55 @@ def login_post(
             },
             status_code=401,
         )
-    request.session["user_id"] = u.id
+    _establish_session(request, u)
     safe_next = next if next.startswith("/") else _default_app_home(u)
     if safe_next == "/":
         safe_next = _default_app_home(u)
     return RedirectResponse(url=safe_next, status_code=303)
+
+
+@app.get("/login/olvidar", response_class=HTMLResponse, name="login_forgot")
+@app.get("/login/forgot", response_class=HTMLResponse, name="login_forgot_en")
+def login_forgot_get(request: Request):
+    user = _session_user(request)
+    if user:
+        return RedirectResponse(url=_default_app_home(user), status_code=303)
+    return _render(
+        request,
+        "login_forgot.html",
+        {"error": None, "success": None, "email": ""},
+    )
+
+
+@app.post("/login/olvidar", response_class=HTMLResponse, name="login_forgot_post")
+@app.post("/login/forgot", response_class=HTMLResponse, name="login_forgot_post_en")
+def login_forgot_post(
+    request: Request,
+    email: Annotated[str, Form()],
+):
+    lang = i18n.resolve_lang(request)
+    addr = (email or "").strip()
+    if not _valid_email(addr):
+        return _render(
+            request,
+            "login_forgot.html",
+            {
+                "error": i18n.t("login.forgot.invalid_email", lang),
+                "success": None,
+                "email": addr,
+            },
+            status_code=400,
+        )
+    if notify.smtp_configured():
+        user = db.get_user_by_notification_email(addr)
+        if user and db.is_user_notification_email_verified(user.id):
+            to = db.get_user_notification_email(user.id)
+            if to:
+                token = db.create_password_reset_token(user.id)
+                reset_url = _password_reset_url(request, token)
+                notify.send_password_reset_email(to=to, reset_url=reset_url, lang=lang)
+    request.session["login_ok"] = i18n.t("login.forgot.sent_generic", lang)
+    return RedirectResponse(url=request.url_for("login"), status_code=303)
 
 
 @app.post("/logout", name="logout")
@@ -469,9 +617,935 @@ def logout(request: Request):
     return RedirectResponse(url=request.url_for("home"), status_code=303)
 
 
+# ---------------------------------------------------------------------------
+# Registro público con código de invitación
+# ---------------------------------------------------------------------------
+
+_REGISTER_ERROR_KEYS = {
+    "invite_required": "register.err.code_required",
+    "invite_invalid": "register.err.code_invalid",
+    "invite_used": "register.err.code_used",
+    "Username must be at least 2 characters": "register.err.username_short",
+    "Password must be at least 4 characters": "register.err.password_short",
+    "Username already exists": "register.err.username_taken",
+}
+
+
+@app.get("/register", response_class=HTMLResponse, name="register")
+@app.get("/registro", response_class=HTMLResponse, name="register_es")
+def register_get(request: Request):
+    if _session_user(request):
+        return RedirectResponse(url="/admin/publicaciones", status_code=303)
+    return _render(request, "register.html", {"error": None})
+
+
+@app.post("/register", response_class=HTMLResponse, name="register_post")
+@app.post("/registro", response_class=HTMLResponse, name="register_es_post")
+def register_post(
+    request: Request,
+    username: Annotated[str, Form()],
+    password: Annotated[str, Form()],
+    password2: Annotated[str, Form()] = "",
+    invite_code: Annotated[str, Form()] = "",
+    email: Annotated[str, Form()] = "",
+):
+    lang = i18n.resolve_lang(request)
+    addr = (email or "").strip()
+
+    def _err(key: str, status: int = 400):
+        return _render(
+            request,
+            "register.html",
+            {
+                "error": i18n.t(key, lang),
+                "username": username,
+                "invite_code": invite_code,
+                "email": addr,
+            },
+            status_code=status,
+        )
+
+    if not _valid_email(addr):
+        return _err("register.err.invalid_email")
+    if db.notification_email_is_taken(addr):
+        return _err("register.err.email_taken")
+    if password != password2:
+        return _err("register.err.password_mismatch")
+    try:
+        user = db.redeem_invite_code(invite_code, username, password)
+    except ValueError as e:
+        return _err(_REGISTER_ERROR_KEYS.get(str(e), "register.err.generic"))
+    if not _send_email_verification(request, user.id, addr):
+        request.session["panel_error"] = _msg(request, "panel.flash.no_smtp")
+    _establish_session(request, user)
+    request.session["panel_ok"] = i18n.t("register.flash.verify_email", lang)
+    return RedirectResponse(url="/admin/panel", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Chat de soporte
+# ---------------------------------------------------------------------------
+
+
+def _user_is_support_agent(user: db.User) -> bool:
+    """Quién atiende los chats: admin del sitio o modo admin (no Usuario TikTok)."""
+    return db.user_has_admin_privileges(user) and not db.user_is_tiktok_mode(user)
+
+
+class SupportMessageBody(BaseModel):
+    body: str = ""
+
+
+class ProxyBody(BaseModel):
+    label: str = ""
+    proxy: str = ""
+    notes: str = ""
+    links: list[str] = []
+
+
+def _proxy_error_message(code: str, lang: str) -> str:
+    key = f"proxys.err.{code}"
+    msg = i18n.t(key, lang)
+    if msg == key:
+        return i18n.t("proxys.err.generic", lang)
+    return msg
+
+
+def _proxy_parsed_from_body(proxy_text: str) -> dict:
+    parsed = proxy_util.parse_proxy_line(proxy_text)
+    parsed["proxy_url"] = proxy_util.build_proxy_url(parsed)
+    return parsed
+
+
+def _proxy_api_item(row: dict) -> dict:
+    out = dict(row)
+    out.pop("password", None)
+    out["display"] = proxy_util.proxy_display(row, mask_password=True)
+    return out
+
+
+def _video_suffix_from_upload(filename: str, content_type: str | None) -> str | None:
+    suffix = Path(filename or "").suffix.lower()
+    if suffix in ALLOWED_VIDEO_EXT:
+        return suffix
+    mime = (content_type or "").split(";")[0].strip().lower()
+    return VIDEO_MIME_EXT.get(mime)
+
+
+@app.get("/admin/api/proxys/link-choices")
+def api_proxys_link_choices(request: Request, q: str = ""):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    return {"ok": True, "choices": db.list_proxy_link_choices(q, lang=lang)}
+
+
+@app.get("/admin/api/proxys")
+def api_proxys_list(request: Request, q: str = ""):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    rows = db.list_proxies(q)
+    return {"ok": True, "proxies": rows}
+
+
+@app.get("/admin/api/proxys/{proxy_id}")
+def api_proxys_get(request: Request, proxy_id: str):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    row = db.get_proxy(proxy_id)
+    if not row:
+        return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
+    out = dict(row)
+    out["proxy_line"] = proxy_util.proxy_display(row, mask_password=False)
+    return {"ok": True, "proxy": out}
+
+
+@app.post("/admin/api/proxys")
+def api_proxys_create(request: Request, body: ProxyBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    try:
+        parsed = _proxy_parsed_from_body(body.proxy)
+    except ValueError as e:
+        code = str(e) or "invalid_format"
+        return {"ok": False, "error": _proxy_error_message(code, lang)}
+    row = db.create_proxy(
+        label=body.label,
+        protocol=str(parsed["protocol"]),
+        host=str(parsed["host"]),
+        port=int(parsed["port"]),
+        username=str(parsed.get("username") or ""),
+        password=str(parsed.get("password") or ""),
+        proxy_url=str(parsed["proxy_url"]),
+        notes=body.notes,
+    )
+    db.set_proxy_links(row["id"], body.links)
+    row = db.get_proxy(row["id"]) or row
+    return {"ok": True, "proxy": _proxy_api_item(row)}
+
+
+@app.put("/admin/api/proxys/{proxy_id}")
+def api_proxys_update(request: Request, proxy_id: str, body: ProxyBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    existing = db.get_proxy(proxy_id)
+    if not existing:
+        return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
+    try:
+        parsed = _proxy_parsed_from_body(body.proxy)
+    except ValueError as e:
+        code = str(e) or "invalid_format"
+        return {"ok": False, "error": _proxy_error_message(code, lang)}
+    row = db.update_proxy(
+        proxy_id,
+        label=body.label,
+        protocol=str(parsed["protocol"]),
+        host=str(parsed["host"]),
+        port=int(parsed["port"]),
+        username=str(parsed.get("username") or ""),
+        password=str(parsed.get("password") or ""),
+        proxy_url=str(parsed["proxy_url"]),
+        notes=existing.get("notes") or "",
+        country_code=existing.get("country_code") or "",
+        country_name=existing.get("country_name") or "",
+    )
+    db.set_proxy_links(proxy_id, body.links)
+    row = db.get_proxy(proxy_id) or row
+    return {"ok": True, "proxy": _proxy_api_item(row)}
+
+
+@app.delete("/admin/api/proxys/{proxy_id}")
+def api_proxys_delete(request: Request, proxy_id: str):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    db.delete_proxy(proxy_id)
+    return {"ok": True}
+
+
+@app.post("/admin/api/proxys/{proxy_id}/active")
+def api_proxys_active(request: Request, proxy_id: str, body: EquipoEstadoBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    db.set_proxy_active(proxy_id, bool(body.active))
+    return {"ok": True}
+
+
+@app.post("/admin/api/proxys/{proxy_id}/test")
+async def api_proxys_test(request: Request, proxy_id: str):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    row = db.get_proxy(proxy_id)
+    if not row:
+        return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
+    result = await asyncio.to_thread(proxy_util.test_proxy, row)
+    if result.get("ok"):
+        message = i18n.t(
+            "proxys.test_ok",
+            lang,
+            country=result.get("country_name") or result.get("country_code") or "—",
+            ip=result.get("ip") or "—",
+        )
+    elif result.get("error"):
+        message = _proxy_error_message(str(result.get("error")), lang)
+    updated = db.save_proxy_check_result(
+        proxy_id,
+        ok=bool(result.get("ok")),
+        ip=str(result.get("ip") or ""),
+        country_code=str(result.get("country_code") or ""),
+        country_name=str(result.get("country_name") or ""),
+        message=message,
+    )
+    return {
+        "ok": bool(result.get("ok")),
+        "message": message,
+        "proxy": _proxy_api_item(updated) if updated else None,
+    }
+
+
+def _membership_error(code: str, lang: str) -> str:
+    key = f"membresias.err.{code}"
+    msg = i18n.t(key, lang)
+    if msg == key:
+        return i18n.t("membresias.err.generic", lang)
+    return msg
+
+
+def _plan_api_item(plan: dict, lang: str) -> dict:
+    pid = plan["id"]
+    return {
+        "id": pid,
+        "name": i18n.t(f"membresias.plan.{pid}.name", lang),
+        "tagline": i18n.t(f"membresias.plan.{pid}.tagline", lang),
+        "price_usd": int(plan["price_usd"]),
+        "videos": int(plan["videos"]),
+        "stats": int(plan["stats"]),
+        "invite_only": bool(plan["invite_only"]),
+        "featured": bool(plan["featured"]),
+        "accent": plan["accent"],
+        "sort": int(plan["sort"]),
+    }
+
+
+def _payment_kind_api(kind: dict, lang: str) -> dict:
+    return {
+        "id": kind["id"],
+        "icon": kind["icon"],
+        "name": i18n.t(kind["label_key"], lang),
+    }
+
+
+class PaymentMethodBody(BaseModel):
+    kind: str = "custom"
+    name: str = ""
+    pay_to: str = ""
+    instructions: str = ""
+    notes: str = ""
+    active: bool = True
+
+
+class PurchaseBody(BaseModel):
+    plan_id: str = ""
+    payment_method_id: str = ""
+    note: str = ""
+    use_wallet: bool = True
+    amount_usd: int = 0
+
+
+class PurchaseStatusBody(BaseModel):
+    status: str = ""
+
+
+class WalletCreditBody(BaseModel):
+    user_id: str = ""
+    amount_usd: int = 0
+    note: str = ""
+
+
+class WalletRechargeBody(BaseModel):
+    amount_usd: int = 0
+    payment_method_id: str = ""
+    note: str = ""
+    use_wallet: bool = True
+
+
+@app.get("/admin/api/membresias/planes")
+def api_membresias_planes(request: Request):
+    deny = _require_user_json(request)
+    if deny:
+        return deny
+    user = require_user(request)
+    lang = i18n.resolve_lang(request)
+    current = (user.membership_plan or "").strip().lower()
+    started = db.membership_started_at_for(user)
+    wallet = int(getattr(user, "wallet_balance_usd", 0) or 0)
+    quotes = {}
+    for p in membership.PLANS:
+        if p.get("invite_only"):
+            continue
+        try:
+            quotes[p["id"]] = membership.quote_plan_change(
+                current_plan=current,
+                started_at=started,
+                wallet_usd=wallet,
+                new_plan_id=p["id"],
+                use_wallet=True,
+            )
+        except ValueError:
+            continue
+    return {
+        "ok": True,
+        "current_plan": current,
+        "wallet_balance_usd": wallet,
+        "unused_credit_usd": membership.unused_plan_credit_usd(current, started),
+        "invited": db.user_was_invited(user.id),
+        "plans": [_plan_api_item(p, lang) for p in membership.PLANS],
+        "quotes": quotes,
+    }
+
+
+@app.get("/admin/api/pagos/medios")
+def api_pagos_medios(request: Request):
+    deny = _require_user_json(request)
+    if deny:
+        return deny
+    user = require_user(request)
+    lang = i18n.resolve_lang(request)
+    admin = db.user_can_access_servers(user)
+    rows = db.list_payment_methods(active_only=not admin)
+    if not admin:
+        for row in rows:
+            row.pop("notes", None)
+    kinds = [_payment_kind_api(k, lang) for k in membership.PAYMENT_KINDS]
+    wallet_usd = int(getattr(user, "wallet_balance_usd", 0) or 0)
+    rows = [
+        {
+            "id": membership.WALLET_METHOD_ID,
+            "kind": "wallet",
+            "name": i18n.t("pagos.kind.wallet", lang),
+            "pay_to": "",
+            "instructions": i18n.t("pagos.wallet_hint", lang),
+            "active": True,
+            "sort_order": -1,
+        }
+    ] + rows
+    return {
+        "ok": True,
+        "methods": rows,
+        "kinds": kinds,
+        "admin": admin,
+        "wallet_balance_usd": wallet_usd,
+    }
+
+
+@app.post("/admin/api/pagos/medios")
+def api_pagos_medios_create(request: Request, body: PaymentMethodBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    try:
+        row = db.create_payment_method(
+            kind=body.kind,
+            name=body.name,
+            pay_to=body.pay_to,
+            instructions=body.instructions,
+            notes=body.notes,
+            active=bool(body.active),
+        )
+    except ValueError as e:
+        return JSONResponse(
+            {"ok": False, "error": _membership_error(str(e) or "generic", lang)},
+            status_code=400,
+        )
+    return {"ok": True, "method": row}
+
+
+@app.put("/admin/api/pagos/medios/{method_id}")
+def api_pagos_medios_update(request: Request, method_id: str, body: PaymentMethodBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    try:
+        row = db.update_payment_method(
+            method_id,
+            kind=body.kind,
+            name=body.name,
+            pay_to=body.pay_to,
+            instructions=body.instructions,
+            notes=body.notes,
+            active=bool(body.active),
+        )
+    except ValueError as e:
+        code = str(e) or "generic"
+        status = 404 if code == "not_found" else 400
+        return JSONResponse(
+            {"ok": False, "error": _membership_error(code, lang)},
+            status_code=status,
+        )
+    return {"ok": True, "method": row}
+
+
+@app.delete("/admin/api/pagos/medios/{method_id}")
+def api_pagos_medios_delete(request: Request, method_id: str):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    db.delete_payment_method(method_id)
+    return {"ok": True}
+
+
+@app.post("/admin/api/pagos/medios/{method_id}/active")
+def api_pagos_medios_active(request: Request, method_id: str, body: EquipoEstadoBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    db.set_payment_method_active(method_id, bool(body.active))
+    return {"ok": True}
+
+
+@app.get("/admin/api/pagos/compras")
+def api_pagos_compras(request: Request, status: str = ""):
+    deny = _require_user_json(request)
+    if deny:
+        return deny
+    user = require_user(request)
+    admin = db.user_can_access_servers(user)
+    rows = db.list_purchases(
+        user_id=None if admin else user.id,
+        status=status,
+    )
+    return {
+        "ok": True,
+        "purchases": rows,
+        "admin": admin,
+        "wallet_balance_usd": int(getattr(user, "wallet_balance_usd", 0) or 0),
+        "ledger": db.list_wallet_ledger(user.id),
+    }
+
+
+@app.post("/admin/api/pagos/compras")
+def api_pagos_compras_create(request: Request, body: PurchaseBody):
+    deny = _require_user_json(request)
+    if deny:
+        return deny
+    user = require_user(request)
+    lang = i18n.resolve_lang(request)
+    try:
+        row = db.create_purchase(
+            user_id=user.id,
+            plan_id=body.plan_id,
+            payment_method_id=body.payment_method_id,
+            note=body.note,
+            use_wallet=bool(body.use_wallet),
+        )
+    except ValueError as e:
+        return JSONResponse(
+            {"ok": False, "error": _membership_error(str(e) or "generic", lang)},
+            status_code=400,
+        )
+    return {"ok": True, "purchase": row}
+
+
+@app.post("/admin/api/pagos/compras/{purchase_id}/status")
+def api_pagos_compras_status(request: Request, purchase_id: str, body: PurchaseStatusBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    user = require_server_admin(request)
+    lang = i18n.resolve_lang(request)
+    try:
+        row = db.update_purchase_status(
+            purchase_id,
+            status=body.status,
+            reviewed_by=user.username,
+        )
+    except ValueError as e:
+        code = str(e) or "generic"
+        status_code = 404 if code == "not_found" else 400
+        return JSONResponse(
+            {"ok": False, "error": _membership_error(code, lang)},
+            status_code=status_code,
+        )
+    return {"ok": True, "purchase": row}
+
+
+@app.post("/admin/api/membresias/cancel")
+def api_membresias_cancel(request: Request):
+    deny = _require_user_json(request)
+    if deny:
+        return deny
+    user = require_user(request)
+    lang = i18n.resolve_lang(request)
+    try:
+        result = db.cancel_membership_to_wallet(user.id)
+    except ValueError as e:
+        return JSONResponse(
+            {"ok": False, "error": _membership_error(str(e) or "generic", lang)},
+            status_code=400,
+        )
+    return {"ok": True, **result}
+
+
+@app.post("/admin/api/pagos/recarga")
+def api_pagos_recarga(request: Request, body: WalletRechargeBody):
+    deny = _require_user_json(request)
+    if deny:
+        return deny
+    user = require_user(request)
+    lang = i18n.resolve_lang(request)
+    try:
+        row = db.create_wallet_recharge(
+            user_id=user.id,
+            amount_usd=int(body.amount_usd or 0),
+            payment_method_id=body.payment_method_id,
+            note=body.note,
+            use_wallet=bool(body.use_wallet),
+        )
+    except ValueError as e:
+        return JSONResponse(
+            {"ok": False, "error": _membership_error(str(e) or "generic", lang)},
+            status_code=400,
+        )
+    return {"ok": True, "purchase": row}
+
+
+@app.post("/admin/api/pagos/saldo")
+def api_pagos_saldo_manual(request: Request, body: WalletCreditBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    admin = require_server_admin(request)
+    lang = i18n.resolve_lang(request)
+    amount = int(body.amount_usd or 0)
+    if amount == 0 or amount > 10000 or amount < -10000:
+        return JSONResponse(
+            {"ok": False, "error": _membership_error("invalid_amount", lang)},
+            status_code=400,
+        )
+    try:
+        bal = db.add_wallet_balance(
+            body.user_id,
+            amount,
+            reason="admin_credit",
+            note=body.note,
+            created_by=admin.username,
+        )
+    except ValueError as e:
+        code = str(e) or "generic"
+        status_code = 404 if code == "not_found" else 400
+        return JSONResponse(
+            {"ok": False, "error": _membership_error(code, lang)},
+            status_code=status_code,
+        )
+    return {"ok": True, "wallet_balance_usd": bal}
+
+
+@app.get("/admin/soporte", response_class=HTMLResponse, name="admin_soporte")
+def admin_soporte_page(request: Request):
+    try:
+        user = require_user(request)
+    except PermissionError:
+        return RedirectResponse(url="/login?next=/admin/soporte", status_code=303)
+    if _user_is_support_agent(user):
+        return RedirectResponse(url="/admin/chats-soporte", status_code=303)
+    return _render(request, "soporte.html", {"user": user, "nav_active": "soporte"})
+
+
+@app.get("/admin/api/soporte/unread")
+def api_soporte_unread(request: Request):
+    try:
+        user = require_user(request)
+    except PermissionError:
+        return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
+    return {"ok": True, "count": db.support_unread_count_for_viewer(user)}
+
+
+@app.get("/admin/api/soporte/mensajes")
+def api_soporte_mensajes(request: Request):
+    try:
+        user = require_user(request)
+    except PermissionError:
+        return JSONResponse({"ok": False, "error": "login_required"}, status_code=401)
+    db.mark_support_read(user.id, "user")
+    return {"ok": True, "messages": db.list_support_messages(user.id)}
+
+
+@app.post("/admin/api/soporte/mensajes")
+def api_soporte_enviar(request: Request, body: SupportMessageBody):
+    try:
+        user = require_user(request)
+    except PermissionError:
+        return JSONResponse({"ok": False, "error": "login_required"}, status_code=401)
+    try:
+        msg = db.add_support_message(user.id, "user", body.body)
+    except ValueError:
+        return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
+    return {"ok": True, "message": msg}
+
+
+@app.get("/admin/chats-soporte", response_class=HTMLResponse, name="admin_chats_soporte")
+def admin_chats_soporte_page(request: Request):
+    try:
+        user = require_user(request)
+    except PermissionError:
+        return RedirectResponse(url="/login?next=/admin/chats-soporte", status_code=303)
+    if not _user_is_support_agent(user):
+        return RedirectResponse(url="/admin/soporte", status_code=303)
+    return _render(
+        request,
+        "chats_soporte.html",
+        {"user": user, "nav_active": "chats_soporte"},
+    )
+
+
+def _require_support_agent_json(request: Request) -> JSONResponse | None:
+    try:
+        user = require_user(request)
+    except PermissionError:
+        return JSONResponse({"ok": False, "error": "login_required"}, status_code=401)
+    if not _user_is_support_agent(user):
+        return JSONResponse({"ok": False, "error": "Permission denied."}, status_code=403)
+    return None
+
+
+@app.get("/admin/api/soporte/hilos")
+def api_soporte_hilos(request: Request, q: str = ""):
+    deny = _require_support_agent_json(request)
+    if deny:
+        return deny
+    return {"ok": True, "threads": db.list_all_support_threads(q)}
+
+
+@app.get("/admin/api/soporte/hilos/{user_id}/mensajes")
+def api_soporte_hilo_mensajes(request: Request, user_id: str):
+    deny = _require_support_agent_json(request)
+    if deny:
+        return deny
+    guest_id = db.parse_guest_thread_id(user_id)
+    if guest_id:
+        db.mark_guest_support_read(guest_id, "admin")
+        lang = i18n.resolve_lang(request)
+        return {
+            "ok": True,
+            "username": i18n.t("support.anonymous_label", lang),
+            "is_guest": True,
+            "messages": db.list_guest_support_messages(guest_id),
+        }
+    target = db.get_user_by_id(user_id)
+    if not target:
+        return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
+    db.mark_support_read(user_id, "admin")
+    return {
+        "ok": True,
+        "username": target.username,
+        "is_guest": False,
+        "messages": db.list_support_messages(user_id),
+    }
+
+
+@app.post("/admin/api/soporte/hilos/{user_id}/mensajes")
+def api_soporte_hilo_responder(request: Request, user_id: str, body: SupportMessageBody):
+    deny = _require_support_agent_json(request)
+    if deny:
+        return deny
+    guest_id = db.parse_guest_thread_id(user_id)
+    if guest_id:
+        try:
+            msg = db.add_guest_support_message(guest_id, "admin", body.body)
+        except ValueError:
+            return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
+        return {"ok": True, "message": msg}
+    target = db.get_user_by_id(user_id)
+    if not target:
+        return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
+    try:
+        msg = db.add_support_message(user_id, "admin", body.body)
+    except ValueError:
+        return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
+    return {"ok": True, "message": msg}
+
+
+@app.get("/admin/api/soporte/logs/count")
+def api_soporte_logs_count(request: Request, date_from: str = "", date_to: str = ""):
+    deny = _require_support_agent_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    bounds = _log_purge_bounds(date_from, date_to, lang)
+    if isinstance(bounds, JSONResponse):
+        return bounds
+    start, end = bounds
+    return {"ok": True, "count": db.count_support_messages_in_range(start, end)}
+
+
+@app.delete("/admin/api/soporte/logs")
+def api_soporte_logs_purge(request: Request, body: LogPurgeBody):
+    deny = _require_support_agent_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    bounds = _log_purge_bounds(body.date_from, body.date_to, lang)
+    if isinstance(bounds, JSONResponse):
+        return bounds
+    start, end = bounds
+    deleted = db.delete_support_messages_in_range(start, end)
+    return {"ok": True, "deleted": deleted}
+
+
+def _guest_chat_id(request: Request) -> str:
+    gid = (request.session.get("guest_chat_id") or "").strip()
+    if not gid:
+        gid = str(uuid.uuid4())
+        request.session["guest_chat_id"] = gid
+    return gid
+
+
+@app.get("/api/soporte-publico/mensajes")
+def api_soporte_publico_mensajes(request: Request):
+    gid = _guest_chat_id(request)
+    db.mark_guest_support_read(gid, "user")
+    return {"ok": True, "messages": db.list_guest_support_messages(gid)}
+
+
+@app.post("/api/soporte-publico/mensajes")
+def api_soporte_publico_enviar(request: Request, body: SupportMessageBody):
+    gid = _guest_chat_id(request)
+    try:
+        msg = db.add_guest_support_message(gid, "user", body.body)
+    except ValueError:
+        return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
+    return {"ok": True, "message": msg}
+
+
+# ---------------------------------------------------------------------------
+# Códigos de invitación (panel)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/admin/api/invitaciones")
+def api_invitaciones_list(request: Request):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    return {"ok": True, "codes": db.list_invite_codes()}
+
+
+@app.post("/admin/api/invitaciones")
+def api_invitaciones_create(request: Request):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    user = require_server_admin(request)
+    code = db.create_invite_code(user.id)
+    return {"ok": True, "code": code}
+
+
+@app.get("/admin/api/invitaciones/logs/count")
+def api_invitaciones_logs_count(request: Request, date_from: str = "", date_to: str = ""):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    bounds = _log_purge_bounds(date_from, date_to, lang)
+    if isinstance(bounds, JSONResponse):
+        return bounds
+    start, end = bounds
+    return {"ok": True, "count": db.count_invite_codes_in_range(start, end)}
+
+
+@app.delete("/admin/api/invitaciones/logs")
+def api_invitaciones_logs_purge(request: Request, body: LogPurgeBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    bounds = _log_purge_bounds(body.date_from, body.date_to, lang)
+    if isinstance(bounds, JSONResponse):
+        return bounds
+    start, end = bounds
+    deleted = db.delete_invite_codes_in_range(start, end)
+    return {"ok": True, "deleted": deleted}
+
+
+@app.delete("/admin/api/invitaciones/{code}")
+def api_invitaciones_delete(request: Request, code: str):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    db.delete_invite_code(code)
+    return {"ok": True}
+
+
 def _password_reset_url(request: Request, token: str) -> str:
     """Enlace absoluto al formulario de restablecimiento."""
     return f"{request.url_for('admin_panel_reset_get')}?{urlencode({'token': token})}"
+
+
+def _viewer_visible_platform_ids(user: db.User) -> set[str] | None:
+    """Plataformas visibles en historial/programaciones. None = admin, sin filtro."""
+    if db.user_can_access_servers(user):
+        return None
+    if db.user_is_tiktok_mode(user):
+        return _tiktok_user_ready_platform_ids()
+    return {"tiktok"}
+
+
+def _filter_log_groups_for_viewer(groups: list[dict], user: db.User) -> list[dict]:
+    allowed = _viewer_visible_platform_ids(user)
+    if allowed is None:
+        return groups
+    out: list[dict] = []
+    for group in groups:
+        entries = [
+            e
+            for e in (group.get("entries") or [])
+            if str(e.get("platform_id") or "") in allowed
+        ]
+        if not entries:
+            continue
+        ok_n = sum(1 for e in entries if e.get("status") == "ok")
+        fail_n = sum(1 for e in entries if e.get("status") == "fail")
+        skipped_n = sum(1 for e in entries if e.get("status") == "skipped")
+        if fail_n and ok_n:
+            status = "mixed"
+        elif fail_n:
+            status = "fail"
+        elif ok_n:
+            status = "ok"
+        else:
+            status = "skipped"
+        item = dict(group)
+        item["entries"] = entries
+        item["ok_n"] = ok_n
+        item["fail_n"] = fail_n
+        item["skipped_n"] = skipped_n
+        item["status"] = status
+        out.append(item)
+    return out
+
+
+def _filter_scheduled_for_viewer(rows: list[dict], user: db.User) -> list[dict]:
+    allowed = _viewer_visible_platform_ids(user)
+    if allowed is None:
+        return rows
+
+    out: list[dict] = []
+    for row in rows:
+        try:
+            pids = json.loads(row.get("platforms_json") or "[]")
+        except (TypeError, ValueError):
+            pids = []
+        if not isinstance(pids, list):
+            pids = []
+        kept = [p for p in pids if str(p) in allowed]
+        if not kept:
+            continue
+        item = dict(row)
+        item["platforms_json"] = json.dumps(kept)
+        out.append(item)
+    return out
+
+
+def _publication_log_groups(lang: str, user: db.User) -> list[dict]:
+    groups = db.list_publication_log_groups(limit=50, viewer=user)
+    for group in groups:
+        for entry in group.get("entries") or []:
+            pid = str(entry.get("platform_id") or "")
+            entry["platform_name"] = i18n.t(f"platform.{pid}", lang) if pid else pid
+    return _filter_log_groups_for_viewer(groups, user)
+
+
+def _email_verify_url(request: Request, token: str) -> str:
+    return f"{request.url_for('verify_email')}?{urlencode({'token': token})}"
+
+
+def _send_email_verification(request: Request, user_id: str, email: str) -> bool:
+    lang = i18n.resolve_lang(request)
+    addr = (email or "").strip()
+    try:
+        token = db.queue_notification_email_verification(user_id, addr)
+    except ValueError:
+        return False
+    if not token:
+        return True
+    if not notify.smtp_configured():
+        return False
+    verify_url = _email_verify_url(request, token)
+    return notify.send_email_verification_email(
+        to=addr, verify_url=verify_url, lang=lang
+    )
 
 
 def _stats_empty() -> dict[str, int]:
@@ -548,6 +1622,30 @@ def _stats_link_kwargs(selected: dict | None) -> dict:
     if len(link_ids) == 1:
         return {"account_link_id": link_ids[0]}
     return {"account_link_ids": link_ids}
+
+
+def _build_empty_platform_breakdown(
+    lang: str,
+    *,
+    platform_ids: list[str] | None = None,
+) -> list[dict]:
+    breakdown: list[dict] = []
+    allowed = set(platform_ids or [])
+    for p in platforms.PLATFORMS:
+        pid = str(p["id"])
+        if allowed and pid not in allowed:
+            continue
+        breakdown.append(
+            {
+                "platform_id": pid,
+                "icon": str(p["icon"]),
+                "name": i18n.t(f"platform.{pid}", lang),
+                "stats": _stats_empty(),
+                "visible_stats": platforms.visible_stats_metrics(pid),
+                "publications": [],
+            }
+        )
+    return breakdown
 
 
 def _build_platform_breakdown(
@@ -639,21 +1737,55 @@ def admin_panel(request: Request):
         return _admin_redirect_login()
 
     is_admin = db.user_has_admin_privileges(u)
+    is_tiktok_user = db.user_is_tiktok_mode(u)
+    can_access_servers = db.user_can_access_servers(u)
     lang = i18n.resolve_lang(request)
     all_filter_choices = db.list_stats_filter_choices(u, lang=lang)
+    stats_consulted = (request.query_params.get("consult") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    spend_stats = (request.query_params.get("spend") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    usage = db.membership_usage(u)
     user_platform_ids = sorted(
         {pid for acc in all_filter_choices for pid in (acc.get("platform_ids") or [])}
     )
 
-    platform_sel = (request.query_params.get("platform") or "all").strip()
-    if platform_sel not in platforms.PLATFORM_IDS and platform_sel != "all":
-        platform_sel = "all"
-    if not is_admin and platform_sel != "all" and platform_sel not in user_platform_ids:
-        platform_sel = "all"
-
     platform_choices = platforms.platform_list(lang)
-    if not is_admin:
-        platform_choices = [p for p in platform_choices if p["id"] in user_platform_ids]
+    if is_tiktok_user:
+        platform_choices = [
+            p for p in _tiktok_user_panel_platforms(lang) if p.get("configured")
+        ]
+    elif not can_access_servers:
+        platform_choices = [p for p in platform_choices if p["id"] == "tiktok"]
+    if is_tiktok_user:
+        show_stats_filters = bool(platform_choices)
+    else:
+        show_stats_filters = can_access_servers or bool(all_filter_choices)
+    allowed_platform_ids = {p["id"] for p in platform_choices}
+    show_stats_all_option = len(platform_choices) > 1
+
+    platform_sel = (request.query_params.get("platform") or "").strip()
+    if platform_sel not in platforms.PLATFORM_IDS and platform_sel != "all":
+        platform_sel = ""
+    if platform_sel == "all" and not show_stats_all_option:
+        platform_sel = ""
+    if platform_sel and platform_sel != "all" and platform_sel not in allowed_platform_ids:
+        platform_sel = ""
+    if not platform_sel:
+        if show_stats_all_option:
+            platform_sel = "all"
+        elif platform_choices:
+            platform_sel = platform_choices[0]["id"]
+        else:
+            platform_sel = "all"
 
     sel = (
         (request.query_params.get("account") or "").strip()
@@ -683,17 +1815,61 @@ def admin_panel(request: Request):
         all_filter_choices, platform_filter
     )
     choice_ids = {c["id"] for c in account_choices}
-    show_account_filter = bool(account_choices)
+    show_account_filter = bool(account_choices) and not is_tiktok_user
 
-    if sel not in choice_ids:
-        sel = ""
-    if not sel and account_choices:
-        sel = account_choices[0]["id"]
-    elif not sel and not is_admin and len(account_choices) == 1:
-        sel = account_choices[0]["id"]
-    selected_account = next((c for c in account_choices if c["id"] == sel), None)
+    if is_tiktok_user and account_choices:
+        seen_links: list[str] = []
+        seen_set: set[str] = set()
+        union_pids: list[str] = []
+        pid_set: set[str] = set()
+        for acc in account_choices:
+            for lid in acc.get("link_ids") or [acc.get("id")]:
+                lid_s = str(lid or "").strip()
+                if not lid_s or lid_s in seen_set:
+                    continue
+                seen_set.add(lid_s)
+                seen_links.append(lid_s)
+            for pid in acc.get("platform_ids") or []:
+                pid_s = str(pid or "").strip()
+                if pid_s and pid_s not in pid_set:
+                    pid_set.add(pid_s)
+                    union_pids.append(pid_s)
+        selected_account = {
+            "id": seen_links[0] if len(seen_links) == 1 else "tiktok-user-all",
+            "name": account_choices[0].get("name") or "",
+            "kind": "link",
+            "platform_ids": [p["id"] for p in platform_choices],
+            "link_ids": seen_links,
+        }
+        sel = selected_account["id"]
+    else:
+        if sel not in choice_ids:
+            sel = ""
+        if not sel and account_choices:
+            sel = account_choices[0]["id"]
+        elif not sel and not is_admin and len(account_choices) == 1:
+            sel = account_choices[0]["id"]
+        selected_account = next((c for c in account_choices if c["id"] == sel), None)
     selected_account_name = (selected_account or {}).get("name") or ""
     link_kwargs = _stats_link_kwargs(selected_account)
+
+    consult_token = f"{platform_sel}|{sel}|{video_sel}"
+    session_token = str(request.session.get("stats_consult_token") or "")
+    quota_error = ""
+    if stats_consulted and spend_stats:
+        quota_code = db.consume_stats_query(u)
+        if quota_code:
+            stats_consulted = False
+            quota_error = i18n.t(quota_code, lang)
+            request.session.pop("stats_consult_token", None)
+        else:
+            request.session["stats_consult_token"] = consult_token
+            usage = db.membership_usage(u)
+    elif stats_consulted:
+        if usage["unlimited"] or session_token == consult_token:
+            pass
+        else:
+            stats_consulted = False
 
     show_global_breakdown = False
     platform_breakdown: list[dict] = []
@@ -707,52 +1883,66 @@ def admin_panel(request: Request):
 
     if selected_account:
         acc_platforms = selected_account.get("platform_ids") or []
-        primary_link = link_kwargs.get("account_link_id", "")
-        group_links = link_kwargs.get("account_link_ids")
-        video_options = [
-            {"id": v.id, "title": v.title}
-            for v in db.list_videos_for_account(
-                primary_link,
-                platform_id=platform_filter,
-                account_link_ids=group_links,
-            )
-        ]
-        stats = _stats_with_followers(None, platform_id=platform_filter, **link_kwargs)
-        if video_sel:
-            vb = _video_stats_bundle(
-                video_sel,
+        if stats_consulted:
+            primary_link = link_kwargs.get("account_link_id", "")
+            group_links = link_kwargs.get("account_link_ids")
+            video_options = [
+                {"id": v.id, "title": v.title}
+                for v in db.list_videos_for_account(
+                    primary_link,
+                    platform_id=platform_filter,
+                    account_link_ids=group_links,
+                )
+            ]
+            stats = _stats_with_followers(None, platform_id=platform_filter, **link_kwargs)
+            if video_sel:
+                vb = _video_stats_bundle(
+                    video_sel,
+                    platform_id=platform_filter,
+                    **link_kwargs,
+                )
+                if vb:
+                    stats = vb["stats"]
+                    video_title = vb["title"]
+                    selected_video = video_sel
+                else:
+                    video_sel = ""
+            global_video_list = db.list_stats_publications(
                 platform_id=platform_filter,
                 **link_kwargs,
             )
-            if vb:
-                stats = vb["stats"]
-                video_title = vb["title"]
-                selected_video = video_sel
-            else:
-                video_sel = ""
-        global_video_list = db.list_stats_publications(
-            platform_id=platform_filter,
-            **link_kwargs,
-        )
-        if platform_sel == "all":
+            if platform_sel == "all":
+                show_global_breakdown = True
+                global_summary = dict(stats)
+                platform_breakdown = _build_platform_breakdown(
+                    lang,
+                    platform_ids=acc_platforms,
+                    **link_kwargs,
+                )
+        elif platform_sel == "all":
             show_global_breakdown = True
-            global_summary = dict(stats)
-            platform_breakdown = _build_platform_breakdown(
-                lang,
-                platform_ids=acc_platforms,
-                **link_kwargs,
+            global_summary = _stats_empty()
+            platform_breakdown = _build_empty_platform_breakdown(
+                lang, platform_ids=acc_platforms
             )
     else:
         stats = _stats_empty()
         sel = ""
+        if is_tiktok_user and platform_sel == "all":
+            show_global_breakdown = True
+            global_summary = _stats_empty()
+            platform_breakdown = _build_empty_platform_breakdown(
+                lang, platform_ids=[p["id"] for p in platform_choices]
+            )
 
-    err = request.session.pop("admin_error", None)
+    err = request.session.pop("admin_error", None) or quota_error
     ok = request.session.pop("admin_ok", None)
     ctx = {
         "user": u,
         "stats": stats,
         "error": err,
         "success": ok,
+        "membership_usage": usage,
         "nav_active": "admin",
         "tiktok_stat_choices": account_choices,
         "selected_tiktoker": sel,
@@ -770,6 +1960,9 @@ def admin_panel(request: Request):
         "selected_platform_icon": selected_platform_icon,
         "visible_stats": visible_stats,
         "show_account_filter": show_account_filter,
+        "show_stats_filters": show_stats_filters,
+        "show_stats_all_option": show_stats_all_option,
+        "stats_consulted": stats_consulted,
         "account_filter_label": account_filter_label,
         "selected_account_name": selected_account_name,
     }
@@ -821,6 +2014,8 @@ def api_publicaciones_comentarios(
         return JSONResponse({"ok": False, "error": "forbidden"}, status_code=403)
     if not db.user_can_manage_comments(u):
         return JSONResponse({"ok": False, "error": "forbidden"}, status_code=403)
+    if not db.membership_usage(u)["can_view_comments"]:
+        return JSONResponse({"ok": False, "error": "forbidden"}, status_code=403)
 
     scope = _publicaciones_comment_scope(u)
     threads = db.list_comment_threads_for_owners(scope)
@@ -871,7 +2066,7 @@ def api_publication_logs_purge(request: Request, body: LogPurgeBody):
 
 @app.get("/admin/api/extractor/events/count")
 def api_extractor_events_count(request: Request, date_from: str = "", date_to: str = ""):
-    guard = _require_admin_json(request)
+    guard = _require_server_admin_json(request)
     if guard:
         return guard
     lang = i18n.resolve_lang(request)
@@ -884,7 +2079,7 @@ def api_extractor_events_count(request: Request, date_from: str = "", date_to: s
 
 @app.delete("/admin/api/extractor/events")
 def api_extractor_events_purge(request: Request, body: LogPurgeBody):
-    guard = _require_admin_json(request)
+    guard = _require_server_admin_json(request)
     if guard:
         return guard
     lang = i18n.resolve_lang(request)
@@ -909,6 +2104,7 @@ def admin_publicaciones(request: Request):
             return _publicaciones_redirect_login()
         return HTMLResponse("You do not have permission to view Publications.", status_code=403)
     lang = i18n.resolve_lang(request)
+    usage = db.membership_usage(u)
     platform_choices = platforms.platform_list(lang)
     account_filter_label = i18n.t("admin.accounts", lang)
     publish_choices = db.publicaciones_tiktoker_choices(u)
@@ -932,7 +2128,7 @@ def admin_publicaciones(request: Request):
     comment_threads: list[dict] = []
     comment_user_choices: list[dict[str, str]] = []
     platform_labels: dict[str, str] = {}
-    if db.user_can_manage_comments(u):
+    if db.user_can_manage_comments(u) and usage["can_view_comments"]:
         comment_owner_scope = _publicaciones_comment_scope(u)
         comment_threads = db.list_comment_threads_for_owners(comment_owner_scope)
         comment_user_choices = _publicaciones_comment_user_choices(publish_choices)
@@ -943,9 +2139,25 @@ def admin_publicaciones(request: Request):
     err = request.session.pop("admin_error", None)
     ok = request.session.pop("admin_ok", None)
     is_admin = db.user_has_admin_privileges(u)
+    is_publish_admin = db.user_can_access_servers(u)
+    is_tiktok_user = db.user_is_tiktok_mode(u)
     publish_account_choices = db.list_stats_filter_choices(u, lang=lang)
-    show_publish_account_picker = is_admin or len(publish_account_choices) > 1
-    publish_unlocked = is_admin or len(publish_account_choices) > 0
+    show_publish_account_picker = (
+        not is_tiktok_user
+        and (is_publish_admin or len(publish_account_choices) > 1)
+    )
+    publish_unlocked = is_admin or is_tiktok_user or len(publish_account_choices) > 0
+    if is_tiktok_user:
+        platform_choices = _tiktok_user_panel_platforms(lang)
+        show_publish_platform_picker = True
+        auto_publish_platform_id = ""
+    elif not is_publish_admin:
+        platform_choices = [p for p in platform_choices if p["id"] == "tiktok"]
+        show_publish_platform_picker = False
+        auto_publish_platform_id = "tiktok" if platform_choices else ""
+    else:
+        show_publish_platform_picker = False
+        auto_publish_platform_id = ""
     pub_account_i18n = {
         "select": i18n.t("pub.select_account", lang),
         "search_ph": i18n.t("pub.publish_account_search_ph", lang),
@@ -972,18 +2184,73 @@ def admin_publicaciones(request: Request):
                 selected_publish_cfg["name"] if selected_publish_cfg else ""
             ),
             "can_upload_videos": db.user_can_upload_videos(u),
-            "can_manage_comments": db.user_can_manage_comments(u),
+            "can_manage_comments": db.user_can_manage_comments(u) and usage["can_view_comments"],
+            "membership_usage": usage,
             "publish_platforms": platform_choices,
-            "publication_logs": db.list_publication_logs(limit=50),
-            "scheduled_publications": db.list_scheduled_publications(limit=30),
+            "publication_logs": _publication_log_groups(lang, u),
+            "scheduled_publications": _filter_scheduled_for_viewer(
+                db.list_scheduled_publications(limit=30, viewer=u), u
+            ),
+            "show_pub_log_user": False,
+            "show_comment_user_filter": is_publish_admin,
             "account_filter_label": account_filter_label,
             "publish_account_choices": publish_account_choices,
             "show_publish_account_picker": show_publish_account_picker,
-            "is_publish_admin": is_admin,
+            "show_publish_platform_picker": show_publish_platform_picker,
+            "auto_publish_platform_id": auto_publish_platform_id,
+            "is_publish_admin": is_publish_admin,
             "publish_unlocked": publish_unlocked,
             "pub_account_i18n": pub_account_i18n,
+            "max_upload_mb": MAX_UPLOAD_MB,
+            "max_upload_bytes": MAX_UPLOAD_BYTES,
         },
     )
+
+
+@app.post("/admin/api/videos/temp", name="api_video_temp_upload")
+async def api_video_temp_upload(request: Request, file: UploadFile = File(...)):
+    auth = _require_publicaciones_user_json(request)
+    if isinstance(auth, JSONResponse):
+        return auth
+    u = auth
+    lang = i18n.resolve_lang(request)
+
+    if not file.filename and not file.content_type:
+        return JSONResponse({"ok": False, "error": "Missing file."}, status_code=400)
+
+    raw_name = file.filename or ""
+    suffix = _video_suffix_from_upload(raw_name, file.content_type)
+    if not suffix:
+        return JSONResponse({"ok": False, "error": "Invalid video type.", "code": "invalid_type"}, status_code=400)
+
+    contents = await file.read()
+    if len(contents) > MAX_UPLOAD_BYTES:
+        return JSONResponse(
+            {
+                "ok": False,
+                "code": "file_too_large",
+                "error": i18n.t("pub.flash.file_too_large", lang, max_mb=MAX_UPLOAD_MB),
+            },
+            status_code=400,
+        )
+
+    token, stored = video_temp_util.save_temp(UPLOAD_DIR, u.id, contents, suffix)
+    return {
+        "ok": True,
+        "token": token,
+        "url": f"/uploads/temp/{stored}",
+        "name": raw_name,
+    }
+
+
+@app.post("/admin/api/videos/temp/{token}/discard", name="api_video_temp_discard")
+def api_video_temp_discard(request: Request, token: str):
+    auth = _require_publicaciones_user_json(request)
+    if isinstance(auth, JSONResponse):
+        return auth
+    u = auth
+    video_temp_util.discard_temp(UPLOAD_DIR, u.id, token)
+    return {"ok": True}
 
 
 @app.post("/admin/videos", name="admin_upload_video")
@@ -1003,34 +2270,78 @@ async def admin_upload_video(request: Request):
     account_link_id = (form.get("account_link_id") or "").strip()
     selected_platforms = [p for p in form.getlist("platforms") if p in platforms.PLATFORM_IDS]
     upload = form.get("file")
+    video_temp_token = (form.get("video_temp_token") or "").strip().lower()
 
     if not db.user_can_upload_videos(u):
         request.session["admin_error"] = _msg(request, "pub.flash.no_upload")
         return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+    quota_code = db.consume_publish_quota(u)
+    if quota_code:
+        request.session["admin_error"] = _msg(request, quota_code)
+        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
 
-    is_admin = db.user_has_admin_privileges(u)
     publish_choices = db.list_stats_filter_choices(u, lang=lang)
     choices_by_id = {c["id"]: c for c in publish_choices}
-    if is_admin:
+    if not choices_by_id:
+        request.session["admin_error"] = _msg(request, "pub.flash.no_accounts_registered")
+        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+    if db.user_is_tiktok_mode(u):
+        allowed_platforms = set(PANEL_API_PLATFORM_IDS)
+        ready = _tiktok_user_ready_platform_ids()
+        selected_platforms = [
+            p for p in selected_platforms if p in allowed_platforms and p in ready
+        ]
+        if len(choices_by_id) == 1:
+            account_link_id = publish_choices[0]["id"]
+        elif account_link_id not in choices_by_id:
+            match_id = ""
+            wanted = set(selected_platforms)
+            for c in publish_choices:
+                pids = {str(p).strip() for p in (c.get("platform_ids") or []) if str(p).strip()}
+                if wanted and wanted.issubset(pids):
+                    match_id = c["id"]
+                    break
+            if not match_id:
+                for c in publish_choices:
+                    pids = {
+                        str(p).strip() for p in (c.get("platform_ids") or []) if str(p).strip()
+                    }
+                    if any(p in pids for p in wanted):
+                        match_id = c["id"]
+                        break
+            if not match_id:
+                request.session["admin_error"] = _msg(
+                    request, "pub.flash.select_account_publish"
+                )
+                return RedirectResponse(
+                    url=request.url_for("admin_publicaciones"), status_code=303
+                )
+            account_link_id = match_id
+    elif db.user_can_access_servers(u):
         if not account_link_id or account_link_id not in choices_by_id:
             request.session["admin_error"] = _msg(request, "pub.flash.select_account_publish")
             return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
         acc = choices_by_id[account_link_id]
         allowed_platforms = set(acc.get("platform_ids") or [])
         selected_platforms = [p for p in selected_platforms if p in allowed_platforms]
+    elif len(choices_by_id) == 1:
+        account_link_id = publish_choices[0]["id"]
+        acc = choices_by_id[account_link_id]
+        allowed_platforms = set(acc.get("platform_ids") or [])
+        selected_platforms = [p for p in selected_platforms if p in allowed_platforms]
+    elif account_link_id not in choices_by_id:
+        request.session["admin_error"] = _msg(request, "pub.flash.select_account_publish")
+        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
     else:
-        if not choices_by_id:
-            request.session["admin_error"] = _msg(request, "pub.flash.no_accounts_registered")
-            return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
-        if len(choices_by_id) == 1:
-            account_link_id = publish_choices[0]["id"]
-        elif account_link_id not in choices_by_id:
-            request.session["admin_error"] = _msg(request, "pub.flash.select_account_publish")
-            return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
         acc = choices_by_id.get(account_link_id)
         if acc:
             allowed_platforms = set(acc.get("platform_ids") or [])
             selected_platforms = [p for p in selected_platforms if p in allowed_platforms]
+
+    if not db.user_can_access_servers(u) and not db.user_is_tiktok_mode(u):
+        selected_platforms = [p for p in selected_platforms if p == "tiktok"]
+        if not selected_platforms:
+            selected_platforms = ["tiktok"]
 
     if not selected_platforms:
         request.session["admin_error"] = _msg(request, "pub.flash.no_platforms")
@@ -1067,29 +2378,52 @@ async def admin_upload_video(request: Request):
             owner_user_id = ready[0]["internal_user_id"] if ready else u.id
 
     if not isinstance(upload, UploadFile) or not upload.filename:
+        upload = None
+
+    temp_path = None
+    if video_temp_token:
+        temp_path = video_temp_util.claim_temp(UPLOAD_DIR, u.id, video_temp_token)
+
+    if temp_path:
+        suffix = temp_path.suffix.lower()
+        if suffix not in ALLOWED_MEDIA_EXT:
+            temp_path.unlink(missing_ok=True)
+            request.session["admin_error"] = _msg(
+                request,
+                "pub.flash.file_type",
+                types=", ".join(sorted(ALLOWED_MEDIA_EXT)),
+            )
+            return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+        content_type = "photo" if suffix in ALLOWED_PHOTO_EXT else "video"
+        stored = f"{uuid.uuid4().hex}{suffix}"
+        path = UPLOAD_DIR / stored
+        temp_path.replace(path)
+    elif upload and upload.filename:
+        raw_name = upload.filename or ""
+        suffix = Path(raw_name).suffix.lower()
+        if suffix not in ALLOWED_MEDIA_EXT:
+            request.session["admin_error"] = _msg(
+                request,
+                "pub.flash.file_type",
+                types=", ".join(sorted(ALLOWED_MEDIA_EXT)),
+            )
+            return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+
+        content_type = "photo" if suffix in ALLOWED_PHOTO_EXT else "video"
+
+        contents = await upload.read()
+        if len(contents) > MAX_UPLOAD_BYTES:
+            request.session["admin_error"] = _msg(
+                request, "pub.flash.file_too_large", max_mb=MAX_UPLOAD_MB
+            )
+            return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+
+        stored = f"{uuid.uuid4().hex}{suffix}"
+        path = UPLOAD_DIR / stored
+        path.write_bytes(contents)
+    else:
         request.session["admin_error"] = _msg(request, "pub.flash.missing_file")
         return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
-
-    raw_name = upload.filename or ""
-    suffix = Path(raw_name).suffix.lower()
-    if suffix not in ALLOWED_MEDIA_EXT:
-        request.session["admin_error"] = _msg(
-            request,
-            "pub.flash.file_type",
-            types=", ".join(sorted(ALLOWED_MEDIA_EXT)),
-        )
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
-
-    content_type = "photo" if suffix in ALLOWED_PHOTO_EXT else "video"
-
-    contents = await upload.read()
-    if len(contents) > MAX_UPLOAD_BYTES:
-        request.session["admin_error"] = _msg(request, "pub.flash.file_too_large")
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
-
-    stored = f"{uuid.uuid4().hex}{suffix}"
-    path = UPLOAD_DIR / stored
-    path.write_bytes(contents)
 
     schedule_enabled = (form.get("schedule_enabled") or "").strip() in ("1", "on", "true")
     scheduled_raw = (form.get("scheduled_at") or "").strip()
@@ -1172,7 +2506,7 @@ def admin_reply_comment(
         if str(e) == "login_required":
             return _publicaciones_redirect_login()
         return HTMLResponse("Permission denied.", status_code=403)
-    if not db.user_can_manage_comments(u):
+    if not db.user_can_manage_comments(u) or not db.membership_usage(u)["can_view_comments"]:
         request.session["admin_error"] = _msg(request, "pub.flash.no_comments")
         return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
 
@@ -1206,20 +2540,37 @@ def admin_panel(request: Request):
     except PermissionError:
         return _panel_redirect_login()
     lang = i18n.resolve_lang(request)
-    err = request.session.pop("panel_error", None) or request.session.pop("equipo_error", None)
-    ok = request.session.pop("panel_ok", None) or request.session.pop("equipo_ok", None)
-    admin_email = site_config.notification_email()
+    err = (
+        request.session.pop("panel_error", None)
+        or request.session.pop("equipo_error", None)
+        or request.session.pop("tiktok_error", None)
+    )
+    ok = (
+        request.session.pop("panel_ok", None)
+        or request.session.pop("equipo_ok", None)
+        or request.session.pop("tiktok_ok", None)
+    )
+    admin_email = db.get_user_panel_email(admin.id)
+    email_verified = db.is_user_notification_email_verified(admin.id)
     return _render(
         request,
         "admin_panel.html",
         {
             "user": admin,
             "nav_active": "panel",
-            "admin_email": admin_email,
+            "user_email": admin_email,
+            "email_verified": email_verified,
             "smtp_configured": notify.smtp_configured(),
             "error": err,
             "success": ok,
-            "user_mode_choices": db.regular_user_mode_choices(lang),
+            "tiktok_oauth_configured": tiktok_oauth.oauth_configured(),
+            "tiktok_linked_accounts": db.list_tiktok_accounts_for_user(admin),
+            "panel_account_platforms": _build_panel_account_platforms(admin, lang, request),
+            "user_mode_choices": [
+                c
+                for c in db.regular_user_mode_choices(lang)
+                if not (db.user_is_tiktok_mode(admin) and c["id"] == "admin")
+            ],
             "user_mode_labels": db.user_mode_labels_for_lang(lang),
             "tiktok_config_choices": db.list_team_server_account_choices(lang=lang),
             "team_account_placeholder": i18n.t("team.link_account_placeholder", lang),
@@ -1230,7 +2581,7 @@ def admin_panel(request: Request):
 @app.get("/admin/servidores", response_class=HTMLResponse, name="admin_servidores")
 def admin_servidores(request: Request):
     try:
-        admin = require_admin_privileges(request)
+        admin = require_server_admin(request)
     except PermissionError:
         return _admin_privileges_redirect_login()
     err = request.session.pop("tiktok_error", None)
@@ -1279,22 +2630,22 @@ def admin_servidores(request: Request):
             "server_accounts": db.list_server_accounts(lang),
             "oauth_configured": tiktok_oauth.oauth_configured(),
             "oauth_scopes": tiktok_oauth.oauth_scopes(),
-            "tiktok_redirect_uri": tiktok_oauth.redirect_uri(),
+            "tiktok_redirect_uri": tiktok_oauth.redirect_uri(request),
             "youtube_oauth_configured": youtube_oauth.oauth_configured(),
             "youtube_oauth_scopes": youtube_oauth.oauth_scopes(),
-            "youtube_redirect_uri": youtube_oauth.redirect_uri(),
+            "youtube_redirect_uri": youtube_oauth.redirect_uri(request),
             "instagram_oauth_configured": instagram_oauth.oauth_configured(),
-            "instagram_redirect_uri": instagram_oauth.redirect_uri(),
+            "instagram_redirect_uri": instagram_oauth.redirect_uri(request),
             "facebook_oauth_configured": facebook_oauth.oauth_configured(),
-            "facebook_redirect_uri": facebook_oauth.redirect_uri(),
+            "facebook_redirect_uri": facebook_oauth.redirect_uri(request),
             "x_oauth_configured": x_oauth.oauth_configured(),
-            "x_redirect_uri": x_oauth.redirect_uri(),
+            "x_redirect_uri": x_oauth.redirect_uri(request),
             "dailymotion_oauth_configured": dailymotion_oauth.oauth_configured(),
-            "dailymotion_redirect_uri": dailymotion_oauth.redirect_uri(),
+            "dailymotion_redirect_uri": dailymotion_oauth.redirect_uri(request),
             "bilibili_oauth_configured": bilibili_oauth.oauth_configured(),
-            "bilibili_redirect_uri": bilibili_oauth.redirect_uri(),
+            "bilibili_redirect_uri": bilibili_oauth.redirect_uri(request),
             "snapchat_oauth_configured": snapchat_oauth.oauth_configured(),
-            "snapchat_redirect_uri": snapchat_oauth.redirect_uri(),
+            "snapchat_redirect_uri": snapchat_oauth.redirect_uri(request),
             "rumble_token_set": rumble_token_set,
             "rumble_channel": rumble_channel,
             "error": err,
@@ -1306,7 +2657,7 @@ def admin_servidores(request: Request):
 @app.get("/admin/api-documento", response_class=HTMLResponse, name="admin_api_documento")
 def admin_api_documento(request: Request):
     try:
-        admin = require_admin_privileges(request)
+        admin = require_server_admin(request)
     except PermissionError:
         return _admin_privileges_redirect_login()
     lang = i18n.resolve_lang(request)
@@ -1321,10 +2672,28 @@ def admin_api_documento(request: Request):
     )
 
 
+@app.get("/admin/condiciones-servidores", response_class=HTMLResponse, name="admin_server_conditions")
+def admin_server_conditions(request: Request):
+    try:
+        admin = require_server_admin(request)
+    except PermissionError:
+        return _admin_privileges_redirect_login()
+    lang = i18n.resolve_lang(request)
+    return _render(
+        request,
+        "admin_condiciones_servidores.html",
+        {
+            "user": admin,
+            "nav_active": "server_conditions",
+            "server_conditions": platforms.server_conditions_rows(lang),
+        },
+    )
+
+
 @app.get("/admin/extractor", response_class=HTMLResponse, name="admin_extractor")
 def admin_extractor_page(request: Request):
     try:
-        admin = require_admin_privileges(request)
+        admin = require_server_admin(request)
     except PermissionError:
         return _admin_privileges_redirect_login()
     lang = i18n.resolve_lang(request)
@@ -1343,6 +2712,67 @@ def admin_extractor_page(request: Request):
                 "rest_min": extractor.MIN_REST_SECONDS,
                 "rest_max": extractor.MAX_REST_SECONDS,
             },
+        },
+    )
+
+
+@app.get("/admin/proxys", response_class=HTMLResponse, name="admin_proxys")
+def admin_proxys_page(request: Request):
+    try:
+        admin = require_server_admin(request)
+    except PermissionError:
+        return _admin_privileges_redirect_login()
+    return _render(
+        request,
+        "admin_proxys.html",
+        {
+            "user": admin,
+            "nav_active": "proxys",
+        },
+    )
+
+
+@app.get("/admin/membresias", response_class=HTMLResponse, name="admin_membresias")
+def admin_membresias_page(request: Request):
+    try:
+        user = require_user(request)
+    except PermissionError:
+        return RedirectResponse(url="/login?next=/admin/membresias", status_code=303)
+    lang = i18n.resolve_lang(request)
+    current = (user.membership_plan or "").strip().lower()
+    plans = [_plan_api_item(p, lang) for p in membership.PLANS]
+    return _render(
+        request,
+        "admin_membresias.html",
+        {
+            "user": user,
+            "nav_active": "membresias",
+            "plans": plans,
+            "current_plan": current,
+            "wallet_balance_usd": int(getattr(user, "wallet_balance_usd", 0) or 0),
+            "unused_credit_usd": membership.unused_plan_credit_usd(
+                current, db.membership_started_at_for(user)
+            ),
+            "invited": db.user_was_invited(user.id),
+            "can_manage_payments": db.user_can_access_servers(user),
+        },
+    )
+
+
+@app.get("/admin/pagos", response_class=HTMLResponse, name="admin_pagos")
+def admin_pagos_page(request: Request):
+    try:
+        user = require_user(request)
+    except PermissionError:
+        return RedirectResponse(url="/login?next=/admin/pagos", status_code=303)
+    return _render(
+        request,
+        "admin_pagos.html",
+        {
+            "user": user,
+            "nav_active": "pagos",
+            "can_manage_payments": db.user_can_access_servers(user),
+            "wallet_balance_usd": int(getattr(user, "wallet_balance_usd", 0) or 0),
         },
     )
 
@@ -1443,7 +2873,7 @@ def _extractor_job_public(job: dict, lang: str) -> dict:
 
 @app.get("/admin/api/extractor/scan")
 def api_extractor_scan(request: Request, platform: str = "", account: str = ""):
-    guard = _require_admin_json(request)
+    guard = _require_server_admin_json(request)
     if guard:
         return guard
     user = _session_user(request)
@@ -1495,7 +2925,7 @@ def api_extractor_scan(request: Request, platform: str = "", account: str = ""):
 
 @app.get("/admin/api/extractor/jobs")
 def api_extractor_jobs(request: Request):
-    guard = _require_admin_json(request)
+    guard = _require_server_admin_json(request)
     if guard:
         return guard
     lang = i18n.resolve_lang(request)
@@ -1505,7 +2935,7 @@ def api_extractor_jobs(request: Request):
 
 @app.post("/admin/api/extractor/jobs")
 def api_extractor_create_job(request: Request, body: ExtractorJobBody):
-    guard = _require_admin_json(request)
+    guard = _require_server_admin_json(request)
     if guard:
         return guard
     user = _session_user(request)
@@ -1633,7 +3063,7 @@ def api_extractor_create_job(request: Request, body: ExtractorJobBody):
 
 @app.post("/admin/api/extractor/jobs/{job_id}/pause")
 def api_extractor_pause_job(request: Request, job_id: str):
-    guard = _require_admin_json(request)
+    guard = _require_server_admin_json(request)
     if guard:
         return guard
     lang = i18n.resolve_lang(request)
@@ -1651,7 +3081,7 @@ def api_extractor_pause_job(request: Request, job_id: str):
 
 @app.post("/admin/api/extractor/jobs/{job_id}/resume")
 def api_extractor_resume_job(request: Request, job_id: str):
-    guard = _require_admin_json(request)
+    guard = _require_server_admin_json(request)
     if guard:
         return guard
     lang = i18n.resolve_lang(request)
@@ -1682,7 +3112,7 @@ def api_extractor_resume_job(request: Request, job_id: str):
 
 @app.post("/admin/api/extractor/jobs/{job_id}/targets/{platform_id}/pause")
 def api_extractor_pause_target(request: Request, job_id: str, platform_id: str):
-    guard = _require_admin_json(request)
+    guard = _require_server_admin_json(request)
     if guard:
         return guard
     lang = i18n.resolve_lang(request)
@@ -1694,7 +3124,7 @@ def api_extractor_pause_target(request: Request, job_id: str, platform_id: str):
 
 @app.post("/admin/api/extractor/jobs/{job_id}/targets/{platform_id}/resume")
 def api_extractor_resume_target(request: Request, job_id: str, platform_id: str):
-    guard = _require_admin_json(request)
+    guard = _require_server_admin_json(request)
     if guard:
         return guard
     lang = i18n.resolve_lang(request)
@@ -1706,7 +3136,7 @@ def api_extractor_resume_target(request: Request, job_id: str, platform_id: str)
 
 @app.delete("/admin/api/extractor/jobs/{job_id}")
 def api_extractor_delete_job(request: Request, job_id: str):
-    guard = _require_admin_json(request)
+    guard = _require_server_admin_json(request)
     if guard:
         return guard
     if not db.delete_extractor_job(job_id):
@@ -1720,16 +3150,87 @@ def admin_panel_save_email(
     email: Annotated[str, Form()],
 ):
     try:
-        require_admin_privileges(request)
+        user = require_admin_privileges(request)
     except PermissionError:
         return _panel_redirect_login()
     addr = (email or "").strip()
     if not _valid_email(addr):
         request.session["panel_error"] = _msg(request, "panel.flash.invalid_email")
         return RedirectResponse(url=request.url_for("admin_panel"), status_code=303)
-    db.set_app_setting("admin_email", addr)
-    request.session["panel_ok"] = _msg(request, "panel.flash.email_saved")
+    try:
+        token = db.set_user_notification_email(user.id, addr)
+    except ValueError as e:
+        msg = str(e)
+        if "already in use" in msg.lower():
+            request.session["panel_error"] = _msg(request, "panel.flash.email_taken")
+        else:
+            request.session["panel_error"] = _msg(request, "panel.flash.invalid_email")
+        return RedirectResponse(url=request.url_for("admin_panel"), status_code=303)
+    if not token:
+        request.session["panel_ok"] = _msg(request, "panel.flash.email_already_verified")
+        return RedirectResponse(url=request.url_for("admin_panel"), status_code=303)
+    if not notify.smtp_configured():
+        request.session["panel_error"] = _msg(request, "panel.flash.no_smtp")
+        return RedirectResponse(url=request.url_for("admin_panel"), status_code=303)
+    verify_url = _email_verify_url(request, token)
+    lang = i18n.resolve_lang(request)
+    if not notify.send_email_verification_email(
+        to=addr, verify_url=verify_url, lang=lang
+    ):
+        request.session["panel_error"] = _msg(request, "panel.flash.mail_fail")
+        return RedirectResponse(url=request.url_for("admin_panel"), status_code=303)
+    request.session["panel_ok"] = _msg(request, "panel.flash.email_saved", email=addr)
     return RedirectResponse(url=request.url_for("admin_panel"), status_code=303)
+
+
+@app.post("/admin/panel/email-resend", name="admin_panel_resend_email")
+def admin_panel_resend_email(request: Request):
+    try:
+        user = require_admin_privileges(request)
+    except PermissionError:
+        return _panel_redirect_login()
+    lang = i18n.resolve_lang(request)
+    if db.is_user_notification_email_verified(user.id):
+        request.session["panel_ok"] = _msg(request, "panel.flash.email_already_verified")
+        return RedirectResponse(url=request.url_for("admin_panel"), status_code=303)
+    token = db.resend_notification_email_verification(user.id)
+    if not token:
+        request.session["panel_error"] = _msg(request, "panel.flash.no_pending_email")
+        return RedirectResponse(url=request.url_for("admin_panel"), status_code=303)
+    if not notify.smtp_configured():
+        request.session["panel_error"] = _msg(request, "panel.flash.no_smtp")
+        return RedirectResponse(url=request.url_for("admin_panel"), status_code=303)
+    addr = db.get_user_panel_email(user.id)
+    verify_url = _email_verify_url(request, token)
+    if not notify.send_email_verification_email(
+        to=addr, verify_url=verify_url, lang=lang
+    ):
+        request.session["panel_error"] = _msg(request, "panel.flash.mail_fail")
+        return RedirectResponse(url=request.url_for("admin_panel"), status_code=303)
+    request.session["panel_ok"] = _msg(request, "panel.flash.email_saved", email=addr)
+    return RedirectResponse(url=request.url_for("admin_panel"), status_code=303)
+
+
+@app.get("/verificar-correo", response_class=HTMLResponse, name="verify_email")
+@app.get("/email/verify", response_class=HTMLResponse, name="verify_email_en")
+def verify_email_get(request: Request):
+    token = (request.query_params.get("token") or "").strip()
+    lang = i18n.resolve_lang(request)
+    uid = db.confirm_notification_email(token)
+    if not uid:
+        request.session["panel_error"] = i18n.t("panel.flash.verification_invalid", lang)
+        session_user = _session_user(request)
+        if session_user:
+            return RedirectResponse(url="/admin/panel", status_code=303)
+        request.session["login_ok"] = i18n.t("panel.flash.verification_invalid", lang)
+        return RedirectResponse(url="/login", status_code=303)
+    msg = i18n.t("panel.flash.email_verified", lang)
+    session_user = _session_user(request)
+    if session_user and session_user.id == uid:
+        request.session["panel_ok"] = msg
+        return RedirectResponse(url="/admin/panel", status_code=303)
+    request.session["login_ok"] = msg
+    return RedirectResponse(url="/login", status_code=303)
 
 
 @app.post("/admin/panel/password-reset", name="admin_panel_password_reset")
@@ -1739,7 +3240,10 @@ def admin_panel_password_reset(request: Request):
     except PermissionError:
         return _panel_redirect_login()
     lang = i18n.resolve_lang(request)
-    to = site_config.notification_email()
+    if not db.is_user_notification_email_verified(admin.id):
+        request.session["panel_error"] = _msg(request, "panel.flash.email_must_confirm")
+        return RedirectResponse(url=request.url_for("admin_panel"), status_code=303)
+    to = db.get_user_notification_email(admin.id)
     if not to:
         request.session["panel_error"] = _msg(request, "panel.flash.no_email")
         return RedirectResponse(url=request.url_for("admin_panel"), status_code=303)
@@ -1830,7 +3334,7 @@ def admin_panel_reset_post(
             status_code=400,
         )
     try:
-        db.set_admin_password(uid, pw)
+        db.set_user_password(uid, pw)
     except ValueError:
         request.session["panel_reset_error"] = i18n.t("panel.reset.fail", lang)
         return RedirectResponse(
@@ -1848,6 +3352,171 @@ def admin_tiktokers_redirect():
     return RedirectResponse(url="/admin/servidores", status_code=301)
 
 
+def _tiktok_oauth_return_path(user: db.User) -> str:
+    return _oauth_return_path(user)
+
+
+def _oauth_return_path(user: db.User) -> str:
+    if db.user_can_access_servers(user):
+        return "/admin/servidores"
+    return "/admin/panel"
+
+
+def _store_oauth_redirect(request: Request, session_key: str, oauth_mod) -> str:
+    ru = oauth_mod.redirect_uri(request)
+    request.session[session_key] = ru
+    return ru
+
+
+def _pop_oauth_redirect(request: Request, session_key: str, oauth_mod) -> str:
+    stored = str(request.session.pop(session_key, None) or "").strip()
+    return stored or oauth_mod.redirect_uri(request)
+
+
+def _oauth_redirect(request: Request, user: db.User) -> RedirectResponse:
+    return RedirectResponse(url=_oauth_return_path(user), status_code=303)
+
+
+PANEL_API_PLATFORM_IDS = frozenset({"dailymotion", "facebook", "x", "youtube", "instagram"})
+TIKTOK_USER_PANEL_PLATFORM_ORDER = ("youtube", "dailymotion", "facebook", "x", "instagram")
+
+_PANEL_OAUTH_REDIRECT_MODS = {
+    "facebook": facebook_oauth,
+    "x": x_oauth,
+    "dailymotion": dailymotion_oauth,
+    "youtube": youtube_oauth,
+    "instagram": instagram_oauth,
+}
+
+_PANEL_OAUTH_REDIRECT_HINT_KEYS: dict[str, str] = {
+    "facebook": "servers.facebook_redirect_hint",
+    "x": "servers.x_redirect_hint",
+    "dailymotion": "servers.dailymotion_redirect_hint",
+    "youtube": "servers.youtube_redirect_hint",
+    "instagram": "servers.instagram_redirect_hint",
+}
+
+
+def _tiktok_user_panel_platforms(lang: str) -> list[dict[str, Any]]:
+    """Las 5 plataformas de Panel → Cuenta para usuarios modo TikTok."""
+    by_id = {p["id"]: dict(p) for p in platforms.platform_list(lang)}
+    out: list[dict[str, Any]] = []
+    for pid in TIKTOK_USER_PANEL_PLATFORM_ORDER:
+        item = by_id.get(pid)
+        if not item:
+            continue
+        mod = _PANEL_OAUTH_REDIRECT_MODS.get(pid)
+        item["configured"] = bool(mod and mod.oauth_configured())
+        out.append(item)
+    return out
+
+
+def _tiktok_user_ready_platform_ids() -> set[str]:
+    return {p["id"] for p in _tiktok_user_panel_platforms("es") if p.get("configured")}
+
+
+def _require_platform_credentials_json(
+    request: Request, platform_id: str
+) -> JSONResponse | None:
+    if platform_id in PANEL_API_PLATFORM_IDS:
+        return _require_admin_json(request)
+    return _require_server_admin_json(request)
+
+
+def _build_panel_account_platforms(
+    user: db.User, lang: str, request: Request | None = None
+) -> list[dict[str, Any]]:
+    if not db.user_can_manage_panel_accounts(user):
+        return []
+    names = {p["id"]: p["name"] for p in platforms.platform_list(lang)}
+    meta_by_id = {p["id"]: p for p in platforms.platform_list(lang)}
+    defs: tuple[tuple[str, Any, str, str, str, str, str], ...] = (
+        (
+            "youtube",
+            youtube_oauth,
+            "servers.connect_with_youtube",
+            "servers.youtube_oauth_missing",
+            "btn-youtube",
+            "▶",
+            "oauth",
+        ),
+        (
+            "dailymotion",
+            dailymotion_oauth,
+            "servers.connect_with_dailymotion",
+            "servers.dailymotion_oauth_missing",
+            "btn-dailymotion",
+            "▶",
+            "oauth",
+        ),
+        (
+            "facebook",
+            facebook_oauth,
+            "servers.connect_with_facebook",
+            "servers.facebook_oauth_missing",
+            "btn-facebook",
+            "f",
+            "oauth",
+        ),
+        (
+            "x",
+            x_oauth,
+            "servers.connect_with_x",
+            "servers.x_oauth_missing",
+            "btn-x",
+            "𝕏",
+            "oauth",
+        ),
+        (
+            "instagram",
+            instagram_oauth,
+            "servers.connect_with_instagram",
+            "servers.instagram_oauth_missing",
+            "btn-instagram",
+            "◎",
+            "oauth",
+        ),
+    )
+    out: list[dict[str, Any]] = []
+    for pid, oauth_mod, connect_key, missing_key, btn_class, icon, kind in defs:
+        configured = oauth_mod.oauth_configured()
+        accounts = db.list_oauth_accounts_for_user(user, pid)
+        display_name = i18n.t(f"panel.platform.{pid}", lang)
+        if display_name == f"panel.platform.{pid}":
+            display_name = names.get(pid, pid)
+        platform_meta = meta_by_id.get(pid, {})
+        creds = db.get_platform_credentials_public(pid)
+        item: dict[str, Any] = {
+            "id": pid,
+            "name": display_name,
+            "connect_url": f"/oauth/{pid}/connect",
+            "connect_label": i18n.t(connect_key, lang),
+            "missing_label": i18n.t(missing_key, lang),
+            "configured": configured,
+            "btn_class": btn_class,
+            "icon": icon,
+            "kind": kind,
+            "accounts": accounts,
+            "api_modal": pid in PANEL_API_PLATFORM_IDS,
+        }
+        if pid in PANEL_API_PLATFORM_IDS:
+            item["creds"] = creds
+            item["label_client_id"] = platform_meta.get("label_client_id") or ""
+            item["label_client_secret"] = platform_meta.get("label_client_secret") or ""
+            redirect_mod = _PANEL_OAUTH_REDIRECT_MODS.get(pid)
+            item["redirect_uri"] = (
+                redirect_mod.redirect_uri(request) if redirect_mod else ""
+            )
+            hint_key = _PANEL_OAUTH_REDIRECT_HINT_KEYS.get(pid, "")
+            item["redirect_hint"] = i18n.t(hint_key, lang) if hint_key else ""
+        out.append(item)
+    return out
+
+
+def _tiktok_oauth_redirect(request: Request, user: db.User) -> RedirectResponse:
+    return _oauth_redirect(request, user)
+
+
 @app.get("/oauth/tiktok/connect", name="tiktok_oauth_connect")
 def tiktok_oauth_connect(request: Request):
     try:
@@ -1855,39 +3524,44 @@ def tiktok_oauth_connect(request: Request):
     except PermissionError:
         return _admin_privileges_redirect_login()
     if not tiktok_oauth.oauth_configured():
-        request.session["tiktok_error"] = (
-            "Faltan las credenciales de TikTok. Pon Client Key y Secret en Servidores."
+        request.session["tiktok_error"] = i18n.t(
+            "panel.tiktok_oauth_missing", i18n.resolve_lang(request)
         )
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _tiktok_oauth_redirect(request, admin)
     state = tiktok_oauth.new_csrf_state()
     request.session["tiktok_oauth_state"] = state
     request.session["tiktok_oauth_user_id"] = admin.id
-    url = tiktok_oauth.build_authorize_url(state=state)
+    ru = _store_oauth_redirect(request, "tiktok_oauth_redirect_uri", tiktok_oauth)
+    url = tiktok_oauth.build_authorize_url(state=state, redirect_uri_value=ru)
     return RedirectResponse(url=url, status_code=303)
 
 
 @app.get("/oauth/tiktok/callback", name="tiktok_oauth_callback")
 def tiktok_oauth_callback(request: Request):
     try:
-        require_admin_privileges(request)
+        admin = require_admin_privileges(request)
     except PermissionError:
         return _admin_privileges_redirect_login()
     saved_state = request.session.pop("tiktok_oauth_state", None)
-    linked_by = request.session.pop("tiktok_oauth_user_id", None)
+    linked_by = request.session.pop("tiktok_oauth_user_id", None) or admin.id
+    nxt = _tiktok_oauth_return_path(admin)
     err_param = request.query_params.get("error")
     if err_param:
         request.session["tiktok_error"] = f"TikTok authorization denied: {err_param}"
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return RedirectResponse(url=nxt, status_code=303)
     state = (request.query_params.get("state") or "").strip()
     code = (request.query_params.get("code") or "").strip()
     if not saved_state or state != saved_state:
         request.session["tiktok_error"] = "Invalid OAuth state. Please try again."
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return RedirectResponse(url=nxt, status_code=303)
     if not code:
         request.session["tiktok_error"] = "TikTok did not return an authorization code."
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return RedirectResponse(url=nxt, status_code=303)
     try:
-        token_data = tiktok_oauth.exchange_code_for_tokens(code)
+        ru = _pop_oauth_redirect(request, "tiktok_oauth_redirect_uri", tiktok_oauth)
+        token_data = tiktok_oauth.exchange_code_for_tokens(
+            code, redirect_uri_value=ru
+        )
         access = token_data.get("access_token") or ""
         refresh = token_data.get("refresh_token")
         expires_in = token_data.get("expires_in")
@@ -1895,7 +3569,7 @@ def tiktok_oauth_callback(request: Request):
             raise ValueError("No access token in TikTok response.")
         profile = tiktok_oauth.fetch_user_profile(access)
         open_id = profile.get("open_id") or token_data.get("open_id") or ""
-        db.save_tiktok_oauth_connection(
+        cid = db.save_tiktok_oauth_connection(
             open_id=str(open_id),
             tiktok_username=profile.get("username"),
             display_name=profile.get("display_name"),
@@ -1905,21 +3579,35 @@ def tiktok_oauth_callback(request: Request):
             scopes=tiktok_oauth.oauth_scopes(),
             client_key=tiktok_oauth.client_key(),
             client_secret=tiktok_oauth.client_secret(),
-            redirect_uri=tiktok_oauth.redirect_uri(),
+            redirect_uri=ru,
             linked_by_user_id=str(linked_by) if linked_by else None,
         )
+        db.attach_tiktok_config_to_user(cid, str(linked_by))
         uname = profile.get("username") or "account"
         request.session["tiktok_ok"] = f"Connected @{uname} successfully."
     except (ValueError, urllib.error.URLError, OSError) as e:
         request.session["tiktok_error"] = str(e)
-    return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+    return RedirectResponse(url=nxt, status_code=303)
 
 
 @app.delete("/admin/api/tiktokers/{config_id}")
 def api_tiktok_delete(request: Request, config_id: str):
-    deny = _require_admin_json(request)
-    if deny:
-        return deny
+    try:
+        me = require_admin_privileges(request)
+    except PermissionError as e:
+        if str(e) == "login_required":
+            return JSONResponse(
+                {"ok": False, "error": "Sign in as an administrator."},
+                status_code=401,
+            )
+        return JSONResponse({"ok": False, "error": "Permission denied."}, status_code=403)
+    if not db.user_can_manage_tiktok_config(me, config_id):
+        return JSONResponse({"ok": False, "error": "Permission denied."}, status_code=403)
+    row = db.get_tiktok_oauth_row(config_id)
+    if row:
+        tok = (row.get("access_token") or "").strip()
+        if tok:
+            tiktok_oauth.revoke_access_token(tok)
     try:
         db.delete_tiktok_api_config(config_id)
     except ValueError as e:
@@ -1936,18 +3624,19 @@ def youtube_oauth_connect(request: Request):
     lang = i18n.resolve_lang(request)
     if not youtube_oauth.oauth_configured():
         request.session["tiktok_error"] = i18n.t("servers.youtube_oauth_missing", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     state = youtube_oauth.new_csrf_state()
     request.session["youtube_oauth_state"] = state
     request.session["youtube_oauth_user_id"] = admin.id
-    url = youtube_oauth.build_authorize_url(state=state)
+    ru = _store_oauth_redirect(request, "youtube_oauth_redirect_uri", youtube_oauth)
+    url = youtube_oauth.build_authorize_url(state=state, redirect_uri_value=ru)
     return RedirectResponse(url=url, status_code=303)
 
 
 @app.get("/oauth/youtube/callback", name="youtube_oauth_callback")
 def youtube_oauth_callback(request: Request):
     try:
-        require_admin_privileges(request)
+        admin = require_admin_privileges(request)
     except PermissionError:
         return _admin_privileges_redirect_login()
     lang = i18n.resolve_lang(request)
@@ -1957,17 +3646,18 @@ def youtube_oauth_callback(request: Request):
     if err_param:
         desc = request.query_params.get("error_description") or err_param
         request.session["tiktok_error"] = f"YouTube: {desc}"
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     state = (request.query_params.get("state") or "").strip()
     code = (request.query_params.get("code") or "").strip()
     if not saved_state or state != saved_state:
         request.session["tiktok_error"] = i18n.t("servers.oauth_state_invalid", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     if not code:
         request.session["tiktok_error"] = i18n.t("servers.youtube_no_code", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     try:
-        token_data = youtube_oauth.exchange_code_for_tokens(code)
+        ru = _pop_oauth_redirect(request, "youtube_oauth_redirect_uri", youtube_oauth)
+        token_data = youtube_oauth.exchange_code_for_tokens(code, redirect_uri_value=ru)
         access = token_data.get("access_token") or ""
         refresh = token_data.get("refresh_token")
         expires_in = token_data.get("expires_in")
@@ -1988,14 +3678,14 @@ def youtube_oauth_callback(request: Request):
             scopes=youtube_oauth.oauth_scopes(),
             client_id=youtube_oauth.client_id(),
             client_secret=youtube_oauth.client_secret(),
-            redirect_uri=youtube_oauth.redirect_uri(),
+            redirect_uri=ru,
             linked_by_user_id=str(linked_by) if linked_by else None,
         )
         label = profile.get("display_name") or profile.get("username") or "YouTube"
         request.session["tiktok_ok"] = i18n.t("servers.youtube_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
         request.session["tiktok_error"] = str(e)
-    return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+    return _oauth_redirect(request, admin)
 
 
 @app.get("/oauth/instagram/connect", name="instagram_oauth_connect")
@@ -2007,18 +3697,19 @@ def instagram_oauth_connect(request: Request):
     lang = i18n.resolve_lang(request)
     if not instagram_oauth.oauth_configured():
         request.session["tiktok_error"] = i18n.t("servers.instagram_oauth_missing", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     state = instagram_oauth.new_csrf_state()
     request.session["instagram_oauth_state"] = state
     request.session["instagram_oauth_user_id"] = admin.id
-    url = instagram_oauth.build_authorize_url(state=state)
+    ru = _store_oauth_redirect(request, "instagram_oauth_redirect_uri", instagram_oauth)
+    url = instagram_oauth.build_authorize_url(state=state, redirect_uri_value=ru)
     return RedirectResponse(url=url, status_code=303)
 
 
 @app.get("/oauth/instagram/callback", name="instagram_oauth_callback")
 def instagram_oauth_callback(request: Request):
     try:
-        require_admin_privileges(request)
+        admin = require_admin_privileges(request)
     except PermissionError:
         return _admin_privileges_redirect_login()
     lang = i18n.resolve_lang(request)
@@ -2028,17 +3719,18 @@ def instagram_oauth_callback(request: Request):
     if err_param:
         desc = request.query_params.get("error_description") or err_param
         request.session["tiktok_error"] = f"Instagram: {desc}"
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     state = (request.query_params.get("state") or "").strip()
     code = (request.query_params.get("code") or "").strip()
     if not saved_state or state != saved_state:
         request.session["tiktok_error"] = i18n.t("servers.oauth_state_invalid", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     if not code:
         request.session["tiktok_error"] = i18n.t("servers.instagram_no_code", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     try:
-        token_data = instagram_oauth.exchange_code_for_tokens(code)
+        ru = _pop_oauth_redirect(request, "instagram_oauth_redirect_uri", instagram_oauth)
+        token_data = instagram_oauth.exchange_code_for_tokens(code, redirect_uri_value=ru)
         access = str(token_data.get("access_token") or "").strip()
         if not access:
             raise ValueError("No access token in Instagram response.")
@@ -2066,14 +3758,14 @@ def instagram_oauth_callback(request: Request):
             scopes=instagram_oauth.oauth_scopes(),
             client_id=instagram_oauth.client_id(),
             client_secret=instagram_oauth.client_secret(),
-            redirect_uri=instagram_oauth.redirect_uri(),
+            redirect_uri=ru,
             linked_by_user_id=str(linked_by) if linked_by else None,
         )
         label = profile.get("username") or profile.get("display_name") or "Instagram"
         request.session["tiktok_ok"] = i18n.t("servers.instagram_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
         request.session["tiktok_error"] = str(e)
-    return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+    return _oauth_redirect(request, admin)
 
 
 @app.get("/oauth/facebook/connect", name="facebook_oauth_connect")
@@ -2085,18 +3777,19 @@ def facebook_oauth_connect(request: Request):
     lang = i18n.resolve_lang(request)
     if not facebook_oauth.oauth_configured():
         request.session["tiktok_error"] = i18n.t("servers.facebook_oauth_missing", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     state = facebook_oauth.new_csrf_state()
     request.session["facebook_oauth_state"] = state
     request.session["facebook_oauth_user_id"] = admin.id
-    url = facebook_oauth.build_authorize_url(state=state)
+    ru = _store_oauth_redirect(request, "facebook_oauth_redirect_uri", facebook_oauth)
+    url = facebook_oauth.build_authorize_url(state=state, redirect_uri_value=ru)
     return RedirectResponse(url=url, status_code=303)
 
 
 @app.get("/oauth/facebook/callback", name="facebook_oauth_callback")
 def facebook_oauth_callback(request: Request):
     try:
-        require_admin_privileges(request)
+        admin = require_admin_privileges(request)
     except PermissionError:
         return _admin_privileges_redirect_login()
     lang = i18n.resolve_lang(request)
@@ -2106,17 +3799,18 @@ def facebook_oauth_callback(request: Request):
     if err_param:
         desc = request.query_params.get("error_description") or err_param
         request.session["tiktok_error"] = f"Facebook: {desc}"
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     state = (request.query_params.get("state") or "").strip()
     code = (request.query_params.get("code") or "").strip()
     if not saved_state or state != saved_state:
         request.session["tiktok_error"] = i18n.t("servers.oauth_state_invalid", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     if not code:
         request.session["tiktok_error"] = i18n.t("servers.facebook_no_code", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     try:
-        token_data = facebook_oauth.exchange_code_for_tokens(code)
+        ru = _pop_oauth_redirect(request, "facebook_oauth_redirect_uri", facebook_oauth)
+        token_data = facebook_oauth.exchange_code_for_tokens(code, redirect_uri_value=ru)
         access = str(token_data.get("access_token") or "").strip()
         if not access:
             raise ValueError("No access token in Facebook response.")
@@ -2144,7 +3838,7 @@ def facebook_oauth_callback(request: Request):
                 scopes=facebook_oauth.oauth_scopes(),
                 client_id=facebook_oauth.client_id(),
                 client_secret=facebook_oauth.client_secret(),
-                redirect_uri=facebook_oauth.redirect_uri(),
+                redirect_uri=ru,
                 linked_by_user_id=str(linked_by) if linked_by else None,
             )
         request.session["tiktok_ok"] = i18n.t(
@@ -2152,7 +3846,7 @@ def facebook_oauth_callback(request: Request):
         )
     except (ValueError, urllib.error.URLError, OSError) as e:
         request.session["tiktok_error"] = str(e)
-    return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+    return _oauth_redirect(request, admin)
 
 
 @app.get("/oauth/x/connect", name="x_oauth_connect")
@@ -2164,20 +3858,23 @@ def x_oauth_connect(request: Request):
     lang = i18n.resolve_lang(request)
     if not x_oauth.oauth_configured():
         request.session["tiktok_error"] = i18n.t("servers.x_oauth_missing", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     state = x_oauth.new_csrf_state()
     verifier, challenge = x_oauth.pkce_pair()
     request.session["x_oauth_state"] = state
     request.session["x_oauth_verifier"] = verifier
     request.session["x_oauth_user_id"] = admin.id
-    url = x_oauth.build_authorize_url(state=state, code_challenge=challenge)
+    ru = _store_oauth_redirect(request, "x_oauth_redirect_uri", x_oauth)
+    url = x_oauth.build_authorize_url(
+        state=state, code_challenge=challenge, redirect_uri_value=ru
+    )
     return RedirectResponse(url=url, status_code=303)
 
 
 @app.get("/oauth/x/callback", name="x_oauth_callback")
 def x_oauth_callback(request: Request):
     try:
-        require_admin_privileges(request)
+        admin = require_admin_privileges(request)
     except PermissionError:
         return _admin_privileges_redirect_login()
     lang = i18n.resolve_lang(request)
@@ -2188,17 +3885,20 @@ def x_oauth_callback(request: Request):
     if err_param:
         desc = request.query_params.get("error_description") or err_param
         request.session["tiktok_error"] = f"X: {desc}"
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     state = (request.query_params.get("state") or "").strip()
     code = (request.query_params.get("code") or "").strip()
     if not saved_state or state != saved_state or not verifier:
         request.session["tiktok_error"] = i18n.t("servers.oauth_state_invalid", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     if not code:
         request.session["tiktok_error"] = i18n.t("servers.x_no_code", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     try:
-        token_data = x_oauth.exchange_code_for_tokens(code, code_verifier=str(verifier))
+        ru = _pop_oauth_redirect(request, "x_oauth_redirect_uri", x_oauth)
+        token_data = x_oauth.exchange_code_for_tokens(
+            code, code_verifier=str(verifier), redirect_uri_value=ru
+        )
         access = str(token_data.get("access_token") or "").strip()
         refresh = str(token_data.get("refresh_token") or "").strip() or None
         expires_in = token_data.get("expires_in")
@@ -2219,14 +3919,14 @@ def x_oauth_callback(request: Request):
             scopes=x_oauth.oauth_scopes(),
             client_id=x_oauth.client_id(),
             client_secret=x_oauth.client_secret(),
-            redirect_uri=x_oauth.redirect_uri(),
+            redirect_uri=ru,
             linked_by_user_id=str(linked_by) if linked_by else None,
         )
         label = profile.get("username") or profile.get("display_name") or "X"
         request.session["tiktok_ok"] = i18n.t("servers.x_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
         request.session["tiktok_error"] = str(e)
-    return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+    return _oauth_redirect(request, admin)
 
 
 @app.get("/oauth/dailymotion/connect", name="dailymotion_oauth_connect")
@@ -2238,18 +3938,19 @@ def dailymotion_oauth_connect(request: Request):
     lang = i18n.resolve_lang(request)
     if not dailymotion_oauth.oauth_configured():
         request.session["tiktok_error"] = i18n.t("servers.dailymotion_oauth_missing", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     state = dailymotion_oauth.new_csrf_state()
     request.session["dailymotion_oauth_state"] = state
     request.session["dailymotion_oauth_user_id"] = admin.id
-    url = dailymotion_oauth.build_authorize_url(state=state)
+    ru = _store_oauth_redirect(request, "dailymotion_oauth_redirect_uri", dailymotion_oauth)
+    url = dailymotion_oauth.build_authorize_url(state=state, redirect_uri_value=ru)
     return RedirectResponse(url=url, status_code=303)
 
 
 @app.get("/oauth/dailymotion/callback", name="dailymotion_oauth_callback")
 def dailymotion_oauth_callback(request: Request):
     try:
-        require_admin_privileges(request)
+        admin = require_admin_privileges(request)
     except PermissionError:
         return _admin_privileges_redirect_login()
     lang = i18n.resolve_lang(request)
@@ -2259,17 +3960,22 @@ def dailymotion_oauth_callback(request: Request):
     if err_param:
         desc = request.query_params.get("error_description") or err_param
         request.session["tiktok_error"] = f"Dailymotion: {desc}"
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     state = (request.query_params.get("state") or "").strip()
     code = (request.query_params.get("code") or "").strip()
     if not saved_state or state != saved_state:
         request.session["tiktok_error"] = i18n.t("servers.oauth_state_invalid", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     if not code:
         request.session["tiktok_error"] = i18n.t("servers.dailymotion_no_code", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     try:
-        token_data = dailymotion_oauth.exchange_code_for_tokens(code)
+        ru = _pop_oauth_redirect(
+            request, "dailymotion_oauth_redirect_uri", dailymotion_oauth
+        )
+        token_data = dailymotion_oauth.exchange_code_for_tokens(
+            code, redirect_uri_value=ru
+        )
         access = str(token_data.get("access_token") or "").strip()
         refresh = str(token_data.get("refresh_token") or "").strip() or None
         expires_in = token_data.get("expires_in")
@@ -2290,14 +3996,14 @@ def dailymotion_oauth_callback(request: Request):
             scopes=dailymotion_oauth.oauth_scopes(),
             client_id=dailymotion_oauth.client_id(),
             client_secret=dailymotion_oauth.client_secret(),
-            redirect_uri=dailymotion_oauth.redirect_uri(),
+            redirect_uri=ru,
             linked_by_user_id=str(linked_by) if linked_by else None,
         )
         label = profile.get("username") or profile.get("display_name") or "Dailymotion"
         request.session["tiktok_ok"] = i18n.t("servers.dailymotion_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
         request.session["tiktok_error"] = str(e)
-    return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+    return _oauth_redirect(request, admin)
 
 
 @app.get("/oauth/bilibili/connect", name="bilibili_oauth_connect")
@@ -2309,18 +4015,19 @@ def bilibili_oauth_connect(request: Request):
     lang = i18n.resolve_lang(request)
     if not bilibili_oauth.oauth_configured():
         request.session["tiktok_error"] = i18n.t("servers.bilibili_oauth_missing", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     state = bilibili_oauth.new_csrf_state()
     request.session["bilibili_oauth_state"] = state
     request.session["bilibili_oauth_user_id"] = admin.id
-    url = bilibili_oauth.build_authorize_url(state=state)
+    ru = _store_oauth_redirect(request, "bilibili_oauth_redirect_uri", bilibili_oauth)
+    url = bilibili_oauth.build_authorize_url(state=state, redirect_uri_value=ru)
     return RedirectResponse(url=url, status_code=303)
 
 
 @app.get("/oauth/bilibili/callback", name="bilibili_oauth_callback")
 def bilibili_oauth_callback(request: Request):
     try:
-        require_admin_privileges(request)
+        admin = require_admin_privileges(request)
     except PermissionError:
         return _admin_privileges_redirect_login()
     lang = i18n.resolve_lang(request)
@@ -2330,16 +4037,17 @@ def bilibili_oauth_callback(request: Request):
     if err_param:
         desc = request.query_params.get("error_description") or err_param
         request.session["tiktok_error"] = f"Bilibili: {desc}"
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     state = (request.query_params.get("state") or "").strip()
     code = (request.query_params.get("code") or "").strip()
     if not saved_state or state != saved_state:
         request.session["tiktok_error"] = i18n.t("servers.oauth_state_invalid", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     if not code:
         request.session["tiktok_error"] = i18n.t("servers.bilibili_no_code", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     try:
+        ru = _pop_oauth_redirect(request, "bilibili_oauth_redirect_uri", bilibili_oauth)
         token_data = bilibili_oauth.exchange_code_for_tokens(code)
         access = str(token_data.get("access_token") or "").strip()
         refresh = str(token_data.get("refresh_token") or "").strip() or None
@@ -2365,14 +4073,14 @@ def bilibili_oauth_callback(request: Request):
             scopes=bilibili_oauth.oauth_scopes(),
             client_id=bilibili_oauth.client_id(),
             client_secret=bilibili_oauth.client_secret(),
-            redirect_uri=bilibili_oauth.redirect_uri(),
+            redirect_uri=ru,
             linked_by_user_id=str(linked_by) if linked_by else None,
         )
         label = profile.get("username") or profile.get("display_name") or "Bilibili"
         request.session["tiktok_ok"] = i18n.t("servers.bilibili_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
         request.session["tiktok_error"] = str(e)
-    return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+    return _oauth_redirect(request, admin)
 
 
 @app.get("/oauth/snapchat/connect", name="snapchat_oauth_connect")
@@ -2384,18 +4092,19 @@ def snapchat_oauth_connect(request: Request):
     lang = i18n.resolve_lang(request)
     if not snapchat_oauth.oauth_configured():
         request.session["tiktok_error"] = i18n.t("servers.snapchat_oauth_missing", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     state = snapchat_oauth.new_csrf_state()
     request.session["snapchat_oauth_state"] = state
     request.session["snapchat_oauth_user_id"] = admin.id
-    url = snapchat_oauth.build_authorize_url(state=state)
+    ru = _store_oauth_redirect(request, "snapchat_oauth_redirect_uri", snapchat_oauth)
+    url = snapchat_oauth.build_authorize_url(state=state, redirect_uri_value=ru)
     return RedirectResponse(url=url, status_code=303)
 
 
 @app.get("/oauth/snapchat/callback", name="snapchat_oauth_callback")
 def snapchat_oauth_callback(request: Request):
     try:
-        require_admin_privileges(request)
+        admin = require_admin_privileges(request)
     except PermissionError:
         return _admin_privileges_redirect_login()
     lang = i18n.resolve_lang(request)
@@ -2405,17 +4114,20 @@ def snapchat_oauth_callback(request: Request):
     if err_param:
         desc = request.query_params.get("error_description") or err_param
         request.session["tiktok_error"] = f"Snapchat: {desc}"
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     state = (request.query_params.get("state") or "").strip()
     code = (request.query_params.get("code") or "").strip()
     if not saved_state or state != saved_state:
         request.session["tiktok_error"] = i18n.t("servers.oauth_state_invalid", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     if not code:
         request.session["tiktok_error"] = i18n.t("servers.snapchat_no_code", lang)
-        return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+        return _oauth_redirect(request, admin)
     try:
-        token_data = snapchat_oauth.exchange_code_for_tokens(code)
+        ru = _pop_oauth_redirect(request, "snapchat_oauth_redirect_uri", snapchat_oauth)
+        token_data = snapchat_oauth.exchange_code_for_tokens(
+            code, redirect_uri_value=ru
+        )
         access = str(token_data.get("access_token") or "").strip()
         refresh = str(token_data.get("refresh_token") or "").strip() or None
         expires_in = token_data.get("expires_in")
@@ -2436,21 +4148,29 @@ def snapchat_oauth_callback(request: Request):
             scopes=snapchat_oauth.oauth_scopes(),
             client_id=snapchat_oauth.client_id(),
             client_secret=snapchat_oauth.client_secret(),
-            redirect_uri=snapchat_oauth.redirect_uri(),
+            redirect_uri=ru,
             linked_by_user_id=str(linked_by) if linked_by else None,
         )
         label = profile.get("username") or profile.get("display_name") or "Snapchat"
         request.session["tiktok_ok"] = i18n.t("servers.snapchat_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
         request.session["tiktok_error"] = str(e)
-    return RedirectResponse(url=request.url_for("admin_servidores"), status_code=303)
+    return _oauth_redirect(request, admin)
 
 
 @app.delete("/admin/api/oauth/{account_id}")
 def api_oauth_delete(request: Request, account_id: str):
-    deny = _require_admin_json(request)
-    if deny:
-        return deny
+    try:
+        me = require_admin_privileges(request)
+    except PermissionError as e:
+        if str(e) == "login_required":
+            return JSONResponse(
+                {"ok": False, "error": "Sign in required."},
+                status_code=401,
+            )
+        return JSONResponse({"ok": False, "error": "Permission denied."}, status_code=403)
+    if not db.user_can_manage_oauth_account(me, account_id):
+        return JSONResponse({"ok": False, "error": "Permission denied."}, status_code=403)
     try:
         db.delete_oauth_account(account_id)
     except ValueError as e:
@@ -2460,12 +4180,13 @@ def api_oauth_delete(request: Request, account_id: str):
 
 @app.post("/admin/api/platforms/{platform_id}/credentials")
 def api_save_platform_credentials(request: Request, platform_id: str, body: PlatformApiBody):
-    deny = _require_admin_json(request)
+    deny = _require_platform_credentials_json(request, platform_id)
     if deny:
         return deny
     if platform_id not in platforms.PLATFORM_IDS:
         return JSONResponse({"ok": False, "error": "Unknown platform."}, status_code=404)
     lang = i18n.resolve_lang(request)
+    user = require_admin_privileges(request)
     try:
         public = db.upsert_platform_credentials(
             platform_id,
@@ -2474,6 +4195,7 @@ def api_save_platform_credentials(request: Request, platform_id: str, body: Plat
             client_secret=body.client_secret or None,
             access_token=body.access_token or None,
             extra=body.extra,
+            owner_user_id=user.id if db.user_can_manage_panel_accounts(user) else None,
         )
     except ValueError as e:
         return JSONResponse(
@@ -2485,7 +4207,7 @@ def api_save_platform_credentials(request: Request, platform_id: str, body: Plat
 
 @app.post("/admin/api/platforms/{platform_id}/test")
 def api_test_platform(request: Request, platform_id: str, body: PlatformApiBody):
-    deny = _require_admin_json(request)
+    deny = _require_platform_credentials_json(request, platform_id)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2499,7 +4221,7 @@ def api_test_platform(request: Request, platform_id: str, body: PlatformApiBody)
 
 @app.post("/admin/api/platforms/test-all")
 def api_test_all_platforms(request: Request):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2535,7 +4257,7 @@ def _server_account_error_message(code: str, lang: str) -> str:
 
 @app.post("/admin/api/server-account-links")
 def api_create_account_link(request: Request, body: AccountLinkBody):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2556,7 +4278,7 @@ def api_create_account_link(request: Request, body: AccountLinkBody):
 
 @app.delete("/admin/api/server-account-links/{link_id}")
 def api_delete_account_link(request: Request, link_id: str):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2578,7 +4300,7 @@ def api_delete_account_link(request: Request, link_id: str):
 def api_set_account_link_active(
     request: Request, link_id: str, body: AccountLinkActiveBody
 ):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2598,7 +4320,7 @@ def api_set_account_link_active(
 
 @app.get("/admin/api/server-accounts")
 def api_list_server_accounts(request: Request):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2615,7 +4337,7 @@ def api_list_server_accounts(request: Request):
 def api_list_server_account_groups(
     request: Request, q: str = "", page: int = 1, per_page: str = "10"
 ):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2648,7 +4370,7 @@ def api_list_server_account_groups(
 
 @app.post("/admin/api/server-accounts")
 def api_create_server_account(request: Request, body: ServerAccountBody):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2669,7 +4391,7 @@ def api_create_server_account(request: Request, body: ServerAccountBody):
 
 @app.put("/admin/api/server-accounts/{account_id}")
 def api_update_server_account(request: Request, account_id: str, body: ServerAccountBody):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2696,7 +4418,7 @@ def api_update_server_account(request: Request, account_id: str, body: ServerAcc
 def api_set_server_account_active(
     request: Request, account_id: str, body: ServerAccountActiveBody
 ):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2716,7 +4438,7 @@ def api_set_server_account_active(
 
 @app.delete("/admin/api/server-accounts/{account_id}")
 def api_delete_server_account(request: Request, account_id: str):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2736,7 +4458,7 @@ def api_delete_server_account(request: Request, account_id: str):
 
 @app.get("/admin/api/server-groups")
 def api_list_server_groups(request: Request):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2747,7 +4469,7 @@ def api_list_server_groups(request: Request):
 def api_list_server_groups_page(
     request: Request, q: str = "", page: int = 1, per_page: str = "10"
 ):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2786,7 +4508,7 @@ def api_list_server_groups_page(
 
 @app.post("/admin/api/server-groups")
 def api_create_server_group(request: Request, body: ServerGroupBody):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2814,7 +4536,7 @@ def api_create_server_group(request: Request, body: ServerGroupBody):
 
 @app.put("/admin/api/server-groups/{group_id}")
 def api_update_server_group(request: Request, group_id: str, body: ServerGroupBody):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2847,7 +4569,7 @@ def api_update_server_group(request: Request, group_id: str, body: ServerGroupBo
 def api_set_server_group_active(
     request: Request, group_id: str, body: ServerGroupActiveBody
 ):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2863,7 +4585,7 @@ def api_set_server_group_active(
 
 @app.delete("/admin/api/server-groups/{group_id}")
 def api_delete_server_group(request: Request, group_id: str):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2879,7 +4601,7 @@ def api_delete_server_group(request: Request, group_id: str):
 
 @app.get("/admin/api/equipo/cuentas")
 def api_equipo_cuentas(request: Request, q: str = "", selected: str = ""):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
     lang = i18n.resolve_lang(request)
@@ -2894,10 +4616,10 @@ def api_equipo_cuentas(request: Request, q: str = "", selected: str = ""):
 
 @app.get("/admin/api/equipo/miembros")
 def api_equipo_miembros(request: Request, q: str = "", page: int = 1, per_page: str = "10"):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
-    me = require_admin_privileges(request)
+    me = require_server_admin(request)
     lang = i18n.resolve_lang(request)
     mode_labels = db.user_mode_labels_for_lang(lang)
     page_size = db.normalize_team_members_per_page(per_page)
@@ -2918,6 +4640,7 @@ def api_equipo_miembros(request: Request, q: str = "", page: int = 1, per_page: 
                 q, page, page_size, lang, exclude_user_id=exclude_id
             )
         per_page_out = page_size
+    invites = db.invite_info_map([u.id for u in users])
     return {
         "ok": True,
         "users": [
@@ -2929,9 +4652,12 @@ def api_equipo_miembros(request: Request, q: str = "", page: int = 1, per_page: 
                 "user_mode_label": mode_labels.get(u.user_mode, u.user_mode),
                 "can_view_comments": u.can_view_comments,
                 "active": u.active,
+                "created_at": u.created_at,
+                "invite_code": (invites.get(u.id) or {}).get("code") or "",
                 "linked_tiktok_config_id": u.linked_tiktok_config_id or "",
                 "linked_account_link_ids": db.list_user_account_link_ids(u.id),
                 "can_manage": db.user_can_manage_member(me, u),
+                "wallet_balance_usd": int(getattr(u, "wallet_balance_usd", 0) or 0),
             }
             for u in users
         ],
@@ -2946,10 +4672,10 @@ def api_equipo_miembros(request: Request, q: str = "", page: int = 1, per_page: 
 
 @app.post("/admin/api/equipo/usuario/{user_id}/estado")
 def api_equipo_usuario_estado(request: Request, user_id: str, body: EquipoEstadoBody):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
-    me = require_admin_privileges(request)
+    me = require_server_admin(request)
     try:
         db.set_user_active(user_id, body.active, actor=me)
     except ValueError as e:
@@ -2989,10 +4715,16 @@ async def api_equipo_create_user(
     password: Annotated[str, Form()],
     user_mode: Annotated[str, Form()] = "basic",
 ):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
+    me = require_server_admin(request)
     lang = i18n.resolve_lang(request)
+    if db.user_is_tiktok_mode(me) and user_mode.strip().lower() == "admin":
+        return JSONResponse(
+            {"ok": False, "error": _equipo_user_form_error("Invalid user mode", lang)},
+            status_code=403,
+        )
     form = await request.form()
     account_link_ids = [
         str(x).strip() for x in form.getlist("account_link_ids") if str(x).strip()
@@ -3040,10 +4772,10 @@ async def api_equipo_usuario_edit(
     password: Annotated[str, Form()] = "",
     user_mode: Annotated[str, Form()] = "basic",
 ):
-    deny = _require_admin_json(request)
+    deny = _require_server_admin_json(request)
     if deny:
         return deny
-    me = require_admin_privileges(request)
+    me = require_server_admin(request)
     target = db.get_user_by_id(user_id)
     if not target or target.role == "admin":
         return JSONResponse(
@@ -3053,6 +4785,11 @@ async def api_equipo_usuario_edit(
     pw = password.strip()
     u = username.strip()
     lang = i18n.resolve_lang(request)
+    if db.user_is_tiktok_mode(me) and user_mode.strip().lower() == "admin":
+        return JSONResponse(
+            {"ok": False, "error": _equipo_user_form_error("Invalid user mode", lang)},
+            status_code=403,
+        )
     form = await request.form()
     account_link_ids = [
         str(x).strip() for x in form.getlist("account_link_ids") if str(x).strip()
@@ -3094,7 +4831,7 @@ async def api_equipo_usuario_edit(
 @app.delete("/admin/api/equipo/usuario/{user_id}")
 def api_equipo_delete_user(request: Request, user_id: str):
     try:
-        me = require_admin_privileges(request)
+        me = require_server_admin(request)
     except PermissionError as e:
         if str(e) == "login_required":
             return JSONResponse(
@@ -3130,7 +4867,7 @@ def admin_create_user(
     can_view_comments: Annotated[str, Form()] = "1",
 ):
     try:
-        require_admin_privileges(request)
+        require_server_admin(request)
     except PermissionError:
         return _admin_privileges_redirect_login()
     comments_on = str(can_view_comments).strip().lower() in ("1", "true", "on", "yes")

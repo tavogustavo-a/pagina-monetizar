@@ -41,14 +41,14 @@ def client_secret() -> str:
     )
 
 
-def redirect_uri() -> str:
+def redirect_uri(request=None) -> str:
     env = (os.environ.get("INSTAGRAM_REDIRECT_URI") or "").strip()
     if env:
         return env
     try:
-        from site_config import SITE_URL
+        from site_config import oauth_callback_url
 
-        return f"{SITE_URL}/oauth/instagram/callback"
+        return oauth_callback_url("instagram", request)
     except Exception:
         return "http://127.0.0.1:8000/oauth/instagram/callback"
 
@@ -65,10 +65,11 @@ def new_csrf_state() -> str:
     return secrets.token_urlsafe(32)
 
 
-def build_authorize_url(*, state: str) -> str:
+def build_authorize_url(*, state: str, redirect_uri_value: str | None = None) -> str:
+    ru = (redirect_uri_value or "").strip() or redirect_uri()
     params = {
         "client_id": client_id(),
-        "redirect_uri": redirect_uri(),
+        "redirect_uri": ru,
         "response_type": "code",
         "scope": oauth_scopes(),
         "state": state,
@@ -156,12 +157,13 @@ def _unwrap_token_payload(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-def exchange_code_for_tokens(code: str) -> dict[str, Any]:
+def exchange_code_for_tokens(code: str, redirect_uri_value: str | None = None) -> dict[str, Any]:
+    ru = (redirect_uri_value or "").strip() or redirect_uri()
     payload = {
         "client_id": client_id(),
         "client_secret": client_secret(),
         "grant_type": "authorization_code",
-        "redirect_uri": redirect_uri(),
+        "redirect_uri": ru,
         "code": (code or "").strip().split("#", 1)[0],
     }
     try:

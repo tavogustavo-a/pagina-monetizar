@@ -9,6 +9,7 @@ reintentan automáticamente más tarde.
 from __future__ import annotations
 
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -241,6 +242,7 @@ def _publish_one(
     ok_n = 0
     fail_n = 0
     started = time.monotonic()
+    batch_id = str(uuid.uuid4())
 
     for pid in target_ids:
         entry = _target_state(state, pid)
@@ -257,6 +259,7 @@ def _publish_one(
                 status="skipped",
                 message=i18n.t("extractor.log_skipped", lang),
                 account_link_id=job["account_link_id"],
+                batch_id=batch_id,
             )
             continue
 
@@ -284,6 +287,7 @@ def _publish_one(
             status="ok" if ok else "fail",
             message=message,
             account_link_id=job["account_link_id"],
+            batch_id=batch_id,
         )
         if ok:
             ok_n += 1

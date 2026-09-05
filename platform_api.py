@@ -167,7 +167,7 @@ def _verify_tiktok_account(account_link_id: str, lang: str) -> dict[str, Any]:
         db.save_platform_test_result("tiktok", True, message)
         return {"ok": True, "message": message}
     except Exception as e:
-        message = t("api.tiktok.token_fail", lang, error=str(e)[:180])
+        message = _fail_message(lang, "tiktok", str(e))
         db.save_platform_test_result("tiktok", False, message)
         return {"ok": False, "message": message}
 
@@ -191,7 +191,7 @@ def _verify_youtube_account(account_link_id: str, lang: str) -> dict[str, Any]:
         db.save_platform_test_result("youtube", True, message)
         return {"ok": True, "message": message}
     except Exception as e:
-        message = t("api.youtube.fail", lang, error=str(e)[:180])
+        message = _fail_message(lang, "youtube", str(e))
         db.save_platform_test_result("youtube", False, message)
         return {"ok": False, "message": message}
 
@@ -215,7 +215,7 @@ def _verify_instagram_account(account_link_id: str, lang: str) -> dict[str, Any]
         db.save_platform_test_result("instagram", True, message)
         return {"ok": True, "message": message}
     except Exception as e:
-        message = t("api.instagram.fail", lang, error=str(e)[:180])
+        message = _fail_message(lang, "instagram", str(e))
         db.save_platform_test_result("instagram", False, message)
         return {"ok": False, "message": message}
 
@@ -239,7 +239,7 @@ def _verify_facebook_account(account_link_id: str, lang: str) -> dict[str, Any]:
         db.save_platform_test_result("facebook", True, message)
         return {"ok": True, "message": message}
     except Exception as e:
-        message = t("api.facebook.fail", lang, error=str(e)[:180])
+        message = _fail_message(lang, "facebook", str(e))
         db.save_platform_test_result("facebook", False, message)
         return {"ok": False, "message": message}
 
@@ -263,7 +263,7 @@ def _verify_x_account(account_link_id: str, lang: str) -> dict[str, Any]:
         db.save_platform_test_result("x", True, message)
         return {"ok": True, "message": message}
     except Exception as e:
-        message = t("api.x.fail", lang, error=str(e)[:180])
+        message = _fail_message(lang, "x", str(e))
         db.save_platform_test_result("x", False, message)
         return {"ok": False, "message": message}
 
@@ -287,7 +287,7 @@ def _verify_dailymotion_account(account_link_id: str, lang: str) -> dict[str, An
         db.save_platform_test_result("dailymotion", True, message)
         return {"ok": True, "message": message}
     except Exception as e:
-        message = t("api.dailymotion.fail", lang, error=str(e)[:180])
+        message = _fail_message(lang, "dailymotion", str(e))
         db.save_platform_test_result("dailymotion", False, message)
         return {"ok": False, "message": message}
 
@@ -311,7 +311,7 @@ def _verify_bilibili_account(account_link_id: str, lang: str) -> dict[str, Any]:
         db.save_platform_test_result("bilibili", True, message)
         return {"ok": True, "message": message}
     except Exception as e:
-        message = t("api.bilibili.fail", lang, error=str(e)[:180])
+        message = _fail_message(lang, "bilibili", str(e))
         db.save_platform_test_result("bilibili", False, message)
         return {"ok": False, "message": message}
 
@@ -340,7 +340,7 @@ def _verify_snapchat_account(account_link_id: str, lang: str) -> dict[str, Any]:
         db.save_platform_test_result("snapchat", True, message)
         return {"ok": True, "message": message}
     except Exception as e:
-        message = t("api.snapchat.fail", lang, error=str(e)[:180])
+        message = _fail_message(lang, "snapchat", str(e))
         db.save_platform_test_result("snapchat", False, message)
         return {"ok": False, "message": message}
 
@@ -371,6 +371,113 @@ def _looks_like_placeholder(value: str) -> bool:
     return False
 
 
+def _platform_label(lang: str, platform_id: str) -> str:
+    from i18n import t
+
+    key = f"platform.{platform_id}"
+    label = t(key, lang)
+    return label if label != key else platform_id
+
+
+def _humanize_api_error(lang: str, platform_id: str, raw: str) -> str:
+    from i18n import t
+
+    text = (raw or "").strip()
+    if not text:
+        return t("api.err.generic", lang)
+    low = text.lower()
+    platform = _platform_label(lang, platform_id)
+    checks: tuple[tuple[tuple[str, ...], str], ...] = (
+        (
+            (
+                "invalid authentication credentials",
+                "invalid_grant",
+                "token has been expired",
+                "token expired",
+                "expired token",
+                "unauthorized",
+                "autherror",
+            ),
+            "api.err.token_expired",
+        ),
+        (
+            (
+                "invalid_client",
+                "unauthorized_client",
+                "client authentication failed",
+                "invalid client",
+            ),
+            "api.err.bad_client",
+        ),
+        (
+            ("access_denied", "insufficient permission", "insufficient_permissions", "forbidden"),
+            "api.err.permission_denied",
+        ),
+        (("redirect_uri_mismatch", "redirect uri"), "api.err.redirect_mismatch"),
+        (("quota", "rate limit", "ratelimit", "too many requests"), "api.err.rate_limit"),
+        (
+            ("ssl", "certificate", "connection refused", "timed out", "timeout", "network"),
+            "api.err.network",
+        ),
+    )
+    for needles, key in checks:
+        if any(n in low for n in needles):
+            if key in {"api.err.token_expired", "api.err.bad_client", "api.err.permission_denied"}:
+                return t(key, lang, platform=platform)
+            return t(key, lang)
+    detail = text.replace("https://", "").replace("http://", "")
+    if len(detail) > 140:
+        detail = detail[:137].rstrip() + "…"
+    return t("api.err.detail", lang, detail=detail)
+
+
+def _testing_draft_credentials(platform_id: str) -> bool:
+    overlay = _test_overlay.get(platform_id) or {}
+    return bool((overlay.get("client_id") or "").strip())
+
+
+def _draft_client_pair(platform_id: str) -> tuple[str, str]:
+    raw = _creds(platform_id)
+    client_id = (raw.get("client_id") or "").strip()
+    client_secret = (raw.get("client_secret") or "").strip()
+    return client_id, client_secret
+
+
+def _validate_draft_client_credentials(lang: str, platform_id: str) -> tuple[bool, str] | None:
+    """Valida credenciales del formulario (panel). None = seguir con prueba normal."""
+    from i18n import t
+
+    if not _testing_draft_credentials(platform_id):
+        return None
+    client_id, client_secret = _draft_client_pair(platform_id)
+    if not client_id:
+        return False, t("api.need_credentials", lang)
+    if _looks_like_placeholder(client_id):
+        return False, t("api.err.invalid_credentials", lang)
+    if platform_id in {"dailymotion", "x", "instagram", "facebook", "youtube"} and not client_secret:
+        return False, t("api.err.need_secret", lang)
+    if client_secret and _looks_like_placeholder(client_secret):
+        return False, t("api.err.invalid_credentials", lang)
+    return None
+
+
+def _finish_draft_credentials_test(
+    lang: str, platform_id: str, ok_key: str
+) -> tuple[bool, str] | None:
+    if not _testing_draft_credentials(platform_id):
+        return None
+    from i18n import t
+
+    client_id, _secret = _draft_client_pair(platform_id)
+    if client_id:
+        return True, t(ok_key, lang)
+    return _need_keys(lang)
+
+
+def _fail_message(lang: str, platform_id: str, raw: str) -> str:
+    return _humanize_api_error(lang, platform_id, raw)
+
+
 def _test_tiktok(lang: str) -> tuple[bool, str]:
     from i18n import t
 
@@ -381,7 +488,7 @@ def _test_tiktok(lang: str) -> tuple[bool, str]:
             name = user.get("username") or user.get("display_name") or "ok"
             return True, t("api.tiktok.token_ok", lang, name=name)
         except Exception as e:
-            return False, t("api.tiktok.token_fail", lang, error=str(e)[:180])
+            return False, _fail_message(lang, "tiktok", str(e))
 
     key, secret, redirect = _tiktok_keys()
     if not (key and secret):
@@ -421,6 +528,13 @@ def _test_youtube(lang: str) -> tuple[bool, str]:
 
     import youtube_oauth
 
+    draft_check = _validate_draft_client_credentials(lang, "youtube")
+    if draft_check is not None:
+        return draft_check
+    draft_ok = _finish_draft_credentials_test(lang, "youtube", "api.youtube.client_ok")
+    if draft_ok is not None:
+        return draft_ok
+
     oid = db.resolve_oauth_account_id("youtube")
     if oid:
         row = db.get_oauth_account_row(oid) or {}
@@ -431,7 +545,7 @@ def _test_youtube(lang: str) -> tuple[bool, str]:
                 name = profile.get("display_name") or profile.get("username") or "ok"
                 return True, t("api.youtube.token_ok", lang) + f" ({name})"
             except Exception as e:
-                return False, t("api.youtube.fail", lang, error=str(e)[:180])
+                return False, _fail_message(lang, "youtube", str(e))
 
     raw = _creds("youtube")
     extra = str(raw.get("extra") or "").strip()
@@ -456,7 +570,7 @@ def _test_youtube(lang: str) -> tuple[bool, str]:
         if status == 200 and "items" in data:
             return True, t("api.youtube.token_ok", lang)
         err = (data.get("error") or {}).get("message") if isinstance(data.get("error"), dict) else body[:160]
-        return False, t("api.youtube.fail", lang, error=str(err)[:180])
+        return False, _fail_message(lang, "youtube", str(err))
     if api_key:
         q = urllib.parse.urlencode({"part": "id", "id": "jNQXAC9IVRw", "key": api_key})
         status, body = _http(f"https://www.googleapis.com/youtube/v3/videos?{q}")
@@ -464,13 +578,15 @@ def _test_youtube(lang: str) -> tuple[bool, str]:
         if status == 200:
             return True, t("api.youtube.key_ok", lang)
         err = (data.get("error") or {}).get("message") if isinstance(data.get("error"), dict) else body[:160]
-        return False, t("api.youtube.fail", lang, error=str(err)[:180])
+        return False, _fail_message(lang, "youtube", str(err))
     if client_id:
         return True, t("api.youtube.client_ok", lang)
     return _need_keys(lang)
 
 
-def _test_graph(url: str, token: str, lang: str, ok_key: str) -> tuple[bool, str]:
+def _test_graph(
+    url: str, token: str, lang: str, ok_key: str, platform_id: str = "facebook"
+) -> tuple[bool, str]:
     from i18n import t
 
     if not token:
@@ -481,13 +597,20 @@ def _test_graph(url: str, token: str, lang: str, ok_key: str) -> tuple[bool, str
         name = data.get("name") or data.get("id")
         return True, t(ok_key, lang, name=name)
     err = (data.get("error") or {}).get("message") if isinstance(data.get("error"), dict) else body[:160]
-    return False, t("api.graph_fail", lang, error=str(err)[:180])
+    return False, _fail_message(lang, platform_id, str(err))
 
 
 def _test_instagram(lang: str) -> tuple[bool, str]:
     from i18n import t
 
     import instagram_oauth
+
+    draft_check = _validate_draft_client_credentials(lang, "instagram")
+    if draft_check is not None:
+        return draft_check
+    draft_ok = _finish_draft_credentials_test(lang, "instagram", "api.instagram.client_ok")
+    if draft_ok is not None:
+        return draft_ok
 
     oid = db.resolve_oauth_account_id("instagram")
     if oid:
@@ -499,7 +622,7 @@ def _test_instagram(lang: str) -> tuple[bool, str]:
                 name = profile.get("username") or profile.get("display_name") or "ok"
                 return True, t("api.instagram.ok", lang, name=name)
             except Exception as e:
-                return False, t("api.instagram.fail", lang, error=str(e)[:180])
+                return False, _fail_message(lang, "instagram", str(e))
 
     raw = _creds("instagram")
     token = (raw.get("access_token") or "").strip()
@@ -511,7 +634,7 @@ def _test_instagram(lang: str) -> tuple[bool, str]:
             return True, t("api.instagram.ok", lang, name=name)
         except Exception:
             return _test_graph(
-                "https://graph.facebook.com/v21.0/me?", token, lang, "api.instagram.ok"
+                "https://graph.facebook.com/v21.0/me?", token, lang, "api.instagram.ok", "instagram"
             )
     if client_id:
         return True, t("api.instagram.client_ok", lang)
@@ -523,6 +646,13 @@ def _test_facebook(lang: str) -> tuple[bool, str]:
 
     import facebook_oauth
 
+    draft_check = _validate_draft_client_credentials(lang, "facebook")
+    if draft_check is not None:
+        return draft_check
+    draft_ok = _finish_draft_credentials_test(lang, "facebook", "api.facebook.client_ok")
+    if draft_ok is not None:
+        return draft_ok
+
     oid = db.resolve_oauth_account_id("facebook")
     if oid:
         row = db.get_oauth_account_row(oid) or {}
@@ -533,13 +663,13 @@ def _test_facebook(lang: str) -> tuple[bool, str]:
                 name = profile.get("display_name") or profile.get("open_id") or "ok"
                 return True, t("api.facebook.ok", lang, name=name)
             except Exception as e:
-                return False, t("api.facebook.fail", lang, error=str(e)[:180])
+                return False, _fail_message(lang, "facebook", str(e))
 
     raw = _creds("facebook")
     token = (raw.get("access_token") or "").strip()
     client_id = (raw.get("client_id") or "").strip() or facebook_oauth.client_id()
     if token:
-        return _test_graph("https://graph.facebook.com/v21.0/me?", token, lang, "api.facebook.ok")
+        return _test_graph("https://graph.facebook.com/v21.0/me?", token, lang, "api.facebook.ok", "facebook")
     if client_id:
         return True, t("api.facebook.client_ok", lang)
     return _need_keys(lang)
@@ -549,6 +679,13 @@ def _test_x(lang: str) -> tuple[bool, str]:
     from i18n import t
 
     import x_oauth
+
+    draft_check = _validate_draft_client_credentials(lang, "x")
+    if draft_check is not None:
+        return draft_check
+    draft_ok = _finish_draft_credentials_test(lang, "x", "api.x.client_ok")
+    if draft_ok is not None:
+        return draft_ok
 
     oid = db.resolve_oauth_account_id("x")
     if oid:
@@ -560,7 +697,7 @@ def _test_x(lang: str) -> tuple[bool, str]:
                 name = profile.get("username") or profile.get("display_name") or "ok"
                 return True, t("api.x.ok", lang, name=name)
             except Exception as e:
-                return False, t("api.x.fail", lang, error=str(e)[:180])
+                return False, _fail_message(lang, "x", str(e))
 
     raw = _creds("x")
     token = (raw.get("access_token") or "").strip()
@@ -571,7 +708,7 @@ def _test_x(lang: str) -> tuple[bool, str]:
             name = profile.get("username") or profile.get("display_name") or "ok"
             return True, t("api.x.ok", lang, name=name)
         except Exception as e:
-            return False, t("api.x.fail", lang, error=str(e)[:180])
+            return False, _fail_message(lang, "x", str(e))
     if client_id:
         return True, t("api.x.client_ok", lang)
     return _need_keys(lang)
@@ -581,6 +718,13 @@ def _test_dailymotion(lang: str) -> tuple[bool, str]:
     from i18n import t
 
     import dailymotion_oauth
+
+    draft_check = _validate_draft_client_credentials(lang, "dailymotion")
+    if draft_check is not None:
+        return draft_check
+    draft_ok = _finish_draft_credentials_test(lang, "dailymotion", "api.dailymotion.client_ok")
+    if draft_ok is not None:
+        return draft_ok
 
     oid = db.resolve_oauth_account_id("dailymotion")
     if oid:
@@ -592,7 +736,7 @@ def _test_dailymotion(lang: str) -> tuple[bool, str]:
                 name = profile.get("username") or profile.get("display_name") or "ok"
                 return True, t("api.dailymotion.ok", lang, name=name)
             except Exception as e:
-                return False, t("api.dailymotion.fail", lang, error=str(e)[:180])
+                return False, _fail_message(lang, "dailymotion", str(e))
 
     raw = _creds("dailymotion")
     token = (raw.get("access_token") or "").strip()
@@ -604,7 +748,7 @@ def _test_dailymotion(lang: str) -> tuple[bool, str]:
             name = profile.get("username") or profile.get("display_name") or "ok"
             return True, t("api.dailymotion.ok", lang, name=name)
         except Exception as e:
-            return False, t("api.dailymotion.fail", lang, error=str(e)[:180])
+            return False, _fail_message(lang, "dailymotion", str(e))
     if client_id and secret:
         return True, t("api.dailymotion.client_ok", lang)
     if client_id:
@@ -617,6 +761,13 @@ def _test_bilibili(lang: str) -> tuple[bool, str]:
 
     import bilibili_oauth
 
+    draft_check = _validate_draft_client_credentials(lang, "bilibili")
+    if draft_check is not None:
+        return draft_check
+    draft_ok = _finish_draft_credentials_test(lang, "bilibili", "api.bilibili.client_ok")
+    if draft_ok is not None:
+        return draft_ok
+
     oid = db.resolve_oauth_account_id("bilibili")
     if oid:
         row = db.get_oauth_account_row(oid) or {}
@@ -627,7 +778,7 @@ def _test_bilibili(lang: str) -> tuple[bool, str]:
                 name = profile.get("username") or profile.get("display_name") or "ok"
                 return True, t("api.bilibili.ok", lang, name=name)
             except Exception as e:
-                return False, t("api.bilibili.fail", lang, error=str(e)[:180])
+                return False, _fail_message(lang, "bilibili", str(e))
 
     raw = _creds("bilibili")
     client_id = (raw.get("client_id") or "").strip() or bilibili_oauth.client_id()
@@ -652,18 +803,25 @@ def _test_rumble(lang: str) -> tuple[bool, str]:
     try:
         ok, detail = rumble_publish.probe_token(token=token, channel=channel)
     except Exception as e:
-        return False, t("api.rumble.fail", lang, error=str(e)[:180])
+        return False, _fail_message(lang, "rumble", str(e))
     if ok:
         if channel:
             return True, t("api.rumble.ok", lang, channel=channel)
         return True, t("api.rumble.token_ok", lang)
-    return False, t("api.rumble.fail", lang, error=detail[:180])
+    return False, _fail_message(lang, "rumble", detail)
 
 
 def _test_snapchat(lang: str) -> tuple[bool, str]:
     from i18n import t
 
     import snapchat_oauth
+
+    draft_check = _validate_draft_client_credentials(lang, "snapchat")
+    if draft_check is not None:
+        return draft_check
+    draft_ok = _finish_draft_credentials_test(lang, "snapchat", "api.snapchat.client_ok")
+    if draft_ok is not None:
+        return draft_ok
 
     oid = db.resolve_oauth_account_id("snapchat")
     if oid:
@@ -675,7 +833,7 @@ def _test_snapchat(lang: str) -> tuple[bool, str]:
                 name = profile.get("username") or profile.get("display_name") or "ok"
                 return True, t("api.snapchat.ok", lang, name=name)
             except Exception as e:
-                return False, t("api.snapchat.fail", lang, error=str(e)[:180])
+                return False, _fail_message(lang, "snapchat", str(e))
 
     raw = _creds("snapchat")
     token = (raw.get("access_token") or "").strip()
@@ -687,7 +845,7 @@ def _test_snapchat(lang: str) -> tuple[bool, str]:
             name = profile.get("username") or profile.get("display_name") or "ok"
             return True, t("api.snapchat.ok", lang, name=name)
         except Exception as e:
-            return False, t("api.snapchat.fail", lang, error=str(e)[:180])
+            return False, _fail_message(lang, "snapchat", str(e))
     if client_id and secret:
         return True, t("api.snapchat.client_ok", lang)
     if client_id:

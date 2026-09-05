@@ -14,9 +14,12 @@
       {% endif %}
 
       {% if can_upload_videos %}
-      <form method="post" action="/admin/videos" enctype="multipart/form-data" class="publish-form{% if publish_unlocked %} publish-form--unlocked{% endif %}" id="publish-form">
+      <form method="post" action="/admin/videos" enctype="multipart/form-data" class="publish-form{% if publish_unlocked and membership_usage.can_publish %} publish-form--unlocked{% endif %}" id="publish-form">
         <div class="pub-publish-section__header pub-publish-page-head{% if is_publish_admin %} pub-publish-section__header--admin{% endif %}">
           <h2 class="pub-publish-section__title">{{ t('pub.publish_video') }}</h2>
+          {% if not membership_usage.unlimited %}
+          <p class="sub membership-quota-line">{{ t('membresias.quota_videos', used=membership_usage.videos_used, limit=membership_usage.video_limit) }}</p>
+          {% endif %}
           {% if is_publish_admin %}
           <button
             type="button"
@@ -32,8 +35,16 @@
           {% endif %}
         </div>
 
+        {% if not membership_usage.can_publish %}
+        <div class="publish-locked">
+          <p class="publish-locked__title">{% if membership_usage.has_plan %}{{ t('membresias.err.quota_videos') }}{% else %}{{ t('membresias.err.no_plan') }}{% endif %}</p>
+        </div>
+        {% else %}
+        {% if auto_publish_platform_id %}
+        <input type="hidden" name="platforms" value="{{ auto_publish_platform_id }}" />
+        {% elif is_publish_admin or show_publish_platform_picker %}
         <section
-          class="section dashboard-section pub-platforms-section"
+          class="section dashboard-section pub-platforms-section{% if show_publish_platform_picker %} pub-platforms-section--tiktok{% endif %}"
           id="pub-platforms-section"
           {% if is_publish_admin %}hidden{% endif %}
         >
@@ -69,7 +80,7 @@
               </thead>
               <tbody>
                 {% for p in publish_platforms %}
-                <tr data-platform-id="{{ p.id }}">
+                <tr data-platform-id="{{ p.id }}"{% if p.configured is defined and not p.configured %} class="is-disabled"{% endif %}>
                   <td>
                     <span class="pub-platforms-table__name">
                       <span class="pub-platforms-table__icon" aria-hidden="true">{{ p.icon }}</span>
@@ -82,7 +93,12 @@
                   </td>
                   <td class="pub-platforms-table__check">
                     <label class="pub-platform-check">
-                      <input type="checkbox" name="platforms" value="{{ p.id }}" />
+                      <input
+                        type="checkbox"
+                        name="platforms"
+                        value="{{ p.id }}"
+                        {% if p.configured is defined and not p.configured %}disabled{% else %}checked{% endif %}
+                      />
                       <span class="pub-platform-check__ui" aria-hidden="true"></span>
                     </label>
                   </td>
@@ -92,6 +108,7 @@
             </table>
           </div>
         </section>
+        {% endif %}
 
       <section class="section dashboard-section pub-publish-section" id="pub-publish-section">
         <div class="pub-publish-section__body" id="pub-publish-panel">
@@ -121,19 +138,17 @@
           <div class="pub-publish-account pub-publish-account--locked">
             <div class="publish-locked">
               <p class="publish-locked__title">{{ t('pub.no_accounts_title') }}</p>
+              {% if not user_is_tiktok_mode(user) %}
               <p class="sub">{{ t('pub.no_accounts_hint', servers=t('servers.ref_servers'), team=t('nav.panel')) }}</p>
+              {% endif %}
             </div>
           </div>
           {% endif %}
 
           {% if publish_unlocked %}
-          <label class="pub-field pub-field--title">
-            <input type="text" class="pub-control pub-control--input" name="title" required placeholder="{{ t('pub.title_ph') }}" aria-label="{{ t('pub.title_ph') }}" />
-          </label>
-
           <div class="pub-field pub-field--dropzone">
             <div class="dropzone pub-control pub-control--dropzone" id="video-dropzone">
-              <input type="file" name="file" id="video-file" accept=".mp4,.webm,.mov,.mkv,.jpg,.jpeg,.png,.webp,.gif,video/*,image/*" required class="dropzone__input" />
+              <input type="file" name="file" id="video-file" accept=".mp4,.webm,.mov,.mkv,.jpg,.jpeg,.png,.webp,.gif,video/*,image/*" class="dropzone__input" />
               <div class="dropzone__content">
                 <p class="dropzone__text">{{ t('pub.dropzone_text') }}</p>
                 <button type="button" class="btn btn-ghost btn-sm" id="video-browse">{{ t('pub.browse_files') }}</button>
@@ -141,6 +156,12 @@
               </div>
             </div>
           </div>
+
+          <input type="hidden" name="video_temp_token" id="video-temp-token" value="" />
+
+          <label class="pub-field pub-field--title">
+            <input type="text" class="pub-control pub-control--input" name="title" required placeholder="{{ t('pub.title_ph') }}" aria-label="{{ t('pub.title_ph') }}" />
+          </label>
 
           <label class="pub-field pub-field--description">
             <textarea class="pub-control pub-control--textarea" name="description" rows="3" required placeholder="{{ t('pub.caption_ph') }}" aria-label="{{ t('pub.caption_ph') }}"></textarea>
@@ -165,6 +186,7 @@
           {% endif %}
         </div>
       </section>
+        {% endif %}
       </form>
 
       <div class="servers-divider pub-divider" role="separator" aria-hidden="true">
@@ -184,7 +206,7 @@
             <span>{{ t('log.purge_to') }}</span>
             <input type="date" id="pub-log-to" class="log-purge__input" />
           </label>
-          <button type="button" class="btn btn-ghost btn-sm log-purge__btn" id="pub-log-delete">{{ t('log.purge_delete') }}</button>
+          <button type="button" class="btn btn-ghost btn-sm log-purge__btn btn-user-delete" id="pub-log-delete" aria-label="{{ t('log.purge_delete') }}" title="{{ t('log.purge_delete') }}">{% include '_icon_trash.html' %}</button>
         </div>
         <p class="log-purge__msg" id="pub-log-msg" hidden></p>
         {% endif %}
@@ -194,6 +216,9 @@
             <thead>
               <tr>
                 <th>{{ t('pub.log_col_date') }}</th>
+                {% if show_pub_log_user %}
+                <th>{{ t('pub.log_col_user') }}</th>
+                {% endif %}
                 <th>{{ t('pub.log_col_platform') }}</th>
                 <th>{{ t('pub.log_col_status') }}</th>
                 <th>{{ t('pub.log_col_message') }}</th>
@@ -201,24 +226,214 @@
             </thead>
             <tbody>
               {% for row in publication_logs %}
-              <tr class="pub-log-table__row pub-log-table__row--{{ row.status }}">
+              {% set n = row.entries|length %}
+              {% set first = row.entries[0] %}
+              <tr class="pub-log-table__row pub-log-table__row--{{ row.status }}" data-log-row="{{ row.id }}">
                 <td>{{ row.created_at[:19].replace('T', ' ') }}</td>
-                <td>{{ t('platform.' ~ row.platform_id) }}</td>
+                {% if show_pub_log_user %}
+                <td class="pub-log-user-cell">{{ row.user_username or '—' }}</td>
+                {% endif %}
                 <td>
-                  {% if row.status == 'ok' %}
+                  {% if n == 1 %}
+                  {{ first.platform_name }}
+                  {% else %}
+                  <button
+                    type="button"
+                    class="pub-log-view js-pub-log-open"
+                    data-log-id="{{ row.id }}"
+                    data-log-kind="platforms"
+                    aria-label="{{ t('pub.log_view') }}"
+                    title="{{ t('pub.log_platforms_n', n=n) }}"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span>{{ t('pub.log_view') }}</span>
+                  </button>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if row.status == 'mixed' %}
+                  <button
+                    type="button"
+                    class="pub-log-view js-pub-log-open"
+                    data-log-id="{{ row.id }}"
+                    data-log-kind="status"
+                    aria-label="{{ t('pub.log_view') }}"
+                    title="{{ t('pub.log_status_mixed') }}"
+                  >
+                    <span class="pub-log-status pub-log-status--mixed">{{ t('pub.log_status_mixed') }}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </button>
+                  {% elif row.status == 'ok' %}
                   <span class="pub-log-status pub-log-status--ok">{{ t('pub.log_status_ok') }}</span>
+                  {% elif row.status == 'skipped' %}
+                  <span class="pub-log-status pub-log-status--skipped">{{ t('pub.log_status_skipped') }}</span>
                   {% else %}
                   <span class="pub-log-status pub-log-status--fail">{{ t('pub.log_status_fail') }}</span>
                   {% endif %}
                 </td>
-                <td>{{ row.message }}{% if row.video_title %} · {{ row.video_title }}{% endif %}</td>
+                <td>
+                  {% if row.fail_n == 1 %}
+                    {% for e in row.entries %}
+                      {% if e.status == 'fail' %}{{ e.message }}{% endif %}
+                    {% endfor %}
+                  {% elif row.fail_n > 1 %}
+                  <button
+                    type="button"
+                    class="pub-log-view js-pub-log-open"
+                    data-log-id="{{ row.id }}"
+                    data-log-kind="errors"
+                    aria-label="{{ t('pub.log_view') }}"
+                    title="{{ t('pub.log_modal_errors') }}"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span>{{ t('pub.log_view') }}</span>
+                  </button>
+                  {% endif %}
+                </td>
               </tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
+        <script type="application/json" id="pub-log-groups-json">{{ publication_logs | tojson }}</script>
         {% endif %}
       </section>
+
+      <div id="pub-log-detail-modal" class="equipo-modal" aria-hidden="true">
+        <div class="equipo-modal__backdrop" data-close-pub-log tabindex="-1"></div>
+        <div class="equipo-modal__panel server-modal__panel" role="dialog" aria-modal="true" aria-labelledby="pub-log-detail-title">
+          <div class="equipo-modal__accent" aria-hidden="true"></div>
+          <div class="equipo-modal__head">
+            <div>
+              <h2 id="pub-log-detail-title">{{ t('pub.log_modal_platforms') }}</h2>
+            </div>
+            <button type="button" class="equipo-modal__close" data-close-pub-log aria-label="{{ t('servers.modal_close') }}">×</button>
+          </div>
+          <div class="server-modal__body">
+            <ul class="pub-log-detail-list" id="pub-log-detail-list"></ul>
+          </div>
+        </div>
+      </div>
+      <script>
+        (function () {
+          var modal = document.getElementById("pub-log-detail-modal");
+          var titleEl = document.getElementById("pub-log-detail-title");
+          var listEl = document.getElementById("pub-log-detail-list");
+          var dataEl = document.getElementById("pub-log-groups-json");
+          if (!modal || !listEl) return;
+          var lastTrigger = null;
+          var groups = [];
+          if (dataEl) {
+            try { groups = JSON.parse(dataEl.textContent || "[]"); } catch (e) { groups = []; }
+          }
+          var titles = {
+            platforms: {{ t('pub.log_modal_platforms') | tojson }},
+            status: {{ t('pub.log_modal_status') | tojson }},
+            errors: {{ t('pub.log_modal_errors') | tojson }}
+          };
+          var statusLabels = {
+            ok: {{ t('pub.log_status_ok') | tojson }},
+            fail: {{ t('pub.log_status_fail') | tojson }},
+            skipped: {{ t('pub.log_status_skipped') | tojson }}
+          };
+
+          function findGroup(id) {
+            for (var i = 0; i < groups.length; i++) {
+              if (String(groups[i].id) === String(id)) return groups[i];
+            }
+            return null;
+          }
+
+          function statusClass(status) {
+            if (status === "ok") return "pub-log-status--ok";
+            if (status === "skipped") return "pub-log-status--skipped";
+            return "pub-log-status--fail";
+          }
+
+          function addItem(name, status, message) {
+            var li = document.createElement("li");
+            li.className = "pub-log-detail-list__item";
+            var head = document.createElement("div");
+            head.className = "pub-log-detail-list__head";
+            var strong = document.createElement("strong");
+            strong.textContent = name || "";
+            head.appendChild(strong);
+            if (status) {
+              var badge = document.createElement("span");
+              badge.className = "pub-log-status " + statusClass(status);
+              badge.textContent = statusLabels[status] || status;
+              head.appendChild(badge);
+            }
+            li.appendChild(head);
+            if (message) {
+              var msg = document.createElement("p");
+              msg.className = "pub-log-detail-list__msg";
+              msg.textContent = message;
+              li.appendChild(msg);
+            }
+            listEl.appendChild(li);
+          }
+
+          function openLog(btn) {
+            var group = findGroup(btn.getAttribute("data-log-id"));
+            var kind = btn.getAttribute("data-log-kind") || "platforms";
+            var entries = group && group.entries ? group.entries : [];
+            lastTrigger = btn;
+            titleEl.textContent = titles[kind] || titles.platforms;
+            listEl.innerHTML = "";
+            if (kind === "platforms") {
+              entries.forEach(function (entry) {
+                addItem(entry.platform_name || entry.platform_id || "", "", "");
+              });
+            } else if (kind === "errors") {
+              entries.forEach(function (entry) {
+                if (entry.status !== "fail") return;
+                addItem(entry.platform_name || entry.platform_id || "", "fail", entry.message || "");
+              });
+            } else {
+              entries.forEach(function (entry) {
+                addItem(
+                  entry.platform_name || entry.platform_id || "",
+                  entry.status || "",
+                  entry.status === "fail" ? (entry.message || "") : ""
+                );
+              });
+            }
+            modal.classList.add("is-open");
+            modal.setAttribute("aria-hidden", "false");
+            document.body.style.overflow = "hidden";
+            var closeBtn = modal.querySelector(".equipo-modal__close");
+            if (closeBtn) closeBtn.focus();
+          }
+
+          function closeLog() {
+            modal.classList.remove("is-open");
+            modal.setAttribute("aria-hidden", "true");
+            document.body.style.overflow = "";
+            if (lastTrigger && typeof lastTrigger.focus === "function") lastTrigger.focus();
+            lastTrigger = null;
+          }
+
+          document.querySelectorAll(".js-pub-log-open").forEach(function (btn) {
+            btn.addEventListener("click", function () { openLog(btn); });
+          });
+          modal.querySelectorAll("[data-close-pub-log]").forEach(function (el) {
+            el.addEventListener("click", closeLog);
+          });
+          document.addEventListener("keydown", function (e) {
+            if (e.key === "Escape" && modal.classList.contains("is-open")) closeLog();
+          });
+        })();
+      </script>
 
       {% if scheduled_publications | length > 0 %}
       <section class="section dashboard-section">
@@ -258,29 +473,49 @@
         <span class="servers-divider__line"></span>
       </div>
       <section class="section dashboard-section pub-accordion" id="pub-comments-accordion">
-        <button
-          type="button"
-          class="pub-accordion__trigger"
-          id="pub-comments-trigger"
-          aria-expanded="true"
-          aria-controls="pub-comments-panel"
-        >
-          <span class="pub-accordion__title">{{ t('pub.comments_section') }}</span>
-          <span class="pub-accordion__chevron" aria-hidden="true"></span>
-        </button>
+        <div class="pub-accordion__head">
+          <div class="pub-accordion__title-group" id="pub-comments-title-group" role="button" tabindex="0" aria-controls="pub-comments-panel">
+            <span class="pub-accordion__title">{{ t('pub.comments_section') }}</span>
+            <button
+              type="button"
+              class="servers-info-btn panel-info-btn pub-accordion__info-btn js-panel-info-open"
+              data-info-title="{{ t('pub.comments_section') }}"
+              data-info-text="{{ t('pub.comments_scopes') }}"
+              aria-label="{{ t('pub.comments_info_btn') }}"
+              title="{{ t('pub.comments_info_btn') }}"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h.008v.008H11.25v-.008zM12 17.25h.01M12 21a9 9 0 100-18 9 9 0 000 18z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v.008M12 11.25V16.5" />
+              </svg>
+            </button>
+          </div>
+          <button
+            type="button"
+            class="pub-accordion__trigger pub-accordion__trigger--chevron"
+            id="pub-comments-trigger"
+            aria-expanded="true"
+            aria-controls="pub-comments-panel"
+            aria-label="{{ t('pub.comments_section') }}"
+          >
+            <span class="pub-accordion__chevron" aria-hidden="true"></span>
+          </button>
+        </div>
 
         <div class="pub-accordion__panel" id="pub-comments-panel">
-          <p class="sub">{{ t('pub.comments_scopes') | safe }}</p>
           <div class="comment-filters">
             <label class="field comment-filters__field">
               <span>{{ t('pub.comments_filter_platform') }}</span>
               <select id="comment-filter-platform" aria-label="{{ t('pub.comments_filter_platform') }}">
+                {% if publish_platforms | length > 1 %}
                 <option value="__all__">{{ t('admin.all') }}</option>
+                {% endif %}
                 {% for p in publish_platforms %}
                 <option value="{{ p.id }}">{{ p.name }}</option>
                 {% endfor %}
               </select>
             </label>
+            {% if show_comment_user_filter %}
             <label class="field comment-filters__field">
               <span>{{ t('pub.comments_filter_user') }}</span>
               <select id="comment-filter-user" aria-label="{{ t('pub.comments_filter_user') }}">
@@ -290,6 +525,7 @@
                 {% endfor %}
               </select>
             </label>
+            {% endif %}
           </div>
 
           <p class="sub comment-results-loading" id="comment-results-loading" hidden>{{ t('team.loading') }}</p>
@@ -398,11 +634,143 @@
     var msgTitle = {{ t('pub.flash.missing_title') | tojson }};
     var msgAccount = {{ pub_account_i18n.select_required | tojson }};
 
+    var tempToken = "";
+    var tempVideoUrl = "";
+    var tempDisplayName = "";
+    var publishing = false;
+    var tempStorageKey = "pub_video_temp";
+    var tempTokenInput = document.getElementById("video-temp-token");
+    var uploadI18n = {
+      uploading: {{ t('pub.captions_uploading') | tojson }},
+      uploadFail: {{ t('pub.captions_upload_fail') | tojson }},
+      fileTooLarge: {{ t('pub.flash.file_too_large', max_mb=max_upload_mb) | tojson }},
+      maxUploadBytes: {{ max_upload_bytes | tojson }},
+    };
+
+    function discardTemp(token, keepalive) {
+      if (!token) return;
+      var opts = { method: "POST", credentials: "same-origin" };
+      if (keepalive) opts.keepalive = true;
+      fetch("/admin/api/videos/temp/" + encodeURIComponent(token) + "/discard", opts);
+    }
+
+    function clearFileInput() {
+      try {
+        var dt = new DataTransfer();
+        input.files = dt.files;
+      } catch (e) {
+        input.value = "";
+      }
+    }
+
+    function setTempToken(token, url, name) {
+      if (tempToken && tempToken !== token) discardTemp(tempToken, false);
+      tempToken = token || "";
+      tempVideoUrl = url || "";
+      tempDisplayName = name || "";
+      if (tempTokenInput) tempTokenInput.value = tempToken;
+      if (tempToken) {
+        sessionStorage.setItem(
+          tempStorageKey,
+          JSON.stringify({ token: tempToken, url: tempVideoUrl, name: tempDisplayName })
+        );
+      } else {
+        sessionStorage.removeItem(tempStorageKey);
+      }
+    }
+
+    function isVideoFile(file) {
+      if (!file) return false;
+      var name = (file.name || "").toLowerCase();
+      return /\.(mp4|webm|mov|mkv|m4v)$/.test(name) || (file.type || "").indexOf("video/") === 0;
+    }
+
     function showName(file) {
-      if (!fname || !file) return;
+      if (!fname) return;
+      if (!file || !file.name) {
+        fname.hidden = true;
+        fname.textContent = "";
+        return;
+      }
       fname.textContent = file.name;
       fname.hidden = false;
     }
+
+    function handleSelectedFile(file) {
+      if (!file) return;
+      if (isVideoFile(file)) {
+        if (file.size > uploadI18n.maxUploadBytes) {
+          alert(uploadI18n.fileTooLarge);
+          return;
+        }
+        if (fname) {
+          fname.textContent = uploadI18n.uploading;
+          fname.hidden = false;
+        }
+        var fd = new FormData();
+        fd.append("file", file);
+        fetch("/admin/api/videos/temp", {
+          method: "POST",
+          body: fd,
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        })
+          .then(function (r) {
+            return r.json().then(function (data) {
+              return { ok: r.ok, data: data };
+            });
+          })
+          .then(function (res) {
+            if (!res.ok || !res.data || !res.data.ok) {
+              throw new Error((res.data && res.data.error) || "upload");
+            }
+            var data = res.data;
+            clearFileInput();
+            setTempToken(data.token, data.url, data.name || file.name);
+            showName({ name: data.name || file.name });
+          })
+          .catch(function (err) {
+            setTempToken("", "", "");
+            if (fname) fname.hidden = true;
+            alert((err && err.message && err.message !== "upload")
+              ? err.message
+              : uploadI18n.uploadFail);
+          });
+        return;
+      }
+      if (tempToken) {
+        discardTemp(tempToken, false);
+        setTempToken("", "", "");
+      }
+      showName(file);
+    }
+
+    var savedTempRaw = sessionStorage.getItem(tempStorageKey);
+    if (savedTempRaw) {
+      try {
+        var savedTemp = JSON.parse(savedTempRaw);
+        if (savedTemp && savedTemp.token && savedTemp.url) {
+          tempToken = savedTemp.token;
+          tempVideoUrl = savedTemp.url;
+          tempDisplayName = savedTemp.name || "";
+          if (tempTokenInput) tempTokenInput.value = tempToken;
+          showName({ name: tempDisplayName });
+        }
+      } catch (e) {
+        sessionStorage.removeItem(tempStorageKey);
+      }
+    }
+
+    window.addEventListener("pagehide", function () {
+      if (publishing) {
+        sessionStorage.removeItem(tempStorageKey);
+        return;
+      }
+      if (tempToken) {
+        discardTemp(tempToken, true);
+        sessionStorage.removeItem(tempStorageKey);
+      }
+    });
 
     if (browse) {
       browse.addEventListener("click", function () {
@@ -411,7 +779,7 @@
     }
 
     input.addEventListener("change", function () {
-      if (input.files && input.files[0]) showName(input.files[0]);
+      if (input.files && input.files[0]) handleSelectedFile(input.files[0]);
     });
 
     zone.addEventListener("dragover", function (e) {
@@ -428,7 +796,7 @@
       zone.classList.remove("dropzone--over");
       if (e.dataTransfer.files && e.dataTransfer.files[0]) {
         input.files = e.dataTransfer.files;
-        showName(e.dataTransfer.files[0]);
+        handleSelectedFile(e.dataTransfer.files[0]);
       }
     });
 
@@ -437,7 +805,7 @@
         var desc = form.querySelector('textarea[name="description"]');
         var title = form.querySelector('input[name="title"]');
         var scheduledAt = document.getElementById("scheduled-at");
-        var hasFile = input.files && input.files.length > 0;
+        var hasFile = (input.files && input.files.length > 0) || !!tempToken;
         var hasDesc = desc && (desc.value || "").trim().length > 0;
         var hasTitle = title && (title.value || "").trim().length > 0;
 
@@ -472,6 +840,7 @@
           if (accountTrigger) accountTrigger.focus();
           return;
         }
+        publishing = true;
       });
     }
   })();
@@ -497,7 +866,10 @@
         }
         row.hidden = !show;
         var cb = row.querySelector('input[name="platforms"]');
-        if (cb) cb.checked = show;
+        if (cb) {
+          if (!show || cb.disabled) cb.checked = false;
+          else cb.checked = true;
+        }
         if (show) visibleCount += 1;
       });
       if (emptyHint) emptyHint.hidden = !hasFilter || visibleCount > 0;
@@ -506,7 +878,12 @@
     window.__pubApplyPlatformFilter = applyPlatformFilter;
 
     var publishAccounts = {{ publish_account_choices | tojson }};
-    if (publishAccounts.length === 1 && !document.getElementById("pub-account-open")) {
+    var showPlatformPicker = {{ show_publish_platform_picker | tojson }};
+    if (
+      !showPlatformPicker &&
+      publishAccounts.length === 1 &&
+      !document.getElementById("pub-account-open")
+    ) {
       applyPlatformFilter(publishAccounts[0].platform_ids || [], null, false);
     }
   })();
@@ -566,6 +943,7 @@
   (function () {
     var accordion = document.getElementById("pub-comments-accordion");
     var trigger = document.getElementById("pub-comments-trigger");
+    var titleGroup = document.getElementById("pub-comments-title-group");
     var panel = document.getElementById("pub-comments-panel");
     if (!accordion || !trigger || !panel) return;
 
@@ -574,10 +952,15 @@
     function setOpen(open) {
       accordion.classList.toggle("pub-accordion--collapsed", !open);
       trigger.setAttribute("aria-expanded", open ? "true" : "false");
+      if (titleGroup) titleGroup.setAttribute("aria-expanded", open ? "true" : "false");
       panel.hidden = !open;
       try {
         localStorage.setItem(storageKey, open ? "1" : "0");
       } catch (err) {}
+    }
+
+    function toggleOpen() {
+      setOpen(trigger.getAttribute("aria-expanded") !== "true");
     }
 
     var saved = null;
@@ -586,9 +969,20 @@
     } catch (err) {}
     setOpen(saved !== "0");
 
-    trigger.addEventListener("click", function () {
-      setOpen(trigger.getAttribute("aria-expanded") !== "true");
-    });
+    trigger.addEventListener("click", toggleOpen);
+    if (titleGroup) {
+      titleGroup.addEventListener("click", function (e) {
+        if (e.target.closest(".js-panel-info-open")) return;
+        toggleOpen();
+      });
+      titleGroup.addEventListener("keydown", function (e) {
+        if (e.target.closest(".js-panel-info-open")) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          toggleOpen();
+        }
+      });
+    }
   })();
 
   (function () {
@@ -597,7 +991,7 @@
     var loadingEl = document.getElementById("comment-results-loading");
     var platformEl = document.getElementById("comment-filter-platform");
     var userEl = document.getElementById("comment-filter-user");
-    if (!threadList || !platformEl || !userEl) return;
+    if (!threadList || !platformEl) return;
 
     var platformLabels = {{ platform_labels | tojson }};
     var labelYou = {{ t('pub.badge_you') | tojson }};
@@ -773,10 +1167,10 @@
 
     if (window.wireAjaxSelectSearch) {
       window.wireAjaxSelectSearch(platformEl, runSearch);
-      window.wireAjaxSelectSearch(userEl, runSearch);
+      if (userEl) window.wireAjaxSelectSearch(userEl, runSearch);
     } else {
       platformEl.addEventListener("change", runSearch);
-      userEl.addEventListener("change", runSearch);
+      if (userEl) userEl.addEventListener("change", runSearch);
     }
 
     runSearch();
@@ -838,7 +1232,7 @@
       <p class="extractor-confirm__body" id="pub-log-confirm-body"></p>
       <div class="extractor-confirm__actions">
         <button type="button" class="btn btn-ghost" data-close-log-purge="pub-log-confirm">{{ t('log.purge_cancel') }}</button>
-        <button type="button" class="btn extractor-confirm__delete" id="pub-log-confirm-delete">{{ t('log.purge_confirm_btn') }}</button>
+        <button type="button" class="btn extractor-confirm__delete btn-user-delete" id="pub-log-confirm-delete" aria-label="{{ t('log.purge_confirm_btn') }}" title="{{ t('log.purge_confirm_btn') }}">{% include '_icon_trash.html' %}</button>
       </div>
     </div>
   </div>
@@ -864,6 +1258,81 @@
       ok: {{ t('log.purge_ok') | tojson }}
     }
   });
+</script>
+{% endif %}
+{% if can_manage_comments %}
+<div id="panel-info-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-panel-info tabindex="-1"></div>
+  <div class="equipo-modal__panel panel-info-modal__panel" role="dialog" aria-modal="true" aria-labelledby="panel-info-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div>
+        <h2 id="panel-info-modal-title"></h2>
+      </div>
+      <button type="button" class="equipo-modal__close" data-close-panel-info aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body">
+      <p class="sub panel-info-modal__text" id="panel-info-modal-text"></p>
+    </div>
+  </div>
+</div>
+<script>
+  (function () {
+    var modal = document.getElementById("panel-info-modal");
+    var titleEl = document.getElementById("panel-info-modal-title");
+    var textEl = document.getElementById("panel-info-modal-text");
+    var lastTrigger = null;
+
+    if (!modal || !titleEl || !textEl) return;
+
+    function releaseModalFocus(returnFocusEl) {
+      var active = document.activeElement;
+      if (!active || !modal.contains(active)) return;
+      if (returnFocusEl && typeof returnFocusEl.focus === "function") {
+        returnFocusEl.focus();
+      } else {
+        active.blur();
+      }
+    }
+
+    function openPanelInfo(btn) {
+      var title = btn.getAttribute("data-info-title") || "";
+      var text = btn.getAttribute("data-info-text") || "";
+      lastTrigger = btn;
+      titleEl.textContent = title;
+      textEl.textContent = text;
+      modal.classList.add("is-open");
+      modal.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+      var closeBtn = modal.querySelector(".equipo-modal__close");
+      if (closeBtn) closeBtn.focus();
+    }
+
+    function closePanelInfo() {
+      releaseModalFocus(lastTrigger);
+      modal.classList.remove("is-open");
+      modal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+      lastTrigger = null;
+    }
+
+    document.querySelectorAll(".js-panel-info-open").forEach(function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        openPanelInfo(btn);
+      });
+    });
+
+    modal.querySelectorAll("[data-close-panel-info]").forEach(function (el) {
+      el.addEventListener("click", closePanelInfo);
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && modal.classList.contains("is-open")) {
+        closePanelInfo();
+      }
+    });
+  })();
 </script>
 {% endif %}
 {% endblock %}

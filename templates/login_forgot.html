@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{{ t('login.forgot.title') }} — {{ site_name }}{% endblock %}
+{% block body %}
+<div class="split-auth">
+  <div class="split-auth__lang">
+    {% include "_lang_switcher.html" %}
+  </div>
+  <div class="split-auth__left">
+    <div class="split-auth__left-content">
+      <h2 style="font-size: 2.5rem; line-height: 1.15; margin-bottom: 1.25rem; letter-spacing: -0.03em;">{{ t('login.forgot.headline') }}</h2>
+      <p style="font-size: 1.15rem; color: rgba(255,255,255,0.7); line-height: 1.6; max-width: 400px; margin: 0;">
+        {{ t('login.forgot.tagline') }}
+      </p>
+    </div>
+  </div>
+  <div class="split-auth__right">
+    <div class="split-auth__form-wrapper">
+      <div class="split-auth__header">
+        <h1>{{ t('login.forgot.title') }}</h1>
+        <p>{{ t('login.forgot.welcome') }}</p>
+      </div>
+
+      {% if success %}
+      <div class="alert-ok" style="margin-bottom: 1.5rem;">{{ success }}</div>
+      {% endif %}
+
+      {% if error %}
+      <div class="alert-error" style="margin-bottom: 1.5rem;">{{ error }}</div>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('login_forgot_post') }}" class="split-auth__form">
+        <label class="field">
+          <span class="field-label">{{ t('login.forgot.email') }}</span>
+          <input
+            type="email"
+            name="email"
+            autocomplete="email"
+            value="{{ email or '' }}"
+            placeholder="{{ t('login.forgot.email_ph') }}"
+            aria-label="{{ t('login.forgot.email') }}"
+            required
+            class="split-auth__input"
+          />
+        </label>
+        <button type="submit" class="btn btn-accent split-auth__submit">
+          {{ t('login.forgot.submit') }}
+        </button>
+      </form>
+      <p class="auth-alt-link">
+        <a href="{{ url_for('login') }}">{{ t('login.forgot.back') }}</a>
+      </p>
+    </div>
+    <div class="split-auth__footer">
+      {% include "_footer.html" %}
+    </div>
+  </div>
+</div>
+{% include "_public_chat.html" %}
+{% endblock %}

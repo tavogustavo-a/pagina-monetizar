@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}{{ t('register.title') }} — {{ site_name }}{% endblock %}
+{% block body %}
+<div class="split-auth">
+  <div class="split-auth__lang">
+    {% include "_lang_switcher.html" %}
+  </div>
+  <div class="split-auth__left">
+    <div class="split-auth__left-content">
+      <h2 style="font-size: 2.5rem; line-height: 1.15; margin-bottom: 1.25rem; letter-spacing: -0.03em;">{{ t('register.headline') }}</h2>
+      <p style="font-size: 1.15rem; color: rgba(255,255,255,0.7); line-height: 1.6; max-width: 400px; margin: 0;">
+        {{ t('register.tagline') }}
+      </p>
+    </div>
+  </div>
+  <div class="split-auth__right">
+    <div class="split-auth__form-wrapper">
+      <div class="split-auth__header">
+        <h1>{{ t('register.title') }}</h1>
+        <p>{{ t('register.welcome') }}</p>
+      </div>
+
+      {% if error %}
+      <div class="alert-error" style="margin-bottom: 1.5rem;">{{ error }}</div>
+      {% endif %}
+
+      <form method="post" action="{{ register_path }}" class="split-auth__form">
+        <label class="field">
+          <span class="field-label">{{ t('register.code') }}</span>
+          <input
+            type="text"
+            name="invite_code"
+            value="{{ invite_code or '' }}"
+            placeholder="{{ t('register.code_ph') }}"
+            aria-label="{{ t('register.code') }}"
+            autocomplete="off"
+            required
+            class="split-auth__input"
+            style="text-transform: uppercase; letter-spacing: 0.15em;"
+          />
+        </label>
+        <label class="field">
+          <span class="field-label">{{ t('login.username') }}</span>
+          <input
+            type="text"
+            name="username"
+            autocomplete="username"
+            value="{{ username or '' }}"
+            placeholder="{{ t('login.username_ph') }}"
+            aria-label="{{ t('login.username') }}"
+            required
+            class="split-auth__input"
+          />
+        </label>
+        <label class="field">
+          <span class="field-label">{{ t('register.email') }}</span>
+          <input
+            type="email"
+            name="email"
+            autocomplete="email"
+            value="{{ email or '' }}"
+            placeholder="{{ t('register.email_ph') }}"
+            aria-label="{{ t('register.email') }}"
+            required
+            class="split-auth__input"
+          />
+        </label>
+        <label class="field">
+          <span class="field-label">{{ t('login.password') }}</span>
+          <input
+            type="password"
+            name="password"
+            autocomplete="new-password"
+            placeholder="{{ t('login.password_ph') }}"
+            aria-label="{{ t('login.password') }}"
+            required
+            class="split-auth__input"
+          />
+        </label>
+        <label class="field">
+          <span class="field-label">{{ t('register.password2') }}</span>
+          <input
+            type="password"
+            name="password2"
+            autocomplete="new-password"
+            placeholder="{{ t('login.password_ph') }}"
+            aria-label="{{ t('register.password2') }}"
+            required
+            class="split-auth__input"
+          />
+        </label>
+        <button type="submit" class="btn btn-accent split-auth__submit">
+          {{ t('register.submit') }}
+        </button>
+      </form>
+      <p class="auth-alt-link">
+        {{ t('register.no_code_hint') }}
+      </p>
+      <p class="auth-alt-link">
+        {{ t('register.have_account') }}
+        <a href="/login">{{ t('register.login_link') }}</a>
+      </p>
+    </div>
+    <div class="split-auth__footer">
+      {% include "_footer.html" %}
+    </div>
+  </div>
+</div>
+{% include "_public_chat.html" %}
+{% endblock %}

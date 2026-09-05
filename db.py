@@ -20,6 +20,7 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "104646")
 REGULAR_USER_MODES = frozenset({
     "basic",
     "admin",
+    "tiktok",
     "supervisor",
     "videos_only",
     "videos_comments",
@@ -28,6 +29,7 @@ REGULAR_USER_MODES = frozenset({
 USER_MODE_LABELS: dict[str, str] = {
     "basic": "Basic mode",
     "admin": "Admin mode",
+    "tiktok": "TikTok user",
     "supervisor": "Supervisor mode",
     "videos_only": "Videos only",
     "videos_comments": "Videos & comments",
@@ -36,6 +38,7 @@ USER_MODE_LABELS: dict[str, str] = {
 USER_MODE_HINTS: dict[str, str] = {
     "basic": "Default: minimal access until permissions are configured.",
     "admin": "High permission level in the app (separate from site administrator account).",
+    "tiktok": "Admin-like workspace without server credentials (publish, stats, team).",
     "supervisor": "Content and workflow oversight.",
     "videos_only": "Publish and manage videos only.",
     "videos_comments": "Videos plus comment interaction.",
@@ -48,6 +51,7 @@ USER_MODE_HINTS_ES = USER_MODE_HINTS
 REGULAR_USER_MODE_ORDER = (
     "basic",
     "admin",
+    "tiktok",
     "supervisor",
     "videos_only",
     "videos_comments",
@@ -59,20 +63,42 @@ USER_MODES_CAN_UPLOAD_VIDEOS = frozenset({
     "videos_comments_stats",
     "supervisor",
     "admin",
+    "tiktok",
 })
 USER_MODES_CAN_MANAGE_COMMENTS = frozenset({
     "videos_comments",
     "videos_comments_stats",
     "supervisor",
     "admin",
+    "tiktok",
 })
 
 
 def user_has_admin_privileges(user: User) -> bool:
-    """Cuenta administrador del sitio o usuario regular en modo admin."""
+    """Cuenta administrador del sitio o usuario regular en modo admin o tiktok."""
     if user.role == "admin":
         return True
-    return user.role == "user" and user.user_mode == "admin"
+    return user.role == "user" and user.user_mode in ("admin", "tiktok")
+
+
+def user_is_tiktok_mode(user: User) -> bool:
+    """Usuario TikTok: panel tipo admin pero sin Servidores/Extractor/API."""
+    return user.role == "user" and user.user_mode == "tiktok"
+
+
+def user_can_access_servers(user: User) -> bool:
+    """Servidores, extractor, API Documento y OAuth: solo admin real."""
+    return user_has_admin_privileges(user) and not user_is_tiktok_mode(user)
+
+
+def user_can_manage_panel_accounts(user: User) -> bool:
+    """Cuentas OAuth en Panel: solo admin del sitio o usuario modo TikTok."""
+    return user_is_site_admin(user) or user_is_tiktok_mode(user)
+
+
+def user_can_manage_team(actor: User) -> bool:
+    """Crear usuarios, miembros y códigos de invitación: solo admin real."""
+    return user_can_access_servers(actor)
 
 
 def user_is_site_admin(user: User) -> bool:
@@ -89,7 +115,9 @@ def user_can_manage_member(actor: User, target: User) -> bool:
         return False
     if target.user_mode == "admin":
         return user_is_site_admin(actor)
-    return user_has_admin_privileges(actor)
+    if target.user_mode == "tiktok":
+        return user_is_site_admin(actor) or user_is_admin_mode_user(actor)
+    return user_can_manage_team(actor)
 
 
 @dataclass
@@ -103,11 +131,20 @@ class User:
     user_mode: str = "basic"
     linked_tiktok_config_id: str | None = None
     can_view_comments: bool = True
+    notification_email: str = ""
+    notification_email_verified: bool = False
+    pending_notification_email: str = ""
+    auth_version: int = 1
+    membership_plan: str = ""
+    membership_started_at: str = ""
+    wallet_balance_usd: int = 0
 
 
 _USER_ROW_COLUMNS = (
     "id, username, role, display_name, created_at, active, user_mode, "
-    "linked_tiktok_config_id, can_view_comments"
+    "linked_tiktok_config_id, can_view_comments, notification_email, "
+    "notification_email_verified, pending_notification_email, auth_version, "
+    "membership_plan, membership_started_at, wallet_balance_usd"
 )
 
 
@@ -279,6 +316,118 @@ def _ensure_users_can_view_comments_column() -> None:
         conn.close()
 
 
+def _ensure_users_notification_email_column() -> None:
+    conn = _connect()
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "notification_email" not in cols:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN notification_email TEXT NOT NULL DEFAULT ''"
+            )
+            conn.commit()
+        row = conn.execute(
+            "SELECT value FROM app_settings WHERE key = 'notification_email_migrated'"
+        ).fetchone()
+        if row:
+            return
+        legacy_row = conn.execute(
+            "SELECT value FROM app_settings WHERE key = 'admin_email'"
+        ).fetchone()
+        legacy = str(legacy_row["value"]).strip() if legacy_row else ""
+        if legacy:
+            admin_row = conn.execute(
+                "SELECT id, notification_email FROM users WHERE role = 'admin' ORDER BY created_at LIMIT 1"
+            ).fetchone()
+            if admin_row and not str(admin_row["notification_email"] or "").strip():
+                conn.execute(
+                    "UPDATE users SET notification_email = ? WHERE id = ?",
+                    (legacy, admin_row["id"]),
+                )
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO app_settings (key, value, updated_at)
+            VALUES ('notification_email_migrated', '1', ?)
+            """,
+            (now,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _ensure_users_email_verification_columns() -> None:
+    conn = _connect()
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "notification_email_verified" not in cols:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN notification_email_verified INTEGER NOT NULL DEFAULT 0"
+            )
+        if "pending_notification_email" not in cols:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN pending_notification_email TEXT NOT NULL DEFAULT ''"
+            )
+        conn.execute(
+            """
+            UPDATE users
+            SET notification_email_verified = 1
+            WHERE trim(notification_email) != ''
+              AND notification_email_verified = 0
+            """
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT value FROM app_settings WHERE key = 'email_verification_migrated'"
+        ).fetchone()
+        if row:
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO app_settings (key, value, updated_at)
+            VALUES ('email_verification_migrated', '1', ?)
+            """,
+            (now,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _ensure_email_verification_tokens_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS email_verification_tokens (
+                token TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                email TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _ensure_users_auth_version_column() -> None:
+    conn = _connect()
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "auth_version" not in cols:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 1"
+            )
+            conn.commit()
+    finally:
+        conn.close()
+
+
 def _migrate_legacy_user_modes() -> None:
     conn = _connect()
     try:
@@ -309,6 +458,15 @@ def _user_from_row(row: sqlite3.Row) -> User:
         can_view_comments = True
     else:
         can_view_comments = bool(cv)
+    email = str(d.get("notification_email") or "").strip()
+    pending_email = str(d.get("pending_notification_email") or "").strip()
+    verified_raw = d.get("notification_email_verified")
+    if verified_raw is None:
+        email_verified = bool(email)
+    else:
+        email_verified = bool(verified_raw)
+    plan = str(d.get("membership_plan") or "").strip().lower()
+    auth_version = int(d.get("auth_version") or 1)
     return User(
         id=d["id"],
         username=d["username"],
@@ -319,6 +477,13 @@ def _user_from_row(row: sqlite3.Row) -> User:
         user_mode=mode,
         linked_tiktok_config_id=ltid,
         can_view_comments=can_view_comments,
+        notification_email=email,
+        notification_email_verified=email_verified,
+        pending_notification_email=pending_email,
+        auth_version=auth_version,
+        membership_plan=plan,
+        membership_started_at=str(d.get("membership_started_at") or "").strip(),
+        wallet_balance_usd=int(d.get("wallet_balance_usd") or 0),
     )
 
 
@@ -480,10 +645,19 @@ def init_db() -> None:
     _migrate_legacy_user_modes()
     _ensure_users_linked_tiktok_config_column()
     _ensure_users_can_view_comments_column()
+    _ensure_users_notification_email_column()
+    _ensure_users_email_verification_columns()
+    _ensure_email_verification_tokens_table()
+    _ensure_users_auth_version_column()
+    _ensure_users_membership_plan_column()
+    _ensure_wallet_columns()
+    _ensure_wallet_ledger_table()
+    _ensure_stats_query_log_table()
     _ensure_tiktok_oauth_columns()
     _ensure_oauth_accounts_table()
     _ensure_scheduled_publications_table()
     _ensure_platform_credentials_name_column()
+    _ensure_platform_credentials_owner_column()
     _ensure_server_groups_tables()
     _ensure_server_accounts_table()
     _ensure_server_accounts_source_columns()
@@ -491,8 +665,18 @@ def init_db() -> None:
     _ensure_user_account_links_table()
     _ensure_server_group_members_v3()
     _ensure_publication_log_account_link_column()
+    _ensure_publication_log_batch_id_column()
     _ensure_scheduled_publications_account_link_column()
     _ensure_extractor_tables()
+    _ensure_invite_codes_table()
+    _migrate_invited_users_guest_plan()
+    _ensure_support_chat_table()
+    _ensure_support_guest_table()
+    _ensure_proxies_table()
+    _ensure_proxy_links_table()
+    _ensure_payment_methods_table()
+    _ensure_purchases_table()
+    _ensure_purchases_wallet_columns()
     _pg = _connect()
     try:
         db_engine.ensure_postgres_extras(_pg)
@@ -536,6 +720,19 @@ def _ensure_platform_credentials_name_column() -> None:
         if "name" not in cols:
             conn.execute(
                 "ALTER TABLE platform_credentials ADD COLUMN name TEXT NOT NULL DEFAULT ''"
+            )
+            conn.commit()
+    finally:
+        conn.close()
+
+
+def _ensure_platform_credentials_owner_column() -> None:
+    conn = _connect()
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(platform_credentials)").fetchall()}
+        if "owner_user_id" not in cols:
+            conn.execute(
+                "ALTER TABLE platform_credentials ADD COLUMN owner_user_id TEXT"
             )
             conn.commit()
     finally:
@@ -886,7 +1083,7 @@ def list_team_server_account_choices(
 
 
 def list_user_publish_accounts(user: User, *, lang: str = "es") -> list[dict[str, Any]]:
-    if user_has_admin_privileges(user):
+    if user_has_admin_privileges(user) and not user_is_tiktok_mode(user):
         return []
     link_ids = list_user_account_link_ids(user.id)
     if not link_ids:
@@ -897,7 +1094,7 @@ def list_user_publish_accounts(user: User, *, lang: str = "es") -> list[dict[str
 
 def list_stats_server_accounts(viewer: User, *, lang: str = "es") -> list[dict[str, Any]]:
     """Cuentas de Servidores visibles en Estadísticas (admin: todas; usuario: asignadas)."""
-    if user_has_admin_privileges(viewer):
+    if user_can_access_servers(viewer):
         return list_team_server_account_choices(lang=lang)
     return list_user_publish_accounts(viewer, lang=lang)
 
@@ -945,7 +1142,7 @@ def list_stats_filter_choices(viewer: User, *, lang: str = "es") -> list[dict[st
     from platforms import platform_list
 
     choices: list[dict[str, Any]] = []
-    if user_has_admin_privileges(viewer):
+    if user_can_access_servers(viewer):
         sync_server_accounts_from_links()
         names = {p["id"]: p["name"] for p in platform_list(lang)}
         conn = _connect()
@@ -979,6 +1176,10 @@ def list_stats_filter_choices(viewer: User, *, lang: str = "es") -> list[dict[st
         finally:
             conn.close()
     else:
+        if user_is_tiktok_mode(viewer):
+            sync_panel_platform_links_for_user(viewer)
+        sync_server_accounts_from_links()
+        names = {p["id"]: p["name"] for p in platform_list(lang)}
         for acc in list_user_publish_accounts(viewer, lang=lang):
             link_id = str(acc.get("id") or "").strip()
             if not link_id:
@@ -993,7 +1194,87 @@ def list_stats_filter_choices(viewer: User, *, lang: str = "es") -> list[dict[st
                     "link_ids": [link_id],
                 }
             )
-    if user_has_admin_privileges(viewer):
+        seen_ids = {c["id"] for c in choices}
+        conn = _connect()
+        try:
+            for tok in list_connected_tiktok_accounts():
+                if str(tok.get("internal_user_id") or "") != viewer.id:
+                    continue
+                cid = str(tok.get("id") or "").strip()
+                if not cid:
+                    continue
+                row = conn.execute(
+                    """
+                    SELECT name FROM server_accounts
+                    WHERE source_kind = 'tiktok' AND source_ref = ?
+                    """,
+                    (cid,),
+                ).fetchone()
+                if not row:
+                    continue
+                link_name = str(row["name"] or "").strip()
+                if not link_name:
+                    continue
+                link_id = _ensure_account_link(conn, link_name)
+                if not link_id or link_id in seen_ids:
+                    continue
+                seen_ids.add(link_id)
+                platform_ids = _account_link_platform_ids(conn, link_name)
+                platform_labels = [names.get(pid, pid) for pid in platform_ids]
+                choices.append(
+                    {
+                        "id": link_id,
+                        "name": link_name,
+                        "kind": "link",
+                        "platform_ids": list(platform_ids),
+                        "platform": ", ".join(platform_labels),
+                        "link_ids": [link_id],
+                    }
+                )
+            oauth_rows = conn.execute(
+                """
+                SELECT id FROM oauth_accounts
+                WHERE linked_by_user_id = ?
+                  AND access_token IS NOT NULL AND TRIM(access_token) != ''
+                """,
+                (viewer.id,),
+            ).fetchall()
+            for oa in oauth_rows:
+                oid = str(oa["id"] or "").strip()
+                if not oid:
+                    continue
+                row = conn.execute(
+                    """
+                    SELECT name FROM server_accounts
+                    WHERE source_kind = 'oauth' AND source_ref = ?
+                    """,
+                    (oid,),
+                ).fetchone()
+                if not row:
+                    continue
+                link_name = str(row["name"] or "").strip()
+                if not link_name:
+                    continue
+                link_id = _ensure_account_link(conn, link_name)
+                if not link_id or link_id in seen_ids:
+                    continue
+                seen_ids.add(link_id)
+                platform_ids = _account_link_platform_ids(conn, link_name)
+                platform_labels = [names.get(pid, pid) for pid in platform_ids]
+                choices.append(
+                    {
+                        "id": link_id,
+                        "name": link_name,
+                        "kind": "link",
+                        "platform_ids": list(platform_ids),
+                        "platform": ", ".join(platform_labels),
+                        "link_ids": [link_id],
+                    }
+                )
+            conn.commit()
+        finally:
+            conn.close()
+    if user_can_access_servers(viewer):
         conn = _connect()
         try:
             for group in list_server_groups(lang):
@@ -1057,6 +1338,19 @@ def _ensure_publication_log_account_link_column() -> None:
         if "account_link_id" not in cols:
             conn.execute(
                 "ALTER TABLE publication_log ADD COLUMN account_link_id TEXT NOT NULL DEFAULT ''"
+            )
+            conn.commit()
+    finally:
+        conn.close()
+
+
+def _ensure_publication_log_batch_id_column() -> None:
+    conn = _connect()
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(publication_log)").fetchall()}
+        if "batch_id" not in cols:
+            conn.execute(
+                "ALTER TABLE publication_log ADD COLUMN batch_id TEXT NOT NULL DEFAULT ''"
             )
             conn.commit()
     finally:
@@ -1559,7 +1853,7 @@ def update_user_record(
             if len(new_password) < 4:
                 raise ValueError("Password must be at least 4 characters")
             conn.execute(
-                "UPDATE users SET username = ?, display_name = ?, password_hash = ?, user_mode = ?, can_view_comments = ? WHERE id = ?",
+                "UPDATE users SET username = ?, display_name = ?, password_hash = ?, user_mode = ?, can_view_comments = ?, auth_version = auth_version + 1 WHERE id = ?",
                 (u, dn, _hash_pw(new_password), mode, (1 if comments_flag else 0), uid),
             )
         else:
@@ -1597,6 +1891,623 @@ def user_mode_labels_for_lang(lang: str = "en") -> dict[str, str]:
     from i18n import t
 
     return {mid: t(f"mode.{mid}", lang) for mid in REGULAR_USER_MODE_ORDER}
+
+
+# ---------------------------------------------------------------------------
+# Códigos de invitación (registro público de Usuarios TikTok)
+# ---------------------------------------------------------------------------
+
+_INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def _ensure_invite_codes_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS invite_codes (
+                code TEXT PRIMARY KEY,
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                used_by TEXT,
+                used_at TEXT,
+                used_by_username TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        if not _has_column(conn, "invite_codes", "used_by_username"):
+            conn.execute(
+                "ALTER TABLE invite_codes ADD COLUMN used_by_username TEXT NOT NULL DEFAULT ''"
+            )
+        conn.execute(
+            """
+            UPDATE invite_codes
+            SET used_by_username = (
+                SELECT username FROM users WHERE users.id = invite_codes.used_by
+            )
+            WHERE used_by IS NOT NULL
+              AND TRIM(COALESCE(used_by_username, '')) = ''
+              AND EXISTS (SELECT 1 FROM users WHERE users.id = invite_codes.used_by)
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def create_invite_code(created_by: str) -> str:
+    import secrets
+
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        for _ in range(10):
+            code = "".join(secrets.choice(_INVITE_ALPHABET) for _ in range(8))
+            row = conn.execute(
+                "SELECT code FROM invite_codes WHERE code = ?", (code,)
+            ).fetchone()
+            if row:
+                continue
+            conn.execute(
+                "INSERT INTO invite_codes (code, created_by, created_at) VALUES (?, ?, ?)",
+                (code, created_by, datetime.now(timezone.utc).isoformat()),
+            )
+            conn.commit()
+            return code
+        raise RuntimeError("Could not generate an invite code")
+    finally:
+        conn.close()
+
+
+def list_invite_codes() -> list[dict[str, Any]]:
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT ic.code, ic.created_at, ic.used_at, ic.used_by,
+                   COALESCE(NULLIF(u.username, ''), ic.used_by_username, '') AS used_by_name
+            FROM invite_codes ic
+            LEFT JOIN users u ON u.id = ic.used_by
+            ORDER BY ic.created_at DESC
+            """
+        ).fetchall()
+        return [
+            {
+                "code": r["code"],
+                "created_at": r["created_at"],
+                "used_at": r["used_at"] or "",
+                "used_by": r["used_by_name"] or "",
+                "expired": bool(r["used_at"] or r["used_by"] or r["used_by_name"]),
+            }
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
+def delete_invite_code(code: str) -> None:
+    """Borra el cupón. No toca la cuenta de quien ya lo usó."""
+    conn = _connect()
+    try:
+        conn.execute("DELETE FROM invite_codes WHERE code = ?", (code.strip().upper(),))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def count_invite_codes_in_range(start_iso: str, end_iso: str) -> int:
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS n FROM invite_codes
+            WHERE created_at >= ? AND created_at <= ?
+            """,
+            (start_iso, end_iso),
+        ).fetchone()
+        return int(row["n"] or 0)
+    finally:
+        conn.close()
+
+
+def delete_invite_codes_in_range(start_iso: str, end_iso: str) -> int:
+    """Borra cupones del rango. Las cuentas que ya se registraron siguen activas."""
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            """
+            DELETE FROM invite_codes
+            WHERE created_at >= ? AND created_at <= ?
+            """,
+            (start_iso, end_iso),
+        )
+        conn.commit()
+        return int(cur.rowcount or 0)
+    finally:
+        conn.close()
+
+
+def invite_info_map(user_ids: list[str]) -> dict[str, dict[str, str]]:
+    """Código de invitación usado por cada usuario (si se registró por /register)."""
+    ids = [str(x).strip() for x in user_ids if str(x).strip()]
+    if not ids:
+        return {}
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        ph, vals = _sql_in(ids)
+        rows = conn.execute(
+            f"SELECT used_by, code, used_at FROM invite_codes WHERE used_by IN ({ph})",
+            vals,
+        ).fetchall()
+        return {
+            str(r["used_by"]): {"code": r["code"] or "", "used_at": r["used_at"] or ""}
+            for r in rows
+            if r["used_by"]
+        }
+    finally:
+        conn.close()
+
+
+def redeem_invite_code(code: str, username: str, password: str) -> User:
+    """Registro público: valida el código, crea Usuario TikTok y marca el código usado."""
+    seed_admin_if_missing()
+    c = (code or "").strip().upper()
+    if not c:
+        raise ValueError("invite_required")
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT code, used_by, used_at FROM invite_codes WHERE code = ?", (c,)
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        raise ValueError("invite_invalid")
+    if row["used_by"] or row["used_at"]:
+        raise ValueError("invite_used")
+    user = create_user(
+        username=username,
+        password=password,
+        display_name=username.strip(),
+        role="user",
+        user_mode="tiktok",
+    )
+    set_user_membership_plan(user.id, "guest")
+    conn = _connect()
+    try:
+        conn.execute(
+            """UPDATE invite_codes
+               SET used_by = ?, used_at = ?, used_by_username = ?
+               WHERE code = ? AND used_by IS NULL AND (used_at IS NULL OR used_at = '')""",
+            (user.id, datetime.now(timezone.utc).isoformat(), user.username, c),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return user
+
+
+# ---------------------------------------------------------------------------
+# Chat de soporte (un hilo por usuario)
+# ---------------------------------------------------------------------------
+
+
+def _ensure_support_chat_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS support_messages (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                sender TEXT NOT NULL CHECK (sender IN ('user', 'admin')),
+                body TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                read_by_admin INTEGER NOT NULL DEFAULT 0,
+                read_by_user INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+SUPPORT_MESSAGE_MAX = 2000
+
+
+def add_support_message(user_id: str, sender: str, body: str) -> dict[str, Any]:
+    text = (body or "").strip()
+    if not text:
+        raise ValueError("empty_message")
+    if sender not in ("user", "admin"):
+        raise ValueError("bad_sender")
+    text = text[:SUPPORT_MESSAGE_MAX]
+    mid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            """INSERT INTO support_messages
+               (id, user_id, sender, body, created_at, read_by_admin, read_by_user)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                mid,
+                user_id,
+                sender,
+                text,
+                now,
+                1 if sender == "admin" else 0,
+                1 if sender == "user" else 0,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"id": mid, "sender": sender, "body": text, "created_at": now}
+
+
+def list_support_messages(user_id: str, limit: int = 300) -> list[dict[str, Any]]:
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """SELECT id, sender, body, created_at FROM support_messages
+               WHERE user_id = ? ORDER BY created_at ASC, id ASC""",
+            (user_id,),
+        ).fetchall()
+        out = [
+            {
+                "id": r["id"],
+                "sender": r["sender"],
+                "body": r["body"],
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
+        return out[-limit:]
+    finally:
+        conn.close()
+
+
+def mark_support_read(user_id: str, reader: str) -> None:
+    """reader='admin' marca leídos los mensajes del usuario; 'user' los del admin."""
+    conn = _connect()
+    try:
+        if reader == "admin":
+            conn.execute(
+                "UPDATE support_messages SET read_by_admin = 1 WHERE user_id = ? AND sender = 'user'",
+                (user_id,),
+            )
+        else:
+            conn.execute(
+                "UPDATE support_messages SET read_by_user = 1 WHERE user_id = ? AND sender = 'admin'",
+                (user_id,),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def support_unread_for_user(user_id: str) -> int:
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """SELECT COUNT(*) AS c FROM support_messages
+               WHERE user_id = ? AND sender = 'admin' AND read_by_user = 0""",
+            (user_id,),
+        ).fetchone()
+        return int(row["c"] or 0)
+    finally:
+        conn.close()
+
+
+def support_unread_total() -> int:
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) AS c FROM support_messages WHERE sender = 'user' AND read_by_admin = 0"
+        ).fetchone()
+        total = int(row["c"] or 0)
+        try:
+            grow = conn.execute(
+                """
+                SELECT COUNT(*) AS c FROM support_guest_messages
+                WHERE sender = 'user' AND read_by_admin = 0
+                """
+            ).fetchone()
+            total += int(grow["c"] or 0)
+        except sqlite3.OperationalError:
+            pass
+        return total
+    finally:
+        conn.close()
+
+
+def support_unread_count_for_viewer(viewer: User) -> int:
+    """Mensajes sin leer para la insignia del menú (admin: todos; usuario: los suyos)."""
+    if user_can_access_servers(viewer):
+        return support_unread_total()
+    return support_unread_for_user(viewer.id)
+
+
+def list_support_threads(q: str = "") -> list[dict[str, Any]]:
+    """Hilos para la vista admin: un registro por usuario con mensajes."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT sm.user_id,
+                   MAX(sm.created_at) AS last_at,
+                   SUM(CASE WHEN sm.sender = 'user' AND sm.read_by_admin = 0 THEN 1 ELSE 0 END) AS unread,
+                   u.username, u.display_name, u.user_mode, u.active
+            FROM support_messages sm
+            JOIN users u ON u.id = sm.user_id
+            GROUP BY sm.user_id, u.username, u.display_name, u.user_mode, u.active
+            ORDER BY last_at DESC
+            """
+        ).fetchall()
+        threads: list[dict[str, Any]] = []
+        query = (q or "").strip().lower()
+        for r in rows:
+            if query and query not in str(r["username"]).lower():
+                continue
+            last = conn.execute(
+                """SELECT sender, body, created_at FROM support_messages
+                   WHERE user_id = ? ORDER BY created_at DESC, id DESC""",
+                (r["user_id"],),
+            ).fetchone()
+            threads.append(
+                {
+                    "user_id": r["user_id"],
+                    "username": r["username"],
+                    "display_name": r["display_name"],
+                    "user_mode": r["user_mode"],
+                    "active": bool(r["active"]),
+                    "is_guest": False,
+                    "unread": int(r["unread"] or 0),
+                    "last_at": r["last_at"],
+                    "last_body": (last["body"] if last else "")[:140],
+                    "last_sender": last["sender"] if last else "",
+                }
+            )
+        return threads
+    finally:
+        conn.close()
+
+
+GUEST_THREAD_PREFIX = "g:"
+GUEST_SEARCH_TERMS = ("anon", "invit", "guest", "visit")
+
+
+def guest_thread_matches_query(query: str) -> bool:
+    q = (query or "").strip().lower()
+    if not q:
+        return True
+    return any(term in q for term in GUEST_SEARCH_TERMS)
+
+
+def _ensure_support_guest_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS support_guest_messages (
+                id TEXT PRIMARY KEY,
+                guest_id TEXT NOT NULL,
+                sender TEXT NOT NULL CHECK (sender IN ('user', 'admin')),
+                body TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                read_by_admin INTEGER NOT NULL DEFAULT 0,
+                read_by_guest INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def guest_thread_id(guest_id: str) -> str:
+    return f"{GUEST_THREAD_PREFIX}{guest_id}"
+
+
+def parse_guest_thread_id(thread_id: str) -> str | None:
+    s = (thread_id or "").strip()
+    if s.startswith(GUEST_THREAD_PREFIX):
+        gid = s[len(GUEST_THREAD_PREFIX) :].strip()
+        return gid or None
+    return None
+
+
+def add_guest_support_message(guest_id: str, sender: str, body: str) -> dict[str, Any]:
+    gid = (guest_id or "").strip()
+    if not gid:
+        raise ValueError("empty_message")
+    text = (body or "").strip()
+    if not text:
+        raise ValueError("empty_message")
+    if sender not in ("user", "admin"):
+        raise ValueError("bad_sender")
+    text = text[:SUPPORT_MESSAGE_MAX]
+    mid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            """INSERT INTO support_guest_messages
+               (id, guest_id, sender, body, created_at, read_by_admin, read_by_guest)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                mid,
+                gid,
+                sender,
+                text,
+                now,
+                1 if sender == "admin" else 0,
+                1 if sender == "user" else 0,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"id": mid, "sender": sender, "body": text, "created_at": now}
+
+
+def list_guest_support_messages(guest_id: str, limit: int = 300) -> list[dict[str, Any]]:
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """SELECT id, sender, body, created_at FROM support_guest_messages
+               WHERE guest_id = ? ORDER BY created_at ASC, id ASC""",
+            (guest_id,),
+        ).fetchall()
+        out = [
+            {
+                "id": r["id"],
+                "sender": r["sender"],
+                "body": r["body"],
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
+        return out[-limit:]
+    finally:
+        conn.close()
+
+
+def mark_guest_support_read(guest_id: str, reader: str) -> None:
+    conn = _connect()
+    try:
+        if reader == "admin":
+            conn.execute(
+                "UPDATE support_guest_messages SET read_by_admin = 1 WHERE guest_id = ? AND sender = 'user'",
+                (guest_id,),
+            )
+        else:
+            conn.execute(
+                "UPDATE support_guest_messages SET read_by_guest = 1 WHERE guest_id = ? AND sender = 'admin'",
+                (guest_id,),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def list_guest_support_threads(q: str = "") -> list[dict[str, Any]]:
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT guest_id,
+                   MAX(created_at) AS last_at,
+                   SUM(CASE WHEN sender = 'user' AND read_by_admin = 0 THEN 1 ELSE 0 END) AS unread
+            FROM support_guest_messages
+            GROUP BY guest_id
+            ORDER BY last_at DESC
+            """
+        ).fetchall()
+        query = (q or "").strip().lower()
+        threads: list[dict[str, Any]] = []
+        for r in rows:
+            gid = str(r["guest_id"])
+            if query and not guest_thread_matches_query(query):
+                continue
+            last = conn.execute(
+                """SELECT sender, body, created_at FROM support_guest_messages
+                   WHERE guest_id = ? ORDER BY created_at DESC, id DESC""",
+                (gid,),
+            ).fetchone()
+            threads.append(
+                {
+                    "user_id": guest_thread_id(gid),
+                    "username": "",
+                    "display_name": "",
+                    "user_mode": "guest",
+                    "active": True,
+                    "is_guest": True,
+                    "unread": int(r["unread"] or 0),
+                    "last_at": r["last_at"],
+                    "last_body": (last["body"] if last else "")[:140],
+                    "last_sender": last["sender"] if last else "",
+                }
+            )
+        return threads
+    finally:
+        conn.close()
+
+
+def list_all_support_threads(q: str = "") -> list[dict[str, Any]]:
+    threads = list_support_threads(q) + list_guest_support_threads(q)
+    threads.sort(key=lambda t: t.get("last_at") or "", reverse=True)
+    return threads
+
+
+def count_support_messages_in_range(start_iso: str, end_iso: str) -> int:
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        n = 0
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS n FROM support_messages
+            WHERE created_at >= ? AND created_at <= ?
+            """,
+            (start_iso, end_iso),
+        ).fetchone()
+        n += int(row["n"] or 0)
+        if _table_exists(conn, "support_guest_messages"):
+            row = conn.execute(
+                """
+                SELECT COUNT(*) AS n FROM support_guest_messages
+                WHERE created_at >= ? AND created_at <= ?
+                """,
+                (start_iso, end_iso),
+            ).fetchone()
+            n += int(row["n"] or 0)
+        return n
+    finally:
+        conn.close()
+
+
+def delete_support_messages_in_range(start_iso: str, end_iso: str) -> int:
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        deleted = 0
+        cur = conn.execute(
+            """
+            DELETE FROM support_messages
+            WHERE created_at >= ? AND created_at <= ?
+            """,
+            (start_iso, end_iso),
+        )
+        deleted += int(cur.rowcount or 0)
+        if _table_exists(conn, "support_guest_messages"):
+            cur = conn.execute(
+                """
+                DELETE FROM support_guest_messages
+                WHERE created_at >= ? AND created_at <= ?
+                """,
+                (start_iso, end_iso),
+            )
+            deleted += int(cur.rowcount or 0)
+        conn.commit()
+        return deleted
+    finally:
+        conn.close()
+
+
+def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    rows = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table'"
+    ).fetchall()
+    return name in {r[0] for r in rows}
 
 
 def _sql_in(ids: list[str]) -> tuple[str, list[str]]:
@@ -1805,6 +2716,19 @@ def delete_user_by_id(uid: str, *, actor: User | None = None) -> list[str]:
         conn.execute("DELETE FROM publication_log WHERE user_id = ?", (uid,))
         conn.execute("DELETE FROM password_reset_tokens WHERE user_id = ?", (uid,))
         conn.execute("DELETE FROM user_account_links WHERE user_id = ?", (uid,))
+        if _table_exists(conn, "support_messages"):
+            conn.execute("DELETE FROM support_messages WHERE user_id = ?", (uid,))
+        if _table_exists(conn, "invite_codes"):
+            conn.execute(
+                """UPDATE invite_codes
+                   SET used_by_username = CASE
+                       WHEN TRIM(COALESCE(used_by_username, '')) = '' THEN ?
+                       ELSE used_by_username
+                   END,
+                   used_by = NULL
+                 WHERE used_by = ?""",
+                (target.username, uid),
+            )
         if _has_column(conn, "tiktok_api_configs", "internal_user_id"):
             conn.execute(
                 "UPDATE tiktok_api_configs SET internal_user_id = NULL WHERE internal_user_id = ?",
@@ -2733,6 +3657,31 @@ def allowed_video_owner_ids_for_user(viewer: User) -> set[str]:
     }
 
 
+def publication_log_viewer_scope(viewer: User) -> list[str] | None:
+    """None = ver todo el historial (admin sitio o servidores); lista = user ids visibles."""
+    if user_is_site_admin(viewer) or user_can_access_servers(viewer):
+        return None
+    ids = {str(viewer.id)}
+    ids.update(allowed_video_owner_ids_for_user(viewer))
+    return list(ids)
+
+
+def _publication_log_scope_sql(viewer: User | None) -> tuple[str, list[Any]]:
+    if viewer is None:
+        return "", []
+    scope = publication_log_viewer_scope(viewer)
+    if scope is None:
+        return "", []
+    if not scope:
+        return "WHERE 1=0", []
+    ph = ",".join("?" * len(scope))
+    where = (
+        f"WHERE (pl.user_id IN ({ph})"
+        f" OR pl.video_id IN (SELECT id FROM videos WHERE user_id IN ({ph})))"
+    )
+    return where, [*scope, *scope]
+
+
 def resolve_publish_owner_user_id(viewer: User, config_id: str) -> str | None:
     cfg_id = (config_id or "").strip()
     if not cfg_id:
@@ -3091,20 +4040,186 @@ def list_connected_tiktok_accounts() -> list[dict[str, Any]]:
         conn.close()
 
 
-def get_tiktok_by_open_id(open_id: str) -> dict[str, Any] | None:
+def list_tiktok_accounts_for_user(user: User) -> list[dict[str, Any]]:
+    """Cuentas TikTok que este usuario conectó o tiene asignadas."""
+    accounts = list_connected_tiktok_accounts()
+    if user_can_access_servers(user):
+        return accounts
+    uid = user.id
+    link = user.linked_tiktok_config_id
+    return [
+        a
+        for a in accounts
+        if a.get("internal_user_id") == uid or a.get("id") == link
+    ]
+
+
+def user_can_manage_tiktok_config(actor: User, config_id: str) -> bool:
+    if user_can_access_servers(actor):
+        return True
+    if not user_has_admin_privileges(actor):
+        return False
+    cid = (config_id or "").strip()
+    if not cid:
+        return False
+    row = get_tiktok_oauth_row(cid)
+    if not row:
+        return False
+    if str(row.get("internal_user_id") or "") == actor.id:
+        return True
+    return actor.linked_tiktok_config_id == cid
+
+
+def attach_tiktok_config_to_user(config_id: str, user_id: str) -> None:
+    """Asigna la cuenta OAuth al usuario del panel y la deja lista para publicar."""
     seed_admin_if_missing()
-    oid = (open_id or "").strip()
-    if not oid:
-        return None
+    cid = (config_id or "").strip()
+    uid = (user_id or "").strip()
+    if not cid or not uid:
+        return
     conn = _connect()
     try:
-        row = conn.execute(
-            "SELECT * FROM tiktok_api_configs WHERE open_id = ?",
-            (oid,),
-        ).fetchone()
-        if not row:
-            return None
-        return dict(row)
+        _sync_user_tiktok_link(conn, uid, cid)
+        _attach_source_account_to_user_on_conn(
+            conn, uid, source_kind="tiktok", source_ref=cid
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _attach_source_account_to_user_on_conn(
+    conn: sqlite3.Connection,
+    user_id: str,
+    *,
+    source_kind: str,
+    source_ref: str,
+) -> None:
+    uid = (user_id or "").strip()
+    ref = (source_ref or "").strip()
+    kind = (source_kind or "").strip()
+    if not uid or not ref or not kind:
+        return
+    acc = conn.execute(
+        """
+        SELECT name FROM server_accounts
+        WHERE source_kind = ? AND source_ref = ?
+        """,
+        (kind, ref),
+    ).fetchone()
+    if not acc or not acc["name"]:
+        return
+    lid = _ensure_account_link(conn, str(acc["name"]))
+    if not lid:
+        return
+    exists = conn.execute(
+        """
+        SELECT 1 AS ok FROM user_account_links
+        WHERE user_id = ? AND account_link_id = ?
+        """,
+        (uid, lid),
+    ).fetchone()
+    if not exists:
+        conn.execute(
+            """
+            INSERT INTO user_account_links (user_id, account_link_id)
+            VALUES (?, ?)
+            """,
+            (uid, lid),
+        )
+
+
+def attach_platform_account_to_user(platform_id: str, user_id: str) -> None:
+    """Vincula la cuenta de plataforma (credenciales del panel) al usuario TikTok."""
+    seed_admin_if_missing()
+    pid = (platform_id or "").strip()
+    uid = (user_id or "").strip()
+    if not pid or not uid:
+        return
+    sync_server_accounts_from_links()
+    conn = _connect()
+    try:
+        _attach_source_account_to_user_on_conn(
+            conn, uid, source_kind="platform", source_ref=pid
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def sync_panel_platform_links_for_user(user: User) -> None:
+    """Asegura que las credenciales del panel del usuario TikTok aparezcan en Publicaciones."""
+    if not user_can_manage_panel_accounts(user) or user_can_access_servers(user):
+        return
+    uid = user.id
+    sync_server_accounts_from_links()
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT platform_id, owner_user_id
+            FROM platform_credentials
+            """
+        ).fetchall()
+        for row in rows:
+            pid = str(row["platform_id"] or "").strip()
+            if not pid:
+                continue
+            owner = str(row["owner_user_id"] or "").strip()
+            if owner and owner != uid:
+                continue
+            raw_row = conn.execute(
+                "SELECT * FROM platform_credentials WHERE platform_id = ?", (pid,)
+            ).fetchone()
+            raw = {k: raw_row[k] for k in raw_row.keys()} if raw_row else None
+            if not _platform_cred_is_configured(raw):
+                continue
+            if not owner:
+                conn.execute(
+                    "UPDATE platform_credentials SET owner_user_id = ? WHERE platform_id = ?",
+                    (uid, pid),
+                )
+            _attach_source_account_to_user_on_conn(
+                conn, uid, source_kind="platform", source_ref=pid
+            )
+        oauth_rows = conn.execute(
+            """
+            SELECT id FROM oauth_accounts
+            WHERE linked_by_user_id = ?
+              AND access_token IS NOT NULL AND TRIM(access_token) != ''
+            """,
+            (uid,),
+        ).fetchall()
+        for row in oauth_rows:
+            oid = str(row["id"] or "").strip()
+            if oid:
+                _attach_source_account_to_user_on_conn(
+                    conn, uid, source_kind="oauth", source_ref=oid
+                )
+        link = (user.linked_tiktok_config_id or "").strip()
+        if link:
+            _attach_source_account_to_user_on_conn(
+                conn, uid, source_kind="tiktok", source_ref=link
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def attach_oauth_account_to_user(account_id: str, user_id: str) -> None:
+    """Asigna la cuenta OAuth al usuario TikTok para que pueda publicar."""
+    seed_admin_if_missing()
+    cid = (account_id or "").strip()
+    uid = (user_id or "").strip()
+    if not cid or not uid:
+        return
+    sync_server_accounts_from_links()
+    conn = _connect()
+    try:
+        _attach_source_account_to_user_on_conn(
+            conn, uid, source_kind="oauth", source_ref=cid
+        )
+        conn.commit()
     finally:
         conn.close()
 
@@ -3254,6 +4369,107 @@ def list_oauth_accounts_public(platform_id: str) -> list[dict[str, Any]]:
         conn.close()
 
 
+def list_oauth_accounts_for_user(user: User, platform_id: str) -> list[dict[str, Any]]:
+    if user_can_access_servers(user):
+        return list_oauth_accounts_public(platform_id)
+    seed_admin_if_missing()
+    pid = (platform_id or "").strip()
+    if not pid:
+        return []
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT o.*, u.username AS internal_username
+            FROM oauth_accounts o
+            LEFT JOIN users u ON u.id = o.linked_by_user_id
+            WHERE o.platform_id = ?
+              AND o.linked_by_user_id = ?
+              AND o.access_token IS NOT NULL AND TRIM(o.access_token) != ''
+            ORDER BY o.updated_at DESC
+            """,
+            (pid, user.id),
+        ).fetchall()
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            uname = str(r["username"] or "").strip()
+            label = str(r["display_name"] or "").strip()
+            if uname and not label:
+                label = f"@{uname}"
+            if not label:
+                label = pid
+            out.append(
+                {
+                    "id": r["id"],
+                    "name": label,
+                    "username": uname,
+                    "open_id": r["open_id"],
+                    "internal_username": r["internal_username"],
+                    "active": bool(r["active"]),
+                    "connected_at": r["updated_at"],
+                    "has_token": True,
+                }
+            )
+        return out
+    finally:
+        conn.close()
+
+
+def list_connected_platform_ids_for_user(user: User) -> list[str]:
+    """Plataformas con cuenta conectada (token), no solo Client ID/Secret del panel."""
+    seed_admin_if_missing()
+    pids: list[str] = []
+    seen: set[str] = set()
+
+    def add(pid: str) -> None:
+        p = (pid or "").strip()
+        if p and p not in seen:
+            seen.add(p)
+            pids.append(p)
+
+    if list_tiktok_accounts_for_user(user):
+        add("tiktok")
+
+    conn = _connect()
+    try:
+        if user_can_access_servers(user):
+            rows = conn.execute(
+                """
+                SELECT DISTINCT platform_id
+                FROM oauth_accounts
+                WHERE access_token IS NOT NULL AND TRIM(access_token) != ''
+                  AND trim(platform_id) != ''
+                ORDER BY platform_id
+                """
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT platform_id
+                FROM oauth_accounts
+                WHERE linked_by_user_id = ?
+                  AND access_token IS NOT NULL AND TRIM(access_token) != ''
+                  AND trim(platform_id) != ''
+                ORDER BY platform_id
+                """,
+                (user.id,),
+            ).fetchall()
+        for row in rows:
+            add(str(row["platform_id"] or ""))
+    finally:
+        conn.close()
+    return pids
+
+
+def user_can_manage_oauth_account(user: User, account_id: str) -> bool:
+    if user_can_access_servers(user):
+        return True
+    row = get_oauth_account_row(account_id)
+    if not row:
+        return False
+    return str(row.get("linked_by_user_id") or "") == user.id
+
+
 def get_oauth_account_row(account_id: str) -> dict[str, Any] | None:
     seed_admin_if_missing()
     oid = (account_id or "").strip()
@@ -3366,6 +4582,8 @@ def save_oauth_connection(
     finally:
         conn.close()
     sync_server_accounts_from_links()
+    if linked_by_user_id:
+        attach_oauth_account_to_user(cid, str(linked_by_user_id))
     return cid
 
 
@@ -3567,6 +4785,7 @@ def upsert_platform_credentials(
     client_secret: str | None = None,
     access_token: str | None = None,
     extra: str | None = None,
+    owner_user_id: str | None = None,
 ) -> dict[str, Any]:
     seed_admin_if_missing()
     pid = (platform_id or "").strip()
@@ -3593,6 +4812,10 @@ def upsert_platform_credentials(
     if extra is not None:
         extra_val = extra.strip()
 
+    owner = existing.get("owner_user_id") or ""
+    if owner_user_id is not None:
+        owner = (owner_user_id or "").strip()
+
     conn = _connect()
     try:
         if cred_name:
@@ -3609,14 +4832,15 @@ def upsert_platform_credentials(
             """
             INSERT INTO platform_credentials (
                 platform_id, name, client_id, client_secret, access_token, extra,
-                last_test_ok, last_test_at, last_test_message, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                owner_user_id, last_test_ok, last_test_at, last_test_message, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(platform_id) DO UPDATE SET
                 name = excluded.name,
                 client_id = excluded.client_id,
                 client_secret = excluded.client_secret,
                 access_token = excluded.access_token,
                 extra = excluded.extra,
+                owner_user_id = COALESCE(excluded.owner_user_id, platform_credentials.owner_user_id),
                 updated_at = excluded.updated_at
             """,
             (
@@ -3626,6 +4850,7 @@ def upsert_platform_credentials(
                 secret,
                 token,
                 extra_val,
+                owner or None,
                 existing.get("last_test_ok"),
                 existing.get("last_test_at") or "",
                 existing.get("last_test_message") or "",
@@ -3636,6 +4861,8 @@ def upsert_platform_credentials(
     finally:
         conn.close()
     sync_server_accounts_from_links()
+    if owner:
+        attach_platform_account_to_user(pid, str(owner))
     return get_platform_credentials_public(pid)
 
 
@@ -4798,6 +6025,7 @@ def insert_publication_log(
     content_type: str = "video",
     video_id: str | None = None,
     account_link_id: str = "",
+    batch_id: str = "",
 ) -> str:
     seed_admin_if_missing()
     log_id = str(uuid.uuid4())
@@ -4808,8 +6036,8 @@ def insert_publication_log(
             """
             INSERT INTO publication_log (
                 id, video_id, user_id, platform_id, content_type, status, message, created_at,
-                account_link_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                account_link_id, batch_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 log_id,
@@ -4818,9 +6046,10 @@ def insert_publication_log(
                 platform_id,
                 content_type,
                 status,
-                (message or "")[:500],
+                (message or "")[:1000],
                 now,
                 (account_link_id or "").strip(),
+                (batch_id or "").strip(),
             ),
         )
         conn.commit()
@@ -4874,20 +6103,32 @@ def create_scheduled_publication(
     return sid
 
 
-def list_scheduled_publications(*, limit: int = 30) -> list[dict[str, Any]]:
+def list_scheduled_publications(
+    *, limit: int = 30, viewer: User | None = None
+) -> list[dict[str, Any]]:
     seed_admin_if_missing()
+    scope = publication_log_viewer_scope(viewer) if viewer is not None else None
     conn = _connect()
     try:
+        if scope is not None and not scope:
+            return []
+        where = "sp.status = 'pending'"
+        params: list[Any] = []
+        if scope is not None:
+            ph = ",".join("?" * len(scope))
+            where += f" AND (sp.user_id IN ({ph}) OR v.user_id IN ({ph}))"
+            params.extend(scope)
+            params.extend(scope)
         rows = conn.execute(
-            """
+            f"""
             SELECT sp.*, v.title AS video_title
             FROM scheduled_publications sp
             LEFT JOIN videos v ON v.id = sp.video_id
-            WHERE sp.status = 'pending'
+            WHERE {where}
             ORDER BY sp.scheduled_at ASC
             LIMIT ?
             """,
-            (max(1, min(limit, 100)),),
+            (*params, max(1, min(limit, 100))),
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
@@ -4951,23 +6192,128 @@ def complete_scheduled_publication(
         conn.close()
 
 
-def list_publication_logs(*, limit: int = 40) -> list[dict[str, Any]]:
+def list_publication_logs(*, limit: int = 40, viewer: User | None = None) -> list[dict[str, Any]]:
     seed_admin_if_missing()
+    where_sql, where_params = _publication_log_scope_sql(viewer)
     conn = _connect()
     try:
         rows = conn.execute(
-            """
-            SELECT pl.*, v.title AS video_title
+            f"""
+            SELECT pl.*, v.title AS video_title,
+                   u.username AS user_username,
+                   u.display_name AS user_display_name,
+                   u.role AS user_role,
+                   u.user_mode AS user_user_mode
             FROM publication_log pl
             LEFT JOIN videos v ON v.id = pl.video_id
+            LEFT JOIN users u ON u.id = pl.user_id
+            {where_sql}
             ORDER BY pl.created_at DESC
             LIMIT ?
             """,
-            (max(1, min(limit, 200)),),
+            (*where_params, max(1, min(limit, 200))),
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()
+
+
+def _parse_log_created_at(raw: str) -> datetime:
+    try:
+        dt = datetime.fromisoformat(str(raw or "").replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        return datetime.now(timezone.utc)
+
+
+def list_publication_log_groups(
+    *, limit: int = 50, viewer: User | None = None
+) -> list[dict[str, Any]]:
+    """Agrupa envíos del mismo lote (varias plataformas en una publicación)."""
+    rows = list_publication_logs(limit=max(limit * 8, 200), viewer=viewer)
+    used: set[str] = set()
+    groups: list[dict[str, Any]] = []
+    window_sec = 180
+    for row in rows:
+        rid = str(row.get("id") or "")
+        if not rid or rid in used:
+            continue
+        batch = str(row.get("batch_id") or "").strip()
+        cluster = [row]
+        used.add(rid)
+        if batch:
+            for other in rows:
+                oid = str(other.get("id") or "")
+                if not oid or oid in used:
+                    continue
+                if str(other.get("batch_id") or "").strip() == batch:
+                    cluster.append(other)
+                    used.add(oid)
+        else:
+            vid = str(row.get("video_id") or "").strip()
+            t0 = _parse_log_created_at(str(row.get("created_at") or ""))
+            if vid:
+                for other in rows:
+                    oid = str(other.get("id") or "")
+                    if not oid or oid in used:
+                        continue
+                    if str(other.get("batch_id") or "").strip():
+                        continue
+                    if str(other.get("video_id") or "").strip() != vid:
+                        continue
+                    t1 = _parse_log_created_at(str(other.get("created_at") or ""))
+                    if abs((t1 - t0).total_seconds()) <= window_sec:
+                        cluster.append(other)
+                        used.add(oid)
+        cluster.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
+        ok_n = sum(1 for r in cluster if r.get("status") == "ok")
+        fail_n = sum(1 for r in cluster if r.get("status") == "fail")
+        skipped_n = sum(1 for r in cluster if r.get("status") == "skipped")
+        if fail_n and ok_n:
+            status = "mixed"
+        elif fail_n:
+            status = "fail"
+        elif ok_n:
+            status = "ok"
+        else:
+            status = "skipped"
+        latest = cluster[0]
+        username = str(latest.get("user_username") or "").strip()
+        display_name = str(latest.get("user_display_name") or "").strip()
+        user_role = str(latest.get("user_role") or "").strip()
+        user_mode = str(latest.get("user_user_mode") or "").strip()
+        groups.append(
+            {
+                "id": str(latest.get("id") or rid),
+                "created_at": str(latest.get("created_at") or ""),
+                "video_title": str(latest.get("video_title") or "").strip(),
+                "user_username": username,
+                "user_display_name": display_name,
+                "user_role": user_role,
+                "user_mode": user_mode,
+                "user_is_admin": user_role == "admin" or user_mode == "admin",
+                "status": status,
+                "ok_n": ok_n,
+                "fail_n": fail_n,
+                "skipped_n": skipped_n,
+                "entries": [
+                    {
+                        "platform_id": str(e.get("platform_id") or ""),
+                        "status": str(e.get("status") or ""),
+                        "message": str(e.get("message") or "").strip(),
+                    }
+                    for e in sorted(
+                        cluster,
+                        key=lambda r: str(r.get("platform_id") or ""),
+                    )
+                ],
+            }
+        )
+        if len(groups) >= limit:
+            break
+    return groups
 
 
 def count_publication_logs_in_range(start_iso: str, end_iso: str) -> int:
@@ -5077,6 +6423,226 @@ def set_app_setting(key: str, value: str) -> None:
         conn.close()
 
 
+def get_user_notification_email(user_id: str) -> str:
+    seed_admin_if_missing()
+    uid = (user_id or "").strip()
+    if not uid:
+        return ""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT notification_email FROM users WHERE id = ?",
+            (uid,),
+        ).fetchone()
+        return str(row["notification_email"] or "").strip() if row else ""
+    finally:
+        conn.close()
+
+
+def _notification_email_taken_by_other(user_id: str, email: str) -> bool:
+    return notification_email_is_taken(email, exclude_user_id=user_id)
+
+
+def notification_email_is_taken(email: str, *, exclude_user_id: str | None = None) -> bool:
+    addr = (email or "").strip()
+    if not addr:
+        return False
+    conn = _connect()
+    try:
+        params: list[str] = [addr, addr]
+        extra = ""
+        if exclude_user_id:
+            extra = " AND id != ?"
+            params.append(exclude_user_id.strip())
+        row = conn.execute(
+            f"""
+            SELECT id FROM users
+            WHERE (
+                (
+                  notification_email_verified = 1
+                  AND lower(trim(notification_email)) = lower(trim(?))
+                  AND trim(notification_email) != ''
+                )
+                OR (
+                  trim(pending_notification_email) != ''
+                  AND lower(trim(pending_notification_email)) = lower(trim(?))
+                )
+            ){extra}
+            """,
+            tuple(params),
+        ).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
+def _create_email_verification_token(
+    user_id: str, email: str, *, ttl_hours: int = 24
+) -> str:
+    uid = (user_id or "").strip()
+    addr = (email or "").strip()
+    if not uid or not addr:
+        raise ValueError("Enter a valid email address")
+    token = uuid.uuid4().hex + uuid.uuid4().hex
+    now = datetime.now(timezone.utc)
+    expires = now.timestamp() + max(1, ttl_hours) * 3600
+    expires_at = datetime.fromtimestamp(expires, tz=timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute("DELETE FROM email_verification_tokens WHERE user_id = ?", (uid,))
+        conn.execute(
+            """
+            INSERT INTO email_verification_tokens (token, user_id, email, expires_at, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (token, uid, addr, expires_at, now.isoformat()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return token
+
+
+def queue_notification_email_verification(user_id: str, email: str) -> str:
+    seed_admin_if_missing()
+    uid = (user_id or "").strip()
+    addr = (email or "").strip()
+    if not uid:
+        raise ValueError("User not found")
+    if not addr:
+        raise ValueError("Enter a valid email address")
+    if _notification_email_taken_by_other(uid, addr):
+        raise ValueError("Email already in use by another account")
+    user = get_user_by_id(uid)
+    if not user:
+        raise ValueError("User not found")
+    same_verified = (
+        user.notification_email_verified
+        and user.notification_email.strip().lower() == addr.lower()
+    )
+    if same_verified:
+        return ""
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            UPDATE users
+            SET pending_notification_email = ?, notification_email = '',
+                notification_email_verified = 0
+            WHERE id = ?
+            """,
+            (addr, uid),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return _create_email_verification_token(uid, addr, ttl_hours=24)
+
+
+def resend_notification_email_verification(user_id: str) -> str | None:
+    seed_admin_if_missing()
+    user = get_user_by_id((user_id or "").strip())
+    if not user or user.notification_email_verified:
+        return None
+    pending = (user.pending_notification_email or "").strip()
+    if not pending:
+        return None
+    return _create_email_verification_token(user.id, pending, ttl_hours=24)
+
+
+def get_email_verification_user_id(token: str) -> str | None:
+    seed_admin_if_missing()
+    tok = (token or "").strip()
+    if not tok:
+        return None
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT user_id, expires_at FROM email_verification_tokens WHERE token = ?",
+            (tok,),
+        ).fetchone()
+        if not row:
+            return None
+        expires_at = datetime.fromisoformat(str(row["expires_at"]))
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expires_at:
+            conn.execute("DELETE FROM email_verification_tokens WHERE token = ?", (tok,))
+            conn.commit()
+            return None
+        return str(row["user_id"])
+    finally:
+        conn.close()
+
+
+def confirm_notification_email(token: str) -> str | None:
+    seed_admin_if_missing()
+    tok = (token or "").strip()
+    if not tok:
+        return None
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT user_id, email, expires_at FROM email_verification_tokens WHERE token = ?",
+            (tok,),
+        ).fetchone()
+        if not row:
+            return None
+        expires_at = datetime.fromisoformat(str(row["expires_at"]))
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expires_at:
+            conn.execute("DELETE FROM email_verification_tokens WHERE token = ?", (tok,))
+            conn.commit()
+            return None
+        uid = str(row["user_id"])
+        email = str(row["email"] or "").strip()
+        if not email or _notification_email_taken_by_other(uid, email):
+            conn.execute("DELETE FROM email_verification_tokens WHERE token = ?", (tok,))
+            conn.commit()
+            return None
+        conn.execute(
+            """
+            UPDATE users
+            SET notification_email = ?, pending_notification_email = '',
+                notification_email_verified = 1
+            WHERE id = ?
+            """,
+            (email, uid),
+        )
+        conn.execute("DELETE FROM email_verification_tokens WHERE token = ?", (tok,))
+        conn.commit()
+        return uid
+    finally:
+        conn.close()
+
+
+def get_user_panel_email(user_id: str) -> str:
+    user = get_user_by_id((user_id or "").strip())
+    if not user:
+        return ""
+    pending = (user.pending_notification_email or "").strip()
+    if pending:
+        return pending
+    return (user.notification_email or "").strip()
+
+
+def is_user_notification_email_verified(user_id: str) -> bool:
+    user = get_user_by_id((user_id or "").strip())
+    if not user:
+        return False
+    return bool(user.notification_email_verified and (user.notification_email or "").strip())
+
+
+def set_user_notification_email(user_id: str, email: str) -> str:
+    """Encola verificación por correo. Devuelve token vacío si ya estaba confirmado."""
+    return queue_notification_email_verification(user_id, email)
+
+
+def notification_email_for_user_id(user_id: str) -> str:
+    return get_user_notification_email(user_id)
+
+
 def create_password_reset_token(user_id: str, *, ttl_hours: int = 2) -> str:
     seed_admin_if_missing()
     uid = (user_id or "").strip()
@@ -5145,24 +6711,77 @@ def consume_password_reset_token(token: str) -> str | None:
     return uid
 
 
-def set_admin_password(user_id: str, new_password: str) -> None:
+def get_user_by_notification_email(email: str) -> User | None:
+    seed_admin_if_missing()
+    addr = (email or "").strip()
+    if not addr:
+        return None
+    conn = _connect()
+    try:
+        row = conn.execute(
+            f"""
+            SELECT {_USER_ROW_COLUMNS}
+            FROM users
+            WHERE notification_email_verified = 1
+              AND lower(trim(notification_email)) = lower(trim(?))
+              AND trim(notification_email) != ''
+            """,
+            (addr,),
+        ).fetchone()
+        if not row:
+            return None
+        return _user_from_row(row)
+    finally:
+        conn.close()
+
+
+def get_user_auth_version(user_id: str) -> int:
+    seed_admin_if_missing()
+    uid = (user_id or "").strip()
+    if not uid:
+        return 0
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT auth_version FROM users WHERE id = ?", (uid,)).fetchone()
+        if not row:
+            return 0
+        return int(row["auth_version"] or 1)
+    finally:
+        conn.close()
+
+
+def set_user_password(user_id: str, new_password: str) -> None:
     seed_admin_if_missing()
     uid = (user_id or "").strip()
     pw = (new_password or "").strip()
     if len(pw) < 4:
         raise ValueError("Password must be at least 4 characters")
     user = get_user_by_id(uid)
-    if not user or not user_has_admin_privileges(user):
-        raise ValueError("Invalid administrator account")
+    if not user:
+        raise ValueError("User not found")
+    if user.role == "user" and not user.active:
+        raise ValueError("Account inactive")
     conn = _connect()
     try:
         conn.execute(
-            "UPDATE users SET password_hash = ? WHERE id = ?",
+            """
+            UPDATE users
+            SET password_hash = ?, auth_version = auth_version + 1
+            WHERE id = ?
+            """,
             (_hash_pw(pw), uid),
         )
         conn.commit()
     finally:
         conn.close()
+
+
+def set_admin_password(user_id: str, new_password: str) -> None:
+    uid = (user_id or "").strip()
+    user = get_user_by_id(uid)
+    if not user or not user_has_admin_privileges(user):
+        raise ValueError("Invalid administrator account")
+    set_user_password(uid, new_password)
 
 
 # ---------------------------------------------------------------------------
@@ -5617,3 +7236,1564 @@ def extractor_job_progress(job: dict[str, Any]) -> dict[str, Any]:
         "pending_ops": pending_ops,
         "per_platform": per_platform,
     }
+
+
+# ---------------------------------------------------------------------------
+# Proxys
+# ---------------------------------------------------------------------------
+
+
+def _ensure_proxies_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS proxies (
+                id TEXT PRIMARY KEY,
+                label TEXT NOT NULL DEFAULT '',
+                protocol TEXT NOT NULL DEFAULT 'http',
+                host TEXT NOT NULL,
+                port INTEGER NOT NULL,
+                username TEXT NOT NULL DEFAULT '',
+                password TEXT NOT NULL DEFAULT '',
+                proxy_url TEXT NOT NULL DEFAULT '',
+                country_code TEXT NOT NULL DEFAULT '',
+                country_name TEXT NOT NULL DEFAULT '',
+                notes TEXT NOT NULL DEFAULT '',
+                active INTEGER NOT NULL DEFAULT 1,
+                last_check_ok INTEGER,
+                last_check_at TEXT,
+                last_check_ip TEXT NOT NULL DEFAULT '',
+                last_check_message TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+PROXY_LINK_KINDS = frozenset({"account"})
+
+
+def _ensure_proxy_links_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS proxy_links (
+                proxy_id TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                ref_id TEXT NOT NULL,
+                PRIMARY KEY (proxy_id, kind, ref_id),
+                FOREIGN KEY (proxy_id) REFERENCES proxies(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _normalize_proxy_link_tokens(links: list[str] | None) -> list[tuple[str, str]]:
+    out: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for raw in links or []:
+        text = (raw or "").strip()
+        if not text or ":" not in text:
+            continue
+        kind, ref_id = text.split(":", 1)
+        kind = kind.strip().lower()
+        ref_id = ref_id.strip()
+        if kind not in PROXY_LINK_KINDS or not ref_id:
+            continue
+        key = (kind, ref_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(key)
+    return out
+
+
+def _validate_proxy_link_refs(
+    conn: sqlite3.Connection, links: list[tuple[str, str]]
+) -> list[tuple[str, str]]:
+    valid: list[tuple[str, str]] = []
+    for kind, ref_id in links:
+        if kind != "account":
+            continue
+        row = conn.execute(
+            "SELECT 1 AS ok FROM server_account_links WHERE id = ?", (ref_id,)
+        ).fetchone()
+        if row:
+            valid.append((kind, ref_id))
+    return valid
+
+
+def _proxy_link_label(conn: sqlite3.Connection, kind: str, ref_id: str) -> str:
+    if kind == "group":
+        row = conn.execute(
+            "SELECT name FROM server_groups WHERE id = ?", (ref_id,)
+        ).fetchone()
+        if row and (row["name"] or "").strip():
+            return str(row["name"]).strip()
+        return ref_id
+    row = conn.execute(
+        "SELECT name FROM server_account_links WHERE id = ?", (ref_id,)
+    ).fetchone()
+    if row and (row["name"] or "").strip():
+        return str(row["name"]).strip()
+    return ref_id
+
+
+def get_proxy_links(proxy_id: str) -> list[dict[str, str]]:
+    seed_admin_if_missing()
+    pid = (proxy_id or "").strip()
+    if not pid:
+        return []
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT kind, ref_id
+            FROM proxy_links
+            WHERE proxy_id = ?
+            ORDER BY kind, ref_id
+            """,
+            (pid,),
+        ).fetchall()
+        out: list[dict[str, str]] = []
+        for row in rows:
+            kind = str(row["kind"] or "")
+            ref_id = str(row["ref_id"] or "")
+            if kind != "account" or not ref_id:
+                continue
+            name = _proxy_link_label(conn, kind, ref_id)
+            if name == ref_id:
+                row_acc = conn.execute(
+                    "SELECT name FROM server_account_links WHERE id = ?", (ref_id,)
+                ).fetchone()
+                if not row_acc:
+                    continue
+            out.append(
+                {
+                    "kind": kind,
+                    "ref_id": ref_id,
+                    "token": f"{kind}:{ref_id}",
+                    "name": name,
+                }
+            )
+        return out
+    finally:
+        conn.close()
+
+
+def _attach_proxy_links(items: list[dict[str, Any]]) -> None:
+    if not items:
+        return
+    ids = [str(item.get("id") or "") for item in items if item.get("id")]
+    if not ids:
+        return
+    conn = _connect()
+    try:
+        placeholders = ",".join("?" * len(ids))
+        rows = conn.execute(
+            f"""
+            SELECT proxy_id, kind, ref_id
+            FROM proxy_links
+            WHERE proxy_id IN ({placeholders})
+            ORDER BY kind, ref_id
+            """,
+            ids,
+        ).fetchall()
+        by_proxy: dict[str, list[dict[str, str]]] = {pid: [] for pid in ids}
+        for row in rows:
+            pid = str(row["proxy_id"] or "")
+            kind = str(row["kind"] or "")
+            ref_id = str(row["ref_id"] or "")
+            if pid not in by_proxy or kind != "account" or not ref_id:
+                continue
+            name = _proxy_link_label(conn, kind, ref_id)
+            if name == ref_id:
+                row_acc = conn.execute(
+                    "SELECT name FROM server_account_links WHERE id = ?", (ref_id,)
+                ).fetchone()
+                if not row_acc:
+                    continue
+            by_proxy[pid].append(
+                {
+                    "kind": kind,
+                    "ref_id": ref_id,
+                    "token": f"{kind}:{ref_id}",
+                    "name": name,
+                }
+            )
+        for item in items:
+            pid = str(item.get("id") or "")
+            links = by_proxy.get(pid, [])
+            item["links"] = links
+            item["links_label"] = ", ".join(l["name"] for l in links if l.get("name"))
+    finally:
+        conn.close()
+
+
+def set_proxy_links(proxy_id: str, links: list[str] | None) -> None:
+    seed_admin_if_missing()
+    pid = (proxy_id or "").strip()
+    if not pid:
+        return
+    normalized = _normalize_proxy_link_tokens(links)
+    conn = _connect()
+    try:
+        validated = _validate_proxy_link_refs(conn, normalized)
+        conn.execute("DELETE FROM proxy_links WHERE proxy_id = ?", (pid,))
+        for kind, ref_id in validated:
+            conn.execute(
+                """
+                INSERT INTO proxy_links (proxy_id, kind, ref_id)
+                VALUES (?, ?, ?)
+                """,
+                (pid, kind, ref_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def list_proxy_link_choices(q: str = "", *, lang: str = "es") -> list[dict[str, str]]:
+    import i18n
+
+    seed_admin_if_missing()
+    query = (q or "").strip().casefold()
+    if not query:
+        return []
+    choices: list[dict[str, str]] = []
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT id, name
+            FROM server_account_links
+            WHERE active = 1
+            ORDER BY name COLLATE NOCASE
+            """
+        ).fetchall()
+        for row in rows:
+            name = (row["name"] or "").strip()
+            aid = (row["id"] or "").strip()
+            if not name or not aid:
+                continue
+            label = i18n.t("proxys.link_account", lang, name=name)
+            hay = f"{name} {label}".casefold()
+            if query and query not in hay:
+                continue
+            choices.append(
+                {
+                    "token": f"account:{aid}",
+                    "kind": "account",
+                    "name": name,
+                    "label": label,
+                }
+            )
+    finally:
+        conn.close()
+    choices.sort(key=lambda item: str(item.get("label") or "").casefold())
+    return choices
+
+
+def _proxy_row_to_dict(row: sqlite3.Row, *, include_secrets: bool = False) -> dict[str, Any]:
+    import proxy_util
+
+    data = {
+        "id": row["id"],
+        "label": row["label"] or "",
+        "protocol": row["protocol"] or "http",
+        "host": row["host"] or "",
+        "port": int(row["port"] or 0),
+        "username": row["username"] or "",
+        "country_code": row["country_code"] or "",
+        "country_name": row["country_name"] or "",
+        "notes": row["notes"] or "",
+        "active": bool(row["active"]),
+        "last_check_ok": None if row["last_check_ok"] is None else bool(row["last_check_ok"]),
+        "last_check_at": row["last_check_at"] or "",
+        "last_check_ip": row["last_check_ip"] or "",
+        "last_check_message": row["last_check_message"] or "",
+        "created_at": row["created_at"] or "",
+        "updated_at": row["updated_at"] or "",
+        "has_password": bool((row["password"] or "").strip()),
+    }
+    secret = {
+        "password": row["password"] or "",
+        "proxy_url": row["proxy_url"] or "",
+    }
+    if include_secrets:
+        data.update(secret)
+    else:
+        data["password"] = ""
+        data["proxy_url"] = proxy_util.proxy_display(
+            {
+                "protocol": data["protocol"],
+                "host": data["host"],
+                "port": data["port"],
+                "username": data["username"],
+                "password": row["password"] or "",
+            }
+        )
+    data["display"] = data["proxy_url"]
+    return data
+
+
+def list_proxies(q: str = "") -> list[dict[str, Any]]:
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT * FROM proxies
+            ORDER BY country_name ASC, label ASC, host ASC, port ASC
+            """
+        ).fetchall()
+        out: list[dict[str, Any]] = []
+        query = (q or "").strip().lower()
+        for row in rows:
+            item = _proxy_row_to_dict(row)
+            if query:
+                hay = " ".join(
+                    [
+                        item.get("label") or "",
+                        item.get("host") or "",
+                        item.get("protocol") or "",
+                        item.get("country_code") or "",
+                        item.get("country_name") or "",
+                        item.get("display") or "",
+                        item.get("notes") or "",
+                        item.get("links_label") or "",
+                    ]
+                ).lower()
+                if query not in hay:
+                    continue
+            out.append(item)
+        _attach_proxy_links(out)
+        return out
+    finally:
+        conn.close()
+
+
+def get_proxy(proxy_id: str) -> dict[str, Any] | None:
+    seed_admin_if_missing()
+    pid = (proxy_id or "").strip()
+    if not pid:
+        return None
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT * FROM proxies WHERE id = ?", (pid,)).fetchone()
+        if not row:
+            return None
+        item = _proxy_row_to_dict(row, include_secrets=True)
+        item["links"] = get_proxy_links(pid)
+        item["links_label"] = ", ".join(
+            l.get("name") or "" for l in item["links"] if l.get("name")
+        )
+        return item
+    finally:
+        conn.close()
+
+
+def get_active_proxy_url_for_account(account_link_id: str | None) -> str:
+    """Proxy activo vinculado a la cuenta de servidores; vacío si no hay."""
+    import proxy_util
+
+    lid = (account_link_id or "").strip()
+    if not lid:
+        return ""
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT p.*
+            FROM proxy_links l
+            JOIN proxies p ON p.id = l.proxy_id
+            WHERE l.kind = 'account'
+              AND l.ref_id = ?
+              AND p.active = 1
+            ORDER BY p.updated_at DESC
+            LIMIT 1
+            """,
+            (lid,),
+        ).fetchone()
+        if not row:
+            return ""
+        data = {
+            "protocol": row["protocol"] or "http",
+            "host": row["host"] or "",
+            "port": int(row["port"] or 0),
+            "username": row["username"] or "",
+            "password": row["password"] or "",
+        }
+        stored = str(row["proxy_url"] or "").strip()
+        return stored or proxy_util.build_proxy_url(data)
+    finally:
+        conn.close()
+
+
+def create_proxy(
+    *,
+    label: str,
+    protocol: str,
+    host: str,
+    port: int,
+    username: str,
+    password: str,
+    proxy_url: str,
+    notes: str = "",
+    country_code: str = "",
+    country_name: str = "",
+) -> dict[str, Any]:
+    seed_admin_if_missing()
+    pid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            INSERT INTO proxies (
+                id, label, protocol, host, port, username, password, proxy_url,
+                country_code, country_name, notes, active, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+            """,
+            (
+                pid,
+                (label or "").strip(),
+                (protocol or "http").strip().lower(),
+                (host or "").strip(),
+                int(port),
+                username or "",
+                password or "",
+                proxy_url or "",
+                (country_code or "").strip().upper(),
+                (country_name or "").strip(),
+                (notes or "").strip(),
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    row = get_proxy(pid)
+    if not row:
+        raise ValueError("create_failed")
+    return row
+
+
+def update_proxy(
+    proxy_id: str,
+    *,
+    label: str,
+    protocol: str,
+    host: str,
+    port: int,
+    username: str,
+    password: str,
+    proxy_url: str,
+    notes: str = "",
+    country_code: str = "",
+    country_name: str = "",
+) -> dict[str, Any]:
+    seed_admin_if_missing()
+    pid = (proxy_id or "").strip()
+    if not get_proxy(pid):
+        raise ValueError("not_found")
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            UPDATE proxies
+            SET label = ?, protocol = ?, host = ?, port = ?, username = ?, password = ?,
+                proxy_url = ?, country_code = ?, country_name = ?, notes = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                (label or "").strip(),
+                (protocol or "http").strip().lower(),
+                (host or "").strip(),
+                int(port),
+                username or "",
+                password or "",
+                proxy_url or "",
+                (country_code or "").strip().upper(),
+                (country_name or "").strip(),
+                (notes or "").strip(),
+                now,
+                pid,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    row = get_proxy(pid)
+    if not row:
+        raise ValueError("not_found")
+    return row
+
+
+def delete_proxy(proxy_id: str) -> None:
+    seed_admin_if_missing()
+    pid = (proxy_id or "").strip()
+    conn = _connect()
+    try:
+        conn.execute("DELETE FROM proxy_links WHERE proxy_id = ?", (pid,))
+        conn.execute("DELETE FROM proxies WHERE id = ?", (pid,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_proxy_active(proxy_id: str, active: bool) -> None:
+    seed_admin_if_missing()
+    pid = (proxy_id or "").strip()
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            "UPDATE proxies SET active = ?, updated_at = ? WHERE id = ?",
+            (1 if active else 0, now, pid),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def save_proxy_check_result(
+    proxy_id: str,
+    *,
+    ok: bool,
+    ip: str,
+    country_code: str,
+    country_name: str,
+    message: str,
+) -> dict[str, Any] | None:
+    seed_admin_if_missing()
+    pid = (proxy_id or "").strip()
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            UPDATE proxies
+            SET last_check_ok = ?, last_check_at = ?, last_check_ip = ?,
+                last_check_message = ?, country_code = ?, country_name = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                1 if ok else 0,
+                now,
+                (ip or "").strip(),
+                (message or "").strip()[:500],
+                (country_code or "").strip().upper(),
+                (country_name or "").strip(),
+                now,
+                pid,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return get_proxy(pid)
+
+
+# ---------------------------------------------------------------------------
+# Membresías y pagos
+# ---------------------------------------------------------------------------
+
+
+def _ensure_users_membership_plan_column() -> None:
+    conn = _connect()
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "membership_plan" not in cols:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN membership_plan TEXT NOT NULL DEFAULT ''"
+            )
+            conn.commit()
+    finally:
+        conn.close()
+
+
+def _migrate_invited_users_guest_plan() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            UPDATE users
+            SET membership_plan = 'guest'
+            WHERE (membership_plan IS NULL OR TRIM(membership_plan) = '')
+              AND id IN (
+                  SELECT used_by FROM invite_codes
+                  WHERE used_by IS NOT NULL AND TRIM(used_by) != ''
+              )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _table_column_names(conn, table: str) -> set[str]:
+    if db_engine.uses_postgres():
+        rows = conn.execute(
+            """
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = ?
+            """,
+            (table,),
+        ).fetchall()
+        return {str(r[0]) for r in rows}
+    return {str(r[1]) for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+
+
+def _ensure_column(table: str, name: str, sqlite_ddl: str, pg_ddl: str | None = None) -> None:
+    conn = _connect()
+    try:
+        cols = _table_column_names(conn, table)
+        if name in cols:
+            return
+        ddl = pg_ddl if db_engine.uses_postgres() and pg_ddl else sqlite_ddl
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _ensure_wallet_columns() -> None:
+    _ensure_column(
+        "users",
+        "membership_started_at",
+        "TEXT NOT NULL DEFAULT ''",
+    )
+    _ensure_column(
+        "users",
+        "wallet_balance_usd",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
+
+
+def _ensure_purchases_wallet_columns() -> None:
+    _ensure_column("purchases", "kind", "TEXT NOT NULL DEFAULT 'plan'")
+    _ensure_column("purchases", "wallet_used_usd", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column("purchases", "credit_usd", "INTEGER NOT NULL DEFAULT 0")
+
+
+def _ensure_wallet_ledger_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS wallet_ledger (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                amount_usd INTEGER NOT NULL DEFAULT 0,
+                reason TEXT NOT NULL DEFAULT '',
+                ref_id TEXT NOT NULL DEFAULT '',
+                note TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                created_by TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def last_paid_membership_started(user_id: str, plan_id: str) -> str:
+    uid = (user_id or "").strip()
+    pid = (plan_id or "").strip().lower()
+    if not uid or not pid:
+        return ""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT COALESCE(reviewed_at, updated_at, created_at) AS started
+            FROM purchases
+            WHERE user_id = ? AND plan_id = ? AND status = 'paid'
+              AND (kind IS NULL OR kind = 'plan')
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (uid, pid),
+        ).fetchone()
+        return str(row["started"] or "") if row else ""
+    finally:
+        conn.close()
+
+
+def membership_started_at_for(user: User) -> str:
+    raw = (getattr(user, "membership_started_at", "") or "").strip()
+    if raw:
+        return raw
+    return last_paid_membership_started(user.id, user.membership_plan)
+
+
+def _ensure_stats_query_log_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS stats_query_log (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stats_query_user_created "
+            "ON stats_query_log(user_id, created_at)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def membership_quota_exempt(user: User) -> bool:
+    return user_is_site_admin(user) or user_can_access_servers(user)
+
+
+def _count_since(conn: sqlite3.Connection, sql: str, user_id: str, start_iso: str) -> int:
+    row = conn.execute(sql, (user_id, start_iso)).fetchone()
+    return int(row["n"] or 0) if row else 0
+
+
+def count_user_videos_in_period(user_id: str, start_iso: str) -> int:
+    uid = (user_id or "").strip()
+    if not uid:
+        return 0
+    conn = _connect()
+    try:
+        return _count_since(
+            conn,
+            "SELECT COUNT(*) AS n FROM videos WHERE user_id = ? AND created_at >= ?",
+            uid,
+            start_iso,
+        )
+    finally:
+        conn.close()
+
+
+def count_stats_queries_in_period(user_id: str, start_iso: str) -> int:
+    uid = (user_id or "").strip()
+    if not uid:
+        return 0
+    conn = _connect()
+    try:
+        return _count_since(
+            conn,
+            "SELECT COUNT(*) AS n FROM stats_query_log WHERE user_id = ? AND created_at >= ?",
+            uid,
+            start_iso,
+        )
+    finally:
+        conn.close()
+
+
+def record_stats_query(user_id: str) -> None:
+    uid = (user_id or "").strip()
+    if not uid:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            "INSERT INTO stats_query_log (id, user_id, created_at) VALUES (?, ?, ?)",
+            (str(uuid.uuid4()), uid, now),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def membership_usage(user: User) -> dict[str, Any]:
+    import membership as membership_mod
+
+    unlimited = membership_quota_exempt(user)
+    plan = membership_mod.get_plan(user.membership_plan)
+    video_limit = int(plan["videos"]) if plan else 0
+    stats_limit = int(plan["stats"]) if plan else 0
+    started = membership_started_at_for(user)
+    period_start = membership_mod.current_period_start(started)
+    start_iso = period_start.isoformat()
+    videos_used = 0 if unlimited else count_user_videos_in_period(user.id, start_iso)
+    stats_used = 0 if unlimited else count_stats_queries_in_period(user.id, start_iso)
+    return {
+        "unlimited": unlimited,
+        "has_plan": bool(plan),
+        "plan_id": (user.membership_plan or "").strip().lower(),
+        "video_limit": video_limit,
+        "stats_limit": stats_limit,
+        "videos_used": videos_used,
+        "stats_used": stats_used,
+        "videos_left": 10**9 if unlimited else max(0, video_limit - videos_used),
+        "stats_left": 10**9 if unlimited else max(0, stats_limit - stats_used),
+        "period_start": start_iso,
+        "can_publish": unlimited or (bool(plan) and videos_used < video_limit),
+        "can_query_stats": unlimited or (bool(plan) and stats_used < stats_limit),
+        "can_view_comments": unlimited or bool(plan),
+    }
+
+
+def consume_publish_quota(user: User) -> str | None:
+    """None si puede publicar; código de error i18n si no."""
+    usage = membership_usage(user)
+    if usage["unlimited"]:
+        return None
+    if not usage["has_plan"]:
+        return "membresias.err.no_plan"
+    if usage["videos_left"] <= 0:
+        return "membresias.err.quota_videos"
+    return None
+
+
+def consume_stats_query(user: User) -> str | None:
+    """Registra una consulta si hay cupo. None = ok; código i18n si no."""
+    usage = membership_usage(user)
+    if usage["unlimited"]:
+        return None
+    if not usage["has_plan"]:
+        return "membresias.err.no_plan"
+    if usage["stats_left"] <= 0:
+        return "membresias.err.quota_stats"
+    record_stats_query(user.id)
+    return None
+
+
+def get_wallet_balance(user_id: str) -> int:
+    uid = (user_id or "").strip()
+    if not uid:
+        return 0
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT wallet_balance_usd FROM users WHERE id = ?", (uid,)
+        ).fetchone()
+        if not row:
+            return 0
+        return int(row["wallet_balance_usd"] or 0)
+    finally:
+        conn.close()
+
+
+def add_wallet_balance(
+    user_id: str,
+    amount_usd: int,
+    *,
+    reason: str,
+    ref_id: str = "",
+    note: str = "",
+    created_by: str = "",
+) -> int:
+    uid = (user_id or "").strip()
+    delta = int(amount_usd or 0)
+    if not uid or delta == 0:
+        return get_wallet_balance(uid)
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT wallet_balance_usd FROM users WHERE id = ?", (uid,)
+        ).fetchone()
+        if not row:
+            raise ValueError("not_found")
+        current = int(row["wallet_balance_usd"] or 0)
+        new_bal = current + delta
+        if new_bal < 0:
+            raise ValueError("insufficient_wallet")
+        conn.execute(
+            "UPDATE users SET wallet_balance_usd = ? WHERE id = ?",
+            (new_bal, uid),
+        )
+        conn.execute(
+            """
+            INSERT INTO wallet_ledger (
+                id, user_id, amount_usd, reason, ref_id, note, created_at, created_by
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(uuid.uuid4()),
+                uid,
+                delta,
+                (reason or "").strip()[:40],
+                (ref_id or "").strip()[:80],
+                (note or "").strip()[:400],
+                now,
+                (created_by or "").strip()[:80],
+            ),
+        )
+        conn.commit()
+        return new_bal
+    finally:
+        conn.close()
+
+
+def list_wallet_ledger(user_id: str, *, limit: int = 40) -> list[dict[str, Any]]:
+    uid = (user_id or "").strip()
+    if not uid:
+        return []
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT * FROM wallet_ledger
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (uid, max(1, min(200, int(limit)))),
+        ).fetchall()
+        out = []
+        for row in rows:
+            d = dict(row)
+            out.append(
+                {
+                    "id": d.get("id"),
+                    "amount_usd": int(d.get("amount_usd") or 0),
+                    "reason": d.get("reason") or "",
+                    "ref_id": d.get("ref_id") or "",
+                    "note": d.get("note") or "",
+                    "created_at": d.get("created_at") or "",
+                    "created_by": d.get("created_by") or "",
+                }
+            )
+        return out
+    finally:
+        conn.close()
+
+
+def set_user_membership_plan(user_id: str, plan_id: str, *, started_at: str | None = None) -> None:
+    import membership as membership_mod
+
+    uid = (user_id or "").strip()
+    pid = (plan_id or "").strip().lower()
+    if not uid:
+        return
+    if pid and pid not in membership_mod.PLAN_IDS:
+        raise ValueError("invalid_plan")
+    plan = membership_mod.get_plan(pid) if pid else None
+    now = datetime.now(timezone.utc).isoformat()
+    if pid and plan and not plan.get("invite_only"):
+        start = (started_at or "").strip() or now
+    else:
+        start = ""
+    conn = _connect()
+    try:
+        conn.execute(
+            "UPDATE users SET membership_plan = ?, membership_started_at = ? WHERE id = ?",
+            (pid, start, uid),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def user_was_invited(user_id: str) -> bool:
+    uid = (user_id or "").strip()
+    if not uid:
+        return False
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT code FROM invite_codes
+            WHERE used_by = ? AND used_by IS NOT NULL
+            LIMIT 1
+            """,
+            (uid,),
+        ).fetchone()
+        return bool(row)
+    finally:
+        conn.close()
+
+
+def _ensure_payment_methods_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS payment_methods (
+                id TEXT PRIMARY KEY,
+                kind TEXT NOT NULL DEFAULT 'custom',
+                name TEXT NOT NULL,
+                pay_to TEXT NOT NULL DEFAULT '',
+                instructions TEXT NOT NULL DEFAULT '',
+                notes TEXT NOT NULL DEFAULT '',
+                active INTEGER NOT NULL DEFAULT 1,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _ensure_purchases_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS purchases (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                plan_id TEXT NOT NULL,
+                payment_method_id TEXT,
+                amount_usd INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'pending',
+                note TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                reviewed_at TEXT,
+                reviewed_by TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _payment_method_row(row: Any) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "kind": row["kind"] or "custom",
+        "name": row["name"] or "",
+        "pay_to": row["pay_to"] or "",
+        "instructions": row["instructions"] or "",
+        "notes": row["notes"] or "",
+        "active": bool(row["active"]),
+        "sort_order": int(row["sort_order"] or 0),
+        "created_at": row["created_at"] or "",
+        "updated_at": row["updated_at"] or "",
+    }
+
+
+def list_payment_methods(*, active_only: bool = False) -> list[dict[str, Any]]:
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        sql = "SELECT * FROM payment_methods"
+        if active_only:
+            sql += " WHERE active = 1"
+        sql += " ORDER BY sort_order ASC, name ASC"
+        return [_payment_method_row(r) for r in conn.execute(sql).fetchall()]
+    finally:
+        conn.close()
+
+
+def get_payment_method(method_id: str) -> dict[str, Any] | None:
+    seed_admin_if_missing()
+    mid = (method_id or "").strip()
+    if not mid:
+        return None
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT * FROM payment_methods WHERE id = ?", (mid,)
+        ).fetchone()
+        if not row:
+            return None
+        return _payment_method_row(row)
+    finally:
+        conn.close()
+
+
+def create_payment_method(
+    *,
+    kind: str,
+    name: str,
+    pay_to: str = "",
+    instructions: str = "",
+    notes: str = "",
+    active: bool = True,
+) -> dict[str, Any]:
+    import membership as membership_mod
+
+    kid = (kind or "custom").strip().lower()
+    if kid not in membership_mod.PAYMENT_KIND_IDS:
+        kid = "custom"
+    label = (name or "").strip()
+    if not label:
+        raise ValueError("name_required")
+    mid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        max_row = conn.execute(
+            "SELECT COALESCE(MAX(sort_order), 0) AS n FROM payment_methods"
+        ).fetchone()
+        sort_n = int(max_row["n"] or 0) + 1 if max_row else 1
+        conn.execute(
+            """
+            INSERT INTO payment_methods (
+                id, kind, name, pay_to, instructions, notes, active, sort_order,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                mid,
+                kid,
+                label,
+                (pay_to or "").strip(),
+                (instructions or "").strip(),
+                (notes or "").strip(),
+                1 if active else 0,
+                sort_n,
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    row = get_payment_method(mid)
+    if not row:
+        raise ValueError("create_failed")
+    return row
+
+
+def update_payment_method(
+    method_id: str,
+    *,
+    kind: str,
+    name: str,
+    pay_to: str = "",
+    instructions: str = "",
+    notes: str = "",
+    active: bool = True,
+) -> dict[str, Any]:
+    import membership as membership_mod
+
+    mid = (method_id or "").strip()
+    if not get_payment_method(mid):
+        raise ValueError("not_found")
+    kid = (kind or "custom").strip().lower()
+    if kid not in membership_mod.PAYMENT_KIND_IDS:
+        kid = "custom"
+    label = (name or "").strip()
+    if not label:
+        raise ValueError("name_required")
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            UPDATE payment_methods
+            SET kind = ?, name = ?, pay_to = ?, instructions = ?, notes = ?,
+                active = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                kid,
+                label,
+                (pay_to or "").strip(),
+                (instructions or "").strip(),
+                (notes or "").strip(),
+                1 if active else 0,
+                now,
+                mid,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    row = get_payment_method(mid)
+    if not row:
+        raise ValueError("not_found")
+    return row
+
+
+def delete_payment_method(method_id: str) -> None:
+    seed_admin_if_missing()
+    mid = (method_id or "").strip()
+    conn = _connect()
+    try:
+        conn.execute("DELETE FROM payment_methods WHERE id = ?", (mid,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_payment_method_active(method_id: str, active: bool) -> None:
+    seed_admin_if_missing()
+    mid = (method_id or "").strip()
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            "UPDATE payment_methods SET active = ?, updated_at = ? WHERE id = ?",
+            (1 if active else 0, now, mid),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _purchase_row(row: Any) -> dict[str, Any]:
+    data = dict(row)
+    method_id = data.get("payment_method_id") or ""
+    method_name = data.get("payment_method_name") or ""
+    if method_id == "wallet" and not method_name:
+        method_name = "wallet"
+    return {
+        "id": data.get("id"),
+        "user_id": data.get("user_id"),
+        "username": data.get("username") or "",
+        "plan_id": data.get("plan_id") or "",
+        "kind": data.get("kind") or "plan",
+        "payment_method_id": method_id,
+        "payment_method_name": method_name,
+        "amount_usd": int(data.get("amount_usd") or 0),
+        "wallet_used_usd": int(data.get("wallet_used_usd") or 0),
+        "credit_usd": int(data.get("credit_usd") or 0),
+        "status": data.get("status") or "pending",
+        "note": data.get("note") or "",
+        "created_at": data.get("created_at") or "",
+        "updated_at": data.get("updated_at") or "",
+        "reviewed_at": data.get("reviewed_at") or "",
+        "reviewed_by": data.get("reviewed_by") or "",
+    }
+
+
+def list_purchases(
+    *,
+    user_id: str | None = None,
+    status: str = "",
+) -> list[dict[str, Any]]:
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        sql = """
+            SELECT p.*, u.username AS username,
+                   COALESCE(pm.name, '') AS payment_method_name
+            FROM purchases p
+            LEFT JOIN users u ON u.id = p.user_id
+            LEFT JOIN payment_methods pm ON pm.id = p.payment_method_id
+        """
+        where: list[str] = []
+        params: list[str] = []
+        if user_id:
+            where.append("p.user_id = ?")
+            params.append(user_id)
+        st = (status or "").strip().lower()
+        if st:
+            where.append("p.status = ?")
+            params.append(st)
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY p.created_at DESC"
+        return [_purchase_row(r) for r in conn.execute(sql, params).fetchall()]
+    finally:
+        conn.close()
+
+
+def get_purchase(purchase_id: str) -> dict[str, Any] | None:
+    seed_admin_if_missing()
+    pid = (purchase_id or "").strip()
+    if not pid:
+        return None
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT p.*, u.username AS username,
+                   COALESCE(pm.name, '') AS payment_method_name
+            FROM purchases p
+            LEFT JOIN users u ON u.id = p.user_id
+            LEFT JOIN payment_methods pm ON pm.id = p.payment_method_id
+            WHERE p.id = ?
+            """,
+            (pid,),
+        ).fetchone()
+        if not row:
+            return None
+        return _purchase_row(row)
+    finally:
+        conn.close()
+
+
+def _apply_paid_plan_purchase(existing: dict[str, Any]) -> None:
+    import membership as membership_mod
+
+    uid = existing["user_id"]
+    user = get_user_by_id(uid)
+    if not user:
+        raise ValueError("not_found")
+    credit = int(existing.get("credit_usd") or 0)
+    plan = membership_mod.get_plan(existing.get("plan_id") or "")
+    price = int(plan["price_usd"]) if plan else 0
+    leftover = max(0, credit - price)
+    if leftover > 0:
+        add_wallet_balance(
+            uid,
+            leftover,
+            reason="plan_unused",
+            ref_id=str(existing.get("id") or ""),
+            note="plan_change",
+        )
+    set_user_membership_plan(uid, existing["plan_id"])
+
+
+def create_purchase(
+    *,
+    user_id: str,
+    plan_id: str,
+    payment_method_id: str = "",
+    note: str = "",
+    use_wallet: bool = True,
+) -> dict[str, Any]:
+    import membership as membership_mod
+
+    uid = (user_id or "").strip()
+    user = get_user_by_id(uid)
+    if not user:
+        raise ValueError("user_required")
+    quote = membership_mod.quote_plan_change(
+        current_plan=user.membership_plan,
+        started_at=membership_started_at_for(user),
+        wallet_usd=user.wallet_balance_usd,
+        new_plan_id=plan_id,
+        use_wallet=use_wallet,
+    )
+    remainder = int(quote["remainder_usd"])
+    method_id = (payment_method_id or "").strip()
+    if remainder > 0:
+        if method_id == membership_mod.WALLET_METHOD_ID:
+            raise ValueError("insufficient_wallet")
+        method = get_payment_method(method_id)
+        if not method or not method.get("active"):
+            raise ValueError("invalid_payment_method")
+        stored_method = method["id"]
+    else:
+        stored_method = membership_mod.WALLET_METHOD_ID
+        method_id = stored_method
+
+    pid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    instant = remainder <= 0
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            INSERT INTO purchases (
+                id, user_id, plan_id, payment_method_id, amount_usd, status, note,
+                created_at, updated_at, kind, wallet_used_usd, credit_usd
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'plan', ?, ?)
+            """,
+            (
+                pid,
+                uid,
+                quote["new_plan_id"],
+                stored_method,
+                remainder,
+                "paid" if instant else "pending",
+                (note or "").strip()[:400],
+                now,
+                now,
+                int(quote["wallet_used_usd"]),
+                int(quote["credit_usd"]),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    row = get_purchase(pid)
+    if not row:
+        raise ValueError("create_failed")
+    wallet_used = int(quote["wallet_used_usd"])
+    if wallet_used > 0:
+        add_wallet_balance(
+            uid,
+            -wallet_used,
+            reason="plan_pay",
+            ref_id=pid,
+        )
+    if instant:
+        _apply_paid_plan_purchase(row)
+        row = get_purchase(pid) or row
+        row["wallet_balance_usd"] = get_wallet_balance(uid)
+    return row
+
+
+def create_wallet_recharge(
+    *,
+    user_id: str,
+    amount_usd: int,
+    payment_method_id: str,
+    note: str = "",
+    use_wallet: bool = True,
+) -> dict[str, Any]:
+    import membership as membership_mod
+
+    uid = (user_id or "").strip()
+    amount = int(amount_usd or 0)
+    if not uid:
+        raise ValueError("user_required")
+    user = get_user_by_id(uid)
+    if not user:
+        raise ValueError("user_required")
+    if amount < 1 or amount > 10000:
+        raise ValueError("invalid_amount")
+    wallet = int(user.wallet_balance_usd or 0)
+    wallet_used = 0
+    if use_wallet and amount > 1:
+        wallet_used = min(wallet, amount - 1)
+    remainder = amount - wallet_used
+    if remainder > 0:
+        method = get_payment_method(payment_method_id)
+        if not method or not method.get("active"):
+            raise ValueError("invalid_payment_method")
+        stored_method = method["id"]
+    else:
+        stored_method = membership_mod.WALLET_METHOD_ID
+    pid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            INSERT INTO purchases (
+                id, user_id, plan_id, payment_method_id, amount_usd, status, note,
+                created_at, updated_at, kind, wallet_used_usd, credit_usd
+            ) VALUES (?, ?, 'wallet', ?, ?, 'pending', ?, ?, ?, 'wallet', ?, 0)
+            """,
+            (
+                pid,
+                uid,
+                stored_method,
+                remainder,
+                (note or "").strip()[:400],
+                now,
+                now,
+                wallet_used,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    if wallet_used > 0:
+        add_wallet_balance(
+            uid,
+            -wallet_used,
+            reason="recharge",
+            ref_id=pid,
+            note="pending",
+        )
+    row = get_purchase(pid)
+    if not row:
+        raise ValueError("create_failed")
+    return row
+
+
+def cancel_membership_to_wallet(user_id: str) -> dict[str, Any]:
+    import membership as membership_mod
+
+    user = get_user_by_id(user_id)
+    if not user:
+        raise ValueError("not_found")
+    credit = membership_mod.unused_plan_credit_usd(
+        user.membership_plan, membership_started_at_for(user)
+    )
+    if credit > 0:
+        add_wallet_balance(user.id, credit, reason="plan_cancel")
+    fallback = "guest" if user_was_invited(user.id) else ""
+    set_user_membership_plan(user.id, fallback)
+    return {
+        "credit_usd": credit,
+        "wallet_balance_usd": get_wallet_balance(user.id),
+        "membership_plan": fallback,
+    }
+
+
+def update_purchase_status(
+    purchase_id: str,
+    *,
+    status: str,
+    reviewed_by: str = "",
+) -> dict[str, Any]:
+    import membership as membership_mod
+
+    pid = (purchase_id or "").strip()
+    st = (status or "").strip().lower()
+    if st not in membership_mod.PURCHASE_STATUSES:
+        raise ValueError("invalid_status")
+    existing = get_purchase(pid)
+    if not existing:
+        raise ValueError("not_found")
+    prev = (existing.get("status") or "").strip().lower()
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            UPDATE purchases
+            SET status = ?, updated_at = ?, reviewed_at = ?, reviewed_by = ?
+            WHERE id = ?
+            """,
+            (st, now, now, (reviewed_by or "").strip(), pid),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    if st == "paid" and prev != "paid":
+        kind = existing.get("kind") or "plan"
+        if kind == "wallet" or existing.get("plan_id") == "wallet":
+            total = int(existing.get("amount_usd") or 0) + int(
+                existing.get("wallet_used_usd") or 0
+            )
+            add_wallet_balance(
+                existing["user_id"],
+                total,
+                reason="recharge",
+                ref_id=pid,
+                created_by=reviewed_by,
+            )
+        else:
+            _apply_paid_plan_purchase(existing)
+    elif st in ("rejected", "cancelled") and prev == "pending":
+        frozen = int(existing.get("wallet_used_usd") or 0)
+        kind = existing.get("kind") or "plan"
+        if frozen > 0:
+            if kind == "wallet" or existing.get("plan_id") == "wallet":
+                add_wallet_balance(
+                    existing["user_id"],
+                    frozen,
+                    reason="recharge",
+                    ref_id=pid,
+                    note="refund",
+                    created_by=reviewed_by,
+                )
+            elif kind != "wallet" and existing.get("plan_id") != "wallet":
+                add_wallet_balance(
+                    existing["user_id"],
+                    frozen,
+                    reason="plan_pay",
+                    ref_id=pid,
+                    note="refund",
+                    created_by=reviewed_by,
+                )
+    row = get_purchase(pid)
+    if not row:
+        raise ValueError("not_found")
+    return row
+
+

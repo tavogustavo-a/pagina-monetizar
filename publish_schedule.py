@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import uuid
 
 import db
 import i18n
@@ -78,6 +79,7 @@ def execute_video_publish(
     ok_n = 0
     fail_n = 0
     failures_for_email: list[dict] = []
+    batch_id = str(uuid.uuid4())
 
     for pid in selected_platforms:
         ok, message = platform_publish.publish_to_platform(
@@ -110,6 +112,7 @@ def execute_video_publish(
             status=status,
             message=message,
             account_link_id=account_link_id,
+            batch_id=batch_id,
         )
 
     if failures_for_email:
@@ -117,6 +120,7 @@ def execute_video_publish(
             video_title=video.title,
             failures=failures_for_email,
             lang=lang,
+            user_id=user_id,
         )
 
     return ok_n, fail_n, failures_for_email

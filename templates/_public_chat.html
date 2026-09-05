@@ -1,0 +1,128 @@
+<div class="public-chat" id="public-chat">
+  <button
+    type="button"
+    class="public-chat__fab"
+    id="public-chat-toggle"
+    aria-expanded="false"
+    aria-controls="public-chat-panel"
+    aria-label="{{ t('support.widget_open') }}"
+    title="{{ t('support.widget_open') }}"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/>
+    </svg>
+  </button>
+  <div class="public-chat__panel" id="public-chat-panel" hidden>
+    <header class="public-chat__head">
+      <strong>{{ t('support.widget_title') }}</strong>
+      <button type="button" class="public-chat__close" id="public-chat-close" aria-label="{{ t('support.widget_close') }}">×</button>
+    </header>
+    <div class="chat-box public-chat__box" id="public-chat-box" aria-live="polite">
+      <div class="chat-empty" id="public-chat-empty">{{ t('support.empty') }}</div>
+    </div>
+    <form class="chat-compose public-chat__form" id="public-chat-form">
+      <div class="chat-compose__field chat-compose__field--compact">
+        <textarea
+          id="public-chat-input"
+          class="chat-compose__input"
+          rows="2"
+          maxlength="2000"
+          placeholder="{{ t('support.placeholder') }}"
+          aria-label="{{ t('support.placeholder') }}"
+        ></textarea>
+      </div>
+      <button type="submit" class="btn btn-accent chat-compose__send chat-compose__send--compact" aria-label="{{ t('support.send') }}" title="{{ t('support.send') }}">{% include '_icon_send.html' %}</button>
+    </form>
+  </div>
+</div>
+<script>
+  (function () {
+    var root = document.getElementById("public-chat");
+    var toggle = document.getElementById("public-chat-toggle");
+    var closeBtn = document.getElementById("public-chat-close");
+    var panel = document.getElementById("public-chat-panel");
+    var box = document.getElementById("public-chat-box");
+    var empty = document.getElementById("public-chat-empty");
+    var form = document.getElementById("public-chat-form");
+    var input = document.getElementById("public-chat-input");
+    if (!root || !toggle || !panel || !box || !form || !input) return;
+    var adminLabel = {{ t('support.admin_label') | tojson }};
+    var anonymousLabel = {{ t('support.anonymous_label') | tojson }};
+    var lastCount = -1;
+    var poll = null;
+
+    function renderMessages(messages) {
+      if (messages.length === lastCount) return;
+      lastCount = messages.length;
+      box.querySelectorAll(".chat-msg").forEach(function (n) { n.remove(); });
+      empty.hidden = messages.length > 0;
+      messages.forEach(function (m) {
+        var wrap = document.createElement("div");
+        wrap.className = "chat-msg " + (m.sender === "user" ? "chat-msg--mine" : "chat-msg--theirs");
+        var who = document.createElement("div");
+        who.className = "chat-msg__who";
+        who.textContent = m.sender === "user" ? anonymousLabel : adminLabel;
+        var body = document.createElement("div");
+        body.className = "chat-msg__body";
+        body.textContent = m.body;
+        wrap.appendChild(who);
+        wrap.appendChild(body);
+        box.appendChild(wrap);
+      });
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function load() {
+      fetch("/api/soporte-publico/mensajes", { headers: { Accept: "application/json" }, credentials: "same-origin" })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data && data.ok) renderMessages(data.messages || []);
+        })
+        .catch(function () {});
+    }
+
+    function setOpen(open) {
+      panel.hidden = !open;
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      root.classList.toggle("is-open", open);
+      if (open) {
+        lastCount = -1;
+        load();
+        if (!poll) poll = setInterval(load, 5000);
+        input.focus();
+      } else if (poll) {
+        clearInterval(poll);
+        poll = null;
+      }
+    }
+
+    toggle.addEventListener("click", function () {
+      setOpen(panel.hidden);
+    });
+    if (closeBtn) {
+      closeBtn.addEventListener("click", function () { setOpen(false); });
+    }
+
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      fetch("/api/soporte-publico/mensajes", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ body: text }),
+      })
+        .then(function () { lastCount = -1; load(); })
+        .catch(function () {});
+    });
+
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" && !ev.shiftKey) {
+        ev.preventDefault();
+        form.dispatchEvent(new Event("submit", { cancelable: true }));
+      }
+    });
+  })();
+</script>

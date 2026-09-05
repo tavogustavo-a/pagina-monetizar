@@ -36,14 +36,14 @@ def client_secret() -> str:
     return (os.environ.get("X_CLIENT_SECRET") or "").strip() or _from_creds("client_secret")
 
 
-def redirect_uri() -> str:
+def redirect_uri(request=None) -> str:
     env = (os.environ.get("X_REDIRECT_URI") or "").strip()
     if env:
         return env
     try:
-        from site_config import SITE_URL
+        from site_config import oauth_callback_url
 
-        return f"{SITE_URL}/oauth/x/callback"
+        return oauth_callback_url("x", request)
     except Exception:
         return "http://127.0.0.1:8000/oauth/x/callback"
 
@@ -67,11 +67,14 @@ def pkce_pair() -> tuple[str, str]:
     return verifier, challenge
 
 
-def build_authorize_url(*, state: str, code_challenge: str) -> str:
+def build_authorize_url(
+    *, state: str, code_challenge: str, redirect_uri_value: str | None = None
+) -> str:
+    ru = (redirect_uri_value or "").strip() or redirect_uri()
     params = {
         "response_type": "code",
         "client_id": client_id(),
-        "redirect_uri": redirect_uri(),
+        "redirect_uri": ru,
         "scope": oauth_scopes(),
         "state": state,
         "code_challenge": code_challenge,
@@ -160,13 +163,16 @@ def _get(url: str, access_token: str) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
-def exchange_code_for_tokens(code: str, *, code_verifier: str) -> dict[str, Any]:
+def exchange_code_for_tokens(
+    code: str, *, code_verifier: str, redirect_uri_value: str | None = None
+) -> dict[str, Any]:
+    ru = (redirect_uri_value or "").strip() or redirect_uri()
     data = _post_form(
         TOKEN_URL,
         {
             "grant_type": "authorization_code",
             "code": (code or "").strip(),
-            "redirect_uri": redirect_uri(),
+            "redirect_uri": ru,
             "code_verifier": (code_verifier or "").strip(),
             "client_id": client_id(),
         },

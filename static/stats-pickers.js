@@ -272,7 +272,8 @@
           }
           var accountOpen = document.getElementById("stats-account-open");
           if (accountOpen) accountOpen.classList.remove("has-selection");
-          submitStatsForm(document.getElementById("stats-filters-form"));
+          var consultFlag = document.getElementById("stats-consult-flag");
+          if (consultFlag) consultFlag.value = "";
         },
         searchText: function (c) {
           return (c.name || "") + " " + (c.id || "") + " " + (c.icon || "");
@@ -340,7 +341,8 @@
           }
         },
         onPick: function () {
-          submitStatsForm(document.getElementById("stats-filters-form"));
+          var consultFlag = document.getElementById("stats-consult-flag");
+          if (consultFlag) consultFlag.value = "";
         },
       });
     }

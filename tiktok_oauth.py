@@ -11,6 +11,7 @@ from typing import Any
 
 TIKTOK_AUTH_URL = "https://www.tiktok.com/v2/auth/authorize/"
 TIKTOK_TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
+TIKTOK_REVOKE_URL = "https://open.tiktokapis.com/v2/oauth/revoke/"
 TIKTOK_USERINFO_URL = "https://open.tiktokapis.com/v2/user/info/"
 
 DEFAULT_SCOPES = "user.info.basic,video.upload,video.publish"
@@ -42,7 +43,7 @@ def client_secret() -> str:
         return ""
 
 
-def redirect_uri() -> str:
+def redirect_uri(request=None) -> str:
     env = os.environ.get("TIKTOK_REDIRECT_URI", "").strip()
     if env:
         return env
@@ -56,9 +57,9 @@ def redirect_uri() -> str:
     except Exception:
         pass
     try:
-        from site_config import SITE_URL
+        from site_config import oauth_callback_url
 
-        return f"{SITE_URL}/oauth/tiktok/callback"
+        return oauth_callback_url("tiktok", request)
     except Exception:
         return "http://127.0.0.1:8000/oauth/tiktok/callback"
 
@@ -75,12 +76,13 @@ def new_csrf_state() -> str:
     return secrets.token_urlsafe(32)
 
 
-def build_authorize_url(*, state: str) -> str:
+def build_authorize_url(*, state: str, redirect_uri_value: str | None = None) -> str:
+    ru = (redirect_uri_value or "").strip() or redirect_uri()
     params = {
         "client_key": client_key(),
         "scope": oauth_scopes(),
         "response_type": "code",
-        "redirect_uri": redirect_uri(),
+        "redirect_uri": ru,
         "state": state,
     }
     return TIKTOK_AUTH_URL + "?" + urllib.parse.urlencode(params)
@@ -99,13 +101,14 @@ def _post_form(url: str, data: dict[str, str]) -> dict[str, Any]:
     return json.loads(raw)
 
 
-def exchange_code_for_tokens(code: str) -> dict[str, Any]:
+def exchange_code_for_tokens(code: str, redirect_uri_value: str | None = None) -> dict[str, Any]:
+    ru = (redirect_uri_value or "").strip() or redirect_uri()
     payload = {
         "client_key": client_key(),
         "client_secret": client_secret(),
         "code": code,
         "grant_type": "authorization_code",
-        "redirect_uri": redirect_uri(),
+        "redirect_uri": ru,
     }
     data = _post_form(TIKTOK_TOKEN_URL, payload)
     if "error" in data or data.get("error_code"):
@@ -154,3 +157,21 @@ def fetch_user_profile(access_token: str) -> dict[str, Any]:
     if not user:
         raise ValueError("TikTok did not return user profile data.")
     return user
+
+
+def revoke_access_token(token: str) -> None:
+    """Revoca el token en TikTok (Login Kit). Si falla, el caller igual puede borrar en local."""
+    tok = (token or "").strip()
+    if not tok:
+        return
+    payload = {
+        "client_key": client_key(),
+        "client_secret": client_secret(),
+        "token": tok,
+    }
+    if not payload["client_key"] or not payload["client_secret"]:
+        return
+    try:
+        _post_form(TIKTOK_REVOKE_URL, payload)
+    except (urllib.error.URLError, OSError, json.JSONDecodeError, ValueError):
+        return

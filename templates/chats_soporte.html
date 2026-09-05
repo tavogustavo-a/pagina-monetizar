@@ -1,0 +1,512 @@
+{% extends "base.html" %}
+{% block title %}{{ t('support.chats_title') }}{% endblock %}
+{% block body %}
+<div class="layout">
+  {% include "_sidebar.html" %}
+
+  <main class="main main--scroll">
+    <div class="admin-layout">
+      <div class="admin-inner admin-inner--wide">
+        <section class="section dashboard-section support-chats-section">
+          <header class="admin-head admin-head--title">
+            <h1 class="admin-head__title-row">
+              {{ t('support.chats_title') }}
+              <button
+                type="button"
+                class="servers-info-btn panel-info-btn admin-head__info-btn js-panel-info-open"
+                data-info-title="{{ t('support.chats_title') }}"
+                data-info-text="{{ t('support.chats_intro') }}"
+                aria-label="{{ t('support.chats_info_btn') }}"
+                title="{{ t('support.chats_info_btn') }}"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h.008v.008H11.25v-.008zM12 17.25h.01M12 21a9 9 0 100-18 9 9 0 000 18z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v.008M12 11.25V16.5" />
+                </svg>
+              </button>
+            </h1>
+          </header>
+
+          <div class="log-purge">
+            <label class="log-purge__field">
+              <span>{{ t('log.purge_from') }}</span>
+              <input type="date" id="chat-log-from" class="log-purge__input" />
+            </label>
+            <label class="log-purge__field">
+              <span>{{ t('log.purge_to') }}</span>
+              <input type="date" id="chat-log-to" class="log-purge__input" />
+            </label>
+            <button type="button" class="btn btn-ghost btn-sm log-purge__btn btn-user-delete" id="chat-log-delete" aria-label="{{ t('log.purge_delete') }}" title="{{ t('log.purge_delete') }}">{% include '_icon_trash.html' %}</button>
+          </div>
+          <p class="log-purge__msg" id="chat-log-msg" hidden></p>
+
+          <div class="chats-split" id="chats-split">
+            <aside class="chats-threads" id="chats-threads">
+              <div class="chats-threads__panel">
+              <div class="chats-threads__toolbar">
+                <button
+                  type="button"
+                  id="threads-toggle"
+                  class="chats-threads-toggle"
+                  aria-expanded="true"
+                  data-label-collapse="{{ t('support.threads_collapse') }}"
+                  data-label-expand="{{ t('support.threads_expand') }}"
+                  aria-label="{{ t('support.threads_collapse') }}"
+                  title="{{ t('support.threads_collapse') }}"
+                >
+                  <svg class="chats-threads-toggle__icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                  </svg>
+                </button>
+                <div class="equipo-search-wrap panel-search-wrap--highlight chats-threads__search-wrap">
+                  <input
+                    type="search"
+                    id="threads-search"
+                    class="equipo-search-input panel-search-input--highlight"
+                    placeholder="{{ t('support.search_ph') }}"
+                    aria-label="{{ t('support.search_ph') }}"
+                    autocomplete="off"
+                  />
+                  <button
+                    type="button"
+                    id="threads-search-clear"
+                    class="equipo-search-clear"
+                    aria-label="{{ t('team.search_clear') }}"
+                    title="{{ t('team.search_clear') }}"
+                    hidden
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              <div id="threads-list" class="chats-threads__list">
+                <div class="chat-empty" id="threads-empty">{{ t('support.no_threads') }}</div>
+              </div>
+              </div>
+            </aside>
+
+            <aside
+              class="chats-threads-rail"
+              id="threads-rail"
+              aria-label="{{ t('support.threads_rail_label') }}"
+            ></aside>
+
+            <div class="chats-detail">
+              <div class="chats-detail__head" id="detail-toolbar">
+                <div class="chats-detail__title">
+                  <strong id="detail-username" class="chats-detail__username" hidden></strong>
+                  <span id="detail-placeholder" class="chats-detail__placeholder sub">{{ t('support.pick_thread') }}</span>
+                </div>
+              </div>
+              <div class="chats-detail__body">
+                <div class="chat-box chat-box--admin" id="chat-box"></div>
+                <form class="chat-compose" id="chat-form" hidden>
+                  <div class="chat-compose__field">
+                    <textarea
+                      id="chat-input"
+                      class="chat-compose__input"
+                      rows="2"
+                      maxlength="2000"
+                      placeholder="{{ t('support.reply_placeholder') }}"
+                      aria-label="{{ t('support.reply_placeholder') }}"
+                    ></textarea>
+                  </div>
+                  <button type="submit" class="btn btn-accent chat-compose__send" aria-label="{{ t('support.send') }}" title="{{ t('support.send') }}">{% include '_icon_send.html' %}</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="chat-log-confirm" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-log-purge="chat-log-confirm" tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel extractor-confirm__panel" role="dialog" aria-modal="true" aria-labelledby="chat-log-confirm-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div><h2 id="chat-log-confirm-title">{{ t('log.purge_confirm_title') }}</h2></div>
+      <button type="button" class="equipo-modal__close" data-close-log-purge="chat-log-confirm" aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body">
+      <p class="extractor-confirm__body" id="chat-log-confirm-body"></p>
+      <div class="extractor-confirm__actions">
+        <button type="button" class="btn btn-ghost" data-close-log-purge="chat-log-confirm">{{ t('log.purge_cancel') }}</button>
+        <button type="button" class="btn extractor-confirm__delete btn-user-delete" id="chat-log-confirm-delete" aria-label="{{ t('log.purge_confirm_btn') }}" title="{{ t('log.purge_confirm_btn') }}">{% include '_icon_trash.html' %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/static/js/ajax-search.js?v=1"></script>
+<script src="/static/js/log-purge.js?v=1"></script>
+<script>
+  (function () {
+    var threadsList = document.getElementById("threads-list");
+    var threadsEmpty = document.getElementById("threads-empty");
+    var search = document.getElementById("threads-search");
+    var searchClear = document.getElementById("threads-search-clear");
+    var box = document.getElementById("chat-box");
+    var form = document.getElementById("chat-form");
+    var input = document.getElementById("chat-input");
+    var detailUsername = document.getElementById("detail-username");
+    var detailPlaceholder = document.getElementById("detail-placeholder");
+    var split = document.getElementById("chats-split");
+    var threadsRail = document.getElementById("threads-rail");
+    var threadsToggle = document.getElementById("threads-toggle");
+    var collapseThreadsLabel = {{ t('support.threads_collapse') | tojson }};
+    var expandThreadsLabel = {{ t('support.threads_expand') | tojson }};
+    var adminLabel = {{ t('support.admin_label') | tojson }};
+    var anonymousLabel = {{ t('support.anonymous_label') | tojson }};
+    var currentUserId = null;
+    var currentThreadLabel = "";
+    var lastCount = -1;
+
+    function isMobileChats() {
+      return window.matchMedia("(max-width: 860px)").matches;
+    }
+
+    function setThreadsCollapsed(collapsed) {
+      if (!split) return;
+      split.classList.toggle("chats-split--threads-collapsed", collapsed);
+      if (threadsToggle) {
+        threadsToggle.hidden = collapsed;
+        threadsToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        var label = collapsed ? expandThreadsLabel : collapseThreadsLabel;
+        threadsToggle.setAttribute("aria-label", label);
+        threadsToggle.setAttribute("title", label);
+      }
+    }
+
+    function updateDetailTitle() {
+      var hasThread = !!currentUserId;
+      if (detailUsername) detailUsername.hidden = !hasThread;
+      if (detailPlaceholder) detailPlaceholder.hidden = hasThread;
+    }
+
+    function updateChatsLayout() {
+      if (!split) return;
+      split.classList.remove("chats-split--mobile-list");
+      if (!isMobileChats()) {
+        if (threadsToggle) {
+          threadsToggle.hidden = split.classList.contains("chats-split--threads-collapsed");
+        }
+        return;
+      }
+      if (!currentUserId) {
+        setThreadsCollapsed(false);
+        return;
+      }
+      setThreadsCollapsed(true);
+    }
+
+    function expandThreadsPanel() {
+      setThreadsCollapsed(false);
+    }
+
+    function threadLabel(th) {
+      return th.is_guest ? anonymousLabel : th.username;
+    }
+
+    function threadInitial(th) {
+      if (th.is_guest) {
+        return (anonymousLabel.charAt(0) || "?").toUpperCase();
+      }
+      var name = String(th.username || "").trim();
+      return (name.charAt(0) || "?").toUpperCase();
+    }
+
+    function renderThreadsRail(threads) {
+      if (!threadsRail) return;
+      threadsRail.innerHTML = "";
+      var expandBtn = document.createElement("button");
+      expandBtn.type = "button";
+      expandBtn.className = "chats-threads-rail__expand";
+      expandBtn.setAttribute("aria-label", expandThreadsLabel);
+      expandBtn.setAttribute("title", expandThreadsLabel);
+      expandBtn.innerHTML =
+        '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />' +
+        "</svg>";
+      expandBtn.addEventListener("click", expandThreadsPanel);
+      threadsRail.appendChild(expandBtn);
+
+      threads.forEach(function (th) {
+        var railBtn = document.createElement("button");
+        railBtn.type = "button";
+        railBtn.className =
+          "chats-thread-rail-btn" +
+          (th.is_guest ? " chats-thread-rail-btn--guest" : "") +
+          (th.user_id === currentUserId ? " chats-thread-rail-btn--active" : "");
+        railBtn.textContent = threadInitial(th);
+        railBtn.setAttribute("title", threadLabel(th));
+        railBtn.setAttribute("aria-label", threadLabel(th));
+        if (th.unread > 0) {
+          var railBadge = document.createElement("span");
+          railBadge.className = "chats-thread-rail-btn__badge";
+          railBadge.textContent = th.unread > 9 ? "9+" : String(th.unread);
+          railBtn.appendChild(railBadge);
+        }
+        railBtn.addEventListener("click", function () {
+          openThread(th.user_id, threadLabel(th));
+        });
+        threadsRail.appendChild(railBtn);
+      });
+    }
+
+    function fmtTime(iso) {
+      try {
+        return new Date(iso).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+      } catch (e) {
+        return "";
+      }
+    }
+
+    function renderThreads(threads) {
+      threadsList.querySelectorAll(".chat-thread").forEach(function (n) { n.remove(); });
+      threadsEmpty.hidden = threads.length > 0;
+      threads.forEach(function (th) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className =
+          "chat-thread" + (th.user_id === currentUserId ? " chat-thread--active" : "");
+        var top = document.createElement("div");
+        top.className = "chat-thread__top";
+        var name = document.createElement("span");
+        name.className = "chat-thread__name";
+        name.textContent = threadLabel(th);
+        top.appendChild(name);
+        if (th.unread > 0) {
+          var badge = document.createElement("span");
+          badge.className = "chat-thread__badge";
+          badge.textContent = th.unread;
+          top.appendChild(badge);
+        }
+        var when = document.createElement("span");
+        when.className = "chat-thread__when";
+        when.textContent = fmtTime(th.last_at);
+        top.appendChild(when);
+        btn.appendChild(top);
+        btn.addEventListener("click", function () {
+          openThread(th.user_id, threadLabel(th));
+        });
+        threadsList.appendChild(btn);
+      });
+      renderThreadsRail(threads);
+    }
+
+    function loadThreads() {
+      var q = search.value.trim();
+      fetch("/admin/api/soporte/hilos?q=" + encodeURIComponent(q), {
+        headers: { Accept: "application/json" },
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data && data.ok) renderThreads(data.threads || []);
+        })
+        .catch(function () {});
+    }
+
+    function renderMessages(messages) {
+      if (messages.length === lastCount) return;
+      lastCount = messages.length;
+      box.querySelectorAll(".chat-msg").forEach(function (n) { n.remove(); });
+      messages.forEach(function (m) {
+        var wrap = document.createElement("div");
+        wrap.className =
+          "chat-msg " + (m.sender === "admin" ? "chat-msg--mine" : "chat-msg--theirs");
+        var who = document.createElement("div");
+        who.className = "chat-msg__who";
+        who.textContent = m.sender === "admin" ? adminLabel : currentThreadLabel;
+        var body = document.createElement("div");
+        body.className = "chat-msg__body";
+        body.textContent = m.body;
+        wrap.appendChild(who);
+        wrap.appendChild(body);
+        box.appendChild(wrap);
+      });
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function loadMessages() {
+      if (!currentUserId) return;
+      fetch("/admin/api/soporte/hilos/" + encodeURIComponent(currentUserId) + "/mensajes", {
+        headers: { Accept: "application/json" },
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data && data.ok) {
+            currentThreadLabel = data.is_guest ? anonymousLabel : (data.username || "");
+            detailUsername.textContent = currentThreadLabel;
+            renderMessages(data.messages || []);
+          }
+        })
+        .catch(function () {});
+    }
+
+    function openThread(userId, username) {
+      currentUserId = userId;
+      currentThreadLabel = username || "";
+      lastCount = -1;
+      if (detailUsername) detailUsername.textContent = currentThreadLabel;
+      updateDetailTitle();
+      form.hidden = false;
+      updateChatsLayout();
+      loadMessages();
+      loadThreads();
+    }
+
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      if (!currentUserId) return;
+      var text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      fetch("/admin/api/soporte/hilos/" + encodeURIComponent(currentUserId) + "/mensajes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ body: text }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function () { lastCount = -1; loadMessages(); loadThreads(); })
+        .catch(function () {});
+    });
+
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" && !ev.shiftKey) {
+        ev.preventDefault();
+        form.dispatchEvent(new Event("submit", { cancelable: true }));
+      }
+    });
+
+    if (threadsToggle) {
+      threadsToggle.addEventListener("click", function () {
+        if (!split) return;
+        setThreadsCollapsed(!split.classList.contains("chats-split--threads-collapsed"));
+      });
+    }
+
+    window.addEventListener("resize", updateChatsLayout);
+    updateDetailTitle();
+    updateChatsLayout();
+
+    if (window.wireAjaxSearch && search) {
+      window.wireAjaxSearch(search, searchClear, function () {
+        loadThreads();
+      });
+    } else if (search) {
+      search.addEventListener("input", function () {
+        loadThreads();
+      });
+    }
+
+    loadThreads();
+    setInterval(function () {
+      loadThreads();
+      loadMessages();
+    }, 5000);
+
+    if (window.wireLogPurge) {
+      window.wireLogPurge({
+        fromId: "chat-log-from",
+        toId: "chat-log-to",
+        btnId: "chat-log-delete",
+        msgId: "chat-log-msg",
+        modalId: "chat-log-confirm",
+        bodyId: "chat-log-confirm-body",
+        confirmId: "chat-log-confirm-delete",
+        countUrl: "/admin/api/soporte/logs/count",
+        deleteUrl: "/admin/api/soporte/logs",
+        i18n: {
+          needDates: {{ t('log.purge_need_dates') | tojson }},
+          invalid: {{ t('log.purge_invalid') | tojson }},
+          none: {{ t('log.purge_none') | tojson }},
+          confirmBody: {{ t('log.purge_confirm_chat') | tojson }},
+          network: {{ t('log.purge_network') | tojson }},
+          ok: {{ t('log.purge_ok') | tojson }}
+        },
+        onDeleted: function () {
+          loadThreads();
+          lastCount = -1;
+          loadMessages();
+        }
+      });
+    }
+  })();
+</script>
+
+<div id="panel-info-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-panel-info tabindex="-1"></div>
+  <div class="equipo-modal__panel panel-info-modal__panel" role="dialog" aria-modal="true" aria-labelledby="panel-info-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div>
+        <h2 id="panel-info-modal-title"></h2>
+      </div>
+      <button type="button" class="equipo-modal__close" data-close-panel-info aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body">
+      <p class="sub panel-info-modal__text" id="panel-info-modal-text"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var modal = document.getElementById("panel-info-modal");
+    var titleEl = document.getElementById("panel-info-modal-title");
+    var textEl = document.getElementById("panel-info-modal-text");
+    var lastTrigger = null;
+
+    if (!modal || !titleEl || !textEl) return;
+
+    function releaseModalFocus(returnFocusEl) {
+      var active = document.activeElement;
+      if (!active || !modal.contains(active)) return;
+      if (returnFocusEl && typeof returnFocusEl.focus === "function") {
+        returnFocusEl.focus();
+      } else {
+        active.blur();
+      }
+    }
+
+    function openPanelInfo(btn) {
+      var title = btn.getAttribute("data-info-title") || "";
+      var text = btn.getAttribute("data-info-text") || "";
+      lastTrigger = btn;
+      titleEl.textContent = title;
+      textEl.textContent = text;
+      modal.classList.add("is-open");
+      modal.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+      var closeBtn = modal.querySelector(".equipo-modal__close");
+      if (closeBtn) closeBtn.focus();
+    }
+
+    function closePanelInfo() {
+      releaseModalFocus(lastTrigger);
+      modal.classList.remove("is-open");
+      modal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+      lastTrigger = null;
+    }
+
+    document.querySelectorAll(".js-panel-info-open").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        openPanelInfo(btn);
+      });
+    });
+
+    modal.querySelectorAll("[data-close-panel-info]").forEach(function (el) {
+      el.addEventListener("click", closePanelInfo);
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && modal.classList.contains("is-open")) {
+        closePanelInfo();
+      }
+    });
+  })();
+</script>
+{% endblock %}

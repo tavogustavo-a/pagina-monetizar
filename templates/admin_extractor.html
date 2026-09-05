@@ -211,7 +211,7 @@
             <span>{{ t('log.purge_to') }}</span>
             <input type="date" id="extractor-log-to" class="log-purge__input" />
           </label>
-          <button type="button" class="btn btn-ghost btn-sm log-purge__btn" id="extractor-log-delete">{{ t('log.purge_delete') }}</button>
+          <button type="button" class="btn btn-ghost btn-sm log-purge__btn btn-user-delete" id="extractor-log-delete" aria-label="{{ t('log.purge_delete') }}" title="{{ t('log.purge_delete') }}">{% include '_icon_trash.html' %}</button>
         </div>
         <p class="log-purge__msg" id="extractor-log-msg" hidden></p>
         <div class="extractor-jobs" id="extractor-jobs"></div>
@@ -335,7 +335,7 @@
       <p class="extractor-confirm__body" id="extractor-confirm-body"></p>
       <div class="extractor-confirm__actions">
         <button type="button" class="btn btn-ghost" data-close-extractor-confirm>{{ t('extractor.confirm_cancel') }}</button>
-        <button type="button" class="btn extractor-confirm__delete" id="extractor-confirm-delete">{{ t('extractor.confirm_delete') }}</button>
+        <button type="button" class="btn extractor-confirm__delete btn-user-delete" id="extractor-confirm-delete" aria-label="{{ t('extractor.confirm_delete') }}" title="{{ t('extractor.confirm_delete') }}">{% include '_icon_trash.html' %}</button>
       </div>
     </div>
   </div>
@@ -353,7 +353,7 @@
       <p class="extractor-confirm__body" id="extractor-log-confirm-body"></p>
       <div class="extractor-confirm__actions">
         <button type="button" class="btn btn-ghost" data-close-log-purge="extractor-log-confirm">{{ t('log.purge_cancel') }}</button>
-        <button type="button" class="btn extractor-confirm__delete" id="extractor-log-confirm-delete">{{ t('log.purge_confirm_btn') }}</button>
+        <button type="button" class="btn extractor-confirm__delete btn-user-delete" id="extractor-log-confirm-delete" aria-label="{{ t('log.purge_confirm_btn') }}" title="{{ t('log.purge_confirm_btn') }}">{% include '_icon_trash.html' %}</button>
       </div>
     </div>
   </div>
@@ -454,6 +454,10 @@
 <script>
   (function () {
     var i18n = window.__EXTRACTOR_I18N || {};
+    var ICON_TRASH =
+      '<svg class="icon-trash" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />' +
+      "</svg>";
     var cfgEl = document.getElementById("extractor-config");
     var cfg = {};
     try {
@@ -998,7 +1002,7 @@
           ? '<button type="button" class="btn btn-ghost btn-sm js-extractor-resume">' + esc(i18n.resumeBtn) + "</button>"
           : "") +
         '<button type="button" class="btn btn-ghost btn-sm js-extractor-log" aria-expanded="' + (isOpen ? "true" : "false") + '">' + esc(i18n.logBtn) + "</button>" +
-        '<button type="button" class="btn btn-ghost btn-sm btn-user-delete js-extractor-delete">' + esc(i18n.deleteBtn) + "</button>" +
+        '<button type="button" class="btn btn-ghost btn-sm btn-user-delete js-extractor-delete" aria-label="' + esc(i18n.deleteBtn) + '" title="' + esc(i18n.deleteBtn) + '">' + ICON_TRASH + "</button>" +
         "</div>" +
         '<div class="extractor-job__log"' + (isOpen ? "" : " hidden") + ">" +
         (events

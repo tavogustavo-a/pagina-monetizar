@@ -36,11 +36,18 @@
       title="{{ t('nav.statistics') }}"
       ><span class="nav-ic">📊</span><span class="nav-label">{{ t('nav.statistics') }}</span></a
     >
+    {% if user_can_access_servers(user) %}
     <a
       href="/admin/api-documento"
       class="nav-link {% if nav_active == 'api_docs' %}nav-link--active{% endif %}"
       title="{{ t('nav.api_docs') }}"
       ><span class="nav-ic">📄</span><span class="nav-label">{{ t('nav.api_docs') }}</span></a
+    >
+    <a
+      href="/admin/condiciones-servidores"
+      class="nav-link {% if nav_active == 'server_conditions' %}nav-link--active{% endif %}"
+      title="{{ t('nav.server_conditions') }}"
+      ><span class="nav-ic">📋</span><span class="nav-label">{{ t('nav.server_conditions') }}</span></a
     >
     <a
       href="/admin/servidores"
@@ -55,11 +62,45 @@
       ><span class="nav-ic">🧲</span><span class="nav-label">{{ t('nav.extractor') }}</span></a
     >
     <a
+      href="/admin/proxys"
+      class="nav-link {% if nav_active == 'proxys' %}nav-link--active{% endif %}"
+      title="{{ t('nav.proxys') }}"
+      ><span class="nav-ic">🛡️</span><span class="nav-label">{{ t('nav.proxys') }}</span></a
+    >
+    {% endif %}
+    <a
+      href="/admin/membresias"
+      class="nav-link {% if nav_active == 'membresias' %}nav-link--active{% endif %}"
+      title="{{ t('nav.membresias') }}"
+      ><span class="nav-ic">🎫</span><span class="nav-label">{{ t('nav.membresias') }}</span></a
+    >
+    <a
+      href="/admin/pagos"
+      class="nav-link {% if nav_active == 'pagos' %}nav-link--active{% endif %}"
+      title="{{ t('nav.pagos') }}"
+      ><span class="nav-ic">💳</span><span class="nav-label">{{ t('nav.pagos') }}</span></a
+    >
+    <a
       href="/admin/panel"
       class="nav-link {% if nav_active == 'panel' %}nav-link--active{% endif %}"
       title="{{ t('nav.panel') }}"
       ><span class="nav-ic">⚙️</span><span class="nav-label">{{ t('nav.panel') }}</span></a
     >
+    {% if user_can_access_servers(user) %}
+    <a
+      href="/admin/chats-soporte"
+      class="nav-link js-nav-support-link {% if nav_active == 'chats_soporte' %}nav-link--active{% endif %}"
+      title="{{ t('nav.support_chats') }}"
+      ><span class="nav-ic">💬</span><span class="nav-label">{{ t('nav.support_chats') }}</span>{% set _support_unread = support_unread_count(user) %}<span class="nav-link__badge" id="nav-support-unread"{% if _support_unread <= 0 %} hidden{% endif %} aria-label="{{ t('support.unread_badge') }}">{{ '9+' if _support_unread > 9 else _support_unread }}</span></a
+    >
+    {% else %}
+    <a
+      href="/admin/soporte"
+      class="nav-link js-nav-support-link {% if nav_active == 'soporte' %}nav-link--active{% endif %}"
+      title="{{ t('nav.support') }}"
+      ><span class="nav-ic">💬</span><span class="nav-label">{{ t('nav.support') }}</span>{% set _support_unread = support_unread_count(user) %}<span class="nav-link__badge" id="nav-support-unread"{% if _support_unread <= 0 %} hidden{% endif %} aria-label="{{ t('support.unread_badge') }}">{{ '9+' if _support_unread > 9 else _support_unread }}</span></a
+    >
+    {% endif %}
   </nav>
   {% elif user.role == 'user' %}
   <nav id="sidebar-nav">
@@ -76,6 +117,24 @@
       class="nav-link {% if nav_active == 'admin' %}nav-link--active{% endif %}"
       title="{{ t('nav.statistics') }}"
       ><span class="nav-ic">📊</span><span class="nav-label">{{ t('nav.statistics') }}</span></a
+    >
+    <a
+      href="/admin/membresias"
+      class="nav-link {% if nav_active == 'membresias' %}nav-link--active{% endif %}"
+      title="{{ t('nav.membresias') }}"
+      ><span class="nav-ic">🎫</span><span class="nav-label">{{ t('nav.membresias') }}</span></a
+    >
+    <a
+      href="/admin/pagos"
+      class="nav-link {% if nav_active == 'pagos' %}nav-link--active{% endif %}"
+      title="{{ t('nav.pagos') }}"
+      ><span class="nav-ic">💳</span><span class="nav-label">{{ t('nav.pagos') }}</span></a
+    >
+    <a
+      href="/admin/soporte"
+      class="nav-link js-nav-support-link {% if nav_active == 'soporte' %}nav-link--active{% endif %}"
+      title="{{ t('nav.support') }}"
+      ><span class="nav-ic">💬</span><span class="nav-label">{{ t('nav.support') }}</span>{% set _support_unread = support_unread_count(user) %}<span class="nav-link__badge" id="nav-support-unread"{% if _support_unread <= 0 %} hidden{% endif %} aria-label="{{ t('support.unread_badge') }}">{{ '9+' if _support_unread > 9 else _support_unread }}</span></a
     >
   </nav>
   {% endif %}
@@ -94,6 +153,10 @@
     </form>
   </div>
 </aside>
+<meta name="support-notify-user" content="{{ t('support.notify_new') }}" />
+<meta name="support-notify-admin" content="{{ t('support.notify_new_admin') }}" />
+<meta name="support-notify-is-agent" content="{{ '1' if user_can_access_servers(user) else '0' }}" />
+<script src="/static/js/support-notify.js?v=1" defer></script>
 <script>
   (function () {
     var sidebar = document.getElementById("app-sidebar");

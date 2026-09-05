@@ -36,14 +36,14 @@ def client_secret() -> str:
     )
 
 
-def redirect_uri() -> str:
+def redirect_uri(request=None) -> str:
     env = (os.environ.get("DAILYMOTION_REDIRECT_URI") or "").strip()
     if env:
         return env
     try:
-        from site_config import SITE_URL
+        from site_config import oauth_callback_url
 
-        return f"{SITE_URL}/oauth/dailymotion/callback"
+        return oauth_callback_url("dailymotion", request)
     except Exception:
         return "http://127.0.0.1:8000/oauth/dailymotion/callback"
 
@@ -60,11 +60,12 @@ def new_csrf_state() -> str:
     return secrets.token_urlsafe(32)
 
 
-def build_authorize_url(*, state: str) -> str:
+def build_authorize_url(*, state: str, redirect_uri_value: str | None = None) -> str:
+    ru = (redirect_uri_value or "").strip() or redirect_uri()
     params = {
         "response_type": "code",
         "client_id": client_id(),
-        "redirect_uri": redirect_uri(),
+        "redirect_uri": ru,
         "scope": oauth_scopes(),
         "state": state,
     }
@@ -126,14 +127,15 @@ def bearer_get(path: str, access_token: str) -> dict[str, Any]:
     )
 
 
-def exchange_code_for_tokens(code: str) -> dict[str, Any]:
+def exchange_code_for_tokens(code: str, redirect_uri_value: str | None = None) -> dict[str, Any]:
+    ru = (redirect_uri_value or "").strip() or redirect_uri()
     data = _post_form(
         TOKEN_URL,
         {
             "grant_type": "authorization_code",
             "client_id": client_id(),
             "client_secret": client_secret(),
-            "redirect_uri": redirect_uri(),
+            "redirect_uri": ru,
             "code": (code or "").strip(),
         },
     )

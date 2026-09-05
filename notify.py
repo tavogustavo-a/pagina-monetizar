@@ -43,18 +43,36 @@ def send_plain_email(*, to: str, subject: str, body: str) -> bool:
         return False
 
 
+def send_email_verification_email(*, to: str, verify_url: str, lang: str = "es") -> bool:
+    if lang == "es":
+        subject = f"[{site_config.SITE_NAME}] Confirma tu correo"
+        body = (
+            f"Confirma el correo de tu cuenta en {site_config.SITE_NAME}.\n\n"
+            f"Abre este enlace (válido 24 horas):\n{verify_url}\n\n"
+            "Si no creaste esta cuenta, ignora este mensaje."
+        )
+    else:
+        subject = f"[{site_config.SITE_NAME}] Confirm your email"
+        body = (
+            f"Confirm the email for your account on {site_config.SITE_NAME}.\n\n"
+            f"Open this link (valid for 24 hours):\n{verify_url}\n\n"
+            "If you did not create this account, you can ignore this email."
+        )
+    return send_plain_email(to=to, subject=subject, body=body)
+
+
 def send_password_reset_email(*, to: str, reset_url: str, lang: str = "es") -> bool:
     if lang == "es":
-        subject = f"[{site_config.SITE_NAME}] Cambiar contraseña de administrador"
+        subject = f"[{site_config.SITE_NAME}] Restablecer contraseña"
         body = (
-            f"Recibimos una solicitud para cambiar la contraseña del administrador en {site_config.SITE_NAME}.\n\n"
+            f"Recibimos una solicitud para restablecer la contraseña de tu cuenta en {site_config.SITE_NAME}.\n\n"
             f"Abre este enlace (válido 2 horas):\n{reset_url}\n\n"
             "Si no fuiste tú, ignora este mensaje."
         )
     else:
-        subject = f"[{site_config.SITE_NAME}] Administrator password reset"
+        subject = f"[{site_config.SITE_NAME}] Password reset"
         body = (
-            f"We received a request to change the administrator password on {site_config.SITE_NAME}.\n\n"
+            f"We received a request to reset your account password on {site_config.SITE_NAME}.\n\n"
             f"Open this link (valid for 2 hours):\n{reset_url}\n\n"
             "If you did not request this, you can ignore this email."
         )
@@ -66,9 +84,16 @@ def send_publish_failure_alert(
     video_title: str,
     failures: list[dict[str, Any]],
     lang: str = "es",
+    user_id: str | None = None,
 ) -> bool:
     """Send one email summarizing failed platform uploads. Returns True if sent."""
-    to = _recipient_email()
+    to = ""
+    if user_id:
+        import db
+
+        to = db.notification_email_for_user_id(user_id)
+    if not to:
+        to = site_config.notification_email()
     if not failures or not smtp_configured() or not to:
         return False
 
