@@ -82,7 +82,10 @@ async def lifespan(app: FastAPI):
     async def scheduled_worker() -> None:
         while True:
             try:
-                publish_schedule.process_due_scheduled_publications(upload_dir=UPLOAD_DIR)
+                await asyncio.to_thread(
+                    publish_schedule.process_due_scheduled_publications,
+                    upload_dir=UPLOAD_DIR,
+                )
             except Exception:
                 pass
             await asyncio.sleep(30)
@@ -90,7 +93,10 @@ async def lifespan(app: FastAPI):
     async def extractor_worker() -> None:
         while True:
             try:
-                extractor.process_due_extractor_jobs(upload_dir=UPLOAD_DIR)
+                await asyncio.to_thread(
+                    extractor.process_due_extractor_jobs,
+                    upload_dir=UPLOAD_DIR,
+                )
             except Exception:
                 pass
             await asyncio.sleep(extractor.WORKER_TICK_SECONDS)
