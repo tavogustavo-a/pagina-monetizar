@@ -20,9 +20,10 @@ import platform_publish
 import platforms
 
 # Frecuencia del worker (main.py) y tope de publicaciones por pasada.
-WORKER_TICK_SECONDS = 10
+# El tick corre en un hilo aparte: un servidor holgado puede trabajar más por ciclo.
+WORKER_TICK_SECONDS = 180
 MAX_PUBLISH_PER_TICK = 20
-MAX_TICK_SECONDS = 8.0
+MAX_TICK_SECONDS = 45.0
 
 # Umbrales de auto-ajuste.
 MEMORY_HIGH_PERCENT = 85.0

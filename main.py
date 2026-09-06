@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -71,9 +72,42 @@ import video_temp_util  # noqa: E402
 import security_headers  # noqa: E402
 
 SECRET_KEY = os.environ.get("SESSION_SECRET", "dev-cambiar-en-produccion")
+_SCHEDULER_LOCK_FH = None
+
+
+def _try_hold_scheduler_lock():
+    """Un solo proceso uvicorn corre programador + extractor (el resto solo atiende HTTP)."""
+    from db_engine import DATA_DIR
+
+    path = DATA_DIR / "scheduler.lock"
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    fh = open(path, "a+", encoding="utf-8")
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            fh.seek(0)
+            fh.write("\0")
+            fh.flush()
+            fh.seek(0)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fh.seek(0)
+        fh.truncate()
+        fh.write(str(os.getpid()))
+        fh.flush()
+        return fh
+    except OSError:
+        fh.close()
+        return None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _SCHEDULER_LOCK_FH
     db.init_db()
     db.seed_admin_if_missing()
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -88,7 +122,7 @@ async def lifespan(app: FastAPI):
                 )
             except Exception:
                 pass
-            await asyncio.sleep(30)
+            await asyncio.sleep(60)
 
     async def extractor_worker() -> None:
         while True:
@@ -101,17 +135,30 @@ async def lifespan(app: FastAPI):
                 pass
             await asyncio.sleep(extractor.WORKER_TICK_SECONDS)
 
-    worker = asyncio.create_task(scheduled_worker())
-    extractor_task = asyncio.create_task(extractor_worker())
+    worker = None
+    extractor_task = None
+    _SCHEDULER_LOCK_FH = _try_hold_scheduler_lock()
+    if _SCHEDULER_LOCK_FH is not None:
+        worker = asyncio.create_task(scheduled_worker())
+        extractor_task = asyncio.create_task(extractor_worker())
     try:
         yield
     finally:
         for task in (worker, extractor_task):
-            task.cancel()
-        await asyncio.gather(worker, extractor_task, return_exceptions=True)
+            if task is not None:
+                task.cancel()
+        if worker is not None:
+            await asyncio.gather(worker, extractor_task, return_exceptions=True)
+        if _SCHEDULER_LOCK_FH is not None:
+            try:
+                _SCHEDULER_LOCK_FH.close()
+            except OSError:
+                pass
+            _SCHEDULER_LOCK_FH = None
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
