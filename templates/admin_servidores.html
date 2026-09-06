@@ -1213,6 +1213,13 @@
         var nameInput = modalBody.querySelector('input[name="name"]');
         if (nameInput) nameInput.value = accountName;
       }
+      // Al conectar OAuth desde una cuenta concreta, une la conexión a esa cuenta.
+      if (accountName && !isCreate) {
+        modalBody.querySelectorAll('a[href*="/oauth/"][href*="/connect"]').forEach(function (a) {
+          var base = (a.getAttribute("href") || "").split("?")[0];
+          if (base) a.setAttribute("href", base + "?link_name=" + encodeURIComponent(accountName));
+        });
+      }
       bindDisconnectButtons(modalBody);
       bindApiForms(modalBody);
       if (fromAccountPicker) {

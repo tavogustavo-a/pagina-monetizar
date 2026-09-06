@@ -199,6 +199,31 @@ def refresh_access_token(refresh_token: str) -> dict[str, Any]:
     return data
 
 
+REVOKE_URL = "https://api.twitter.com/2/oauth2/revoke"
+
+
+def revoke_tokens(access_token: str, refresh_token: str | None = None) -> None:
+    """Revoca los tokens en X (mejor esfuerzo)."""
+    for token, hint in (
+        ((refresh_token or "").strip(), "refresh_token"),
+        ((access_token or "").strip(), "access_token"),
+    ):
+        if not token:
+            continue
+        try:
+            _post_form(
+                REVOKE_URL,
+                {
+                    "token": token,
+                    "token_type_hint": hint,
+                    "client_id": client_id(),
+                },
+            )
+            return
+        except (ValueError, urllib.error.URLError, OSError, json.JSONDecodeError):
+            continue
+
+
 def fetch_profile(access_token: str) -> dict[str, Any]:
     params = urllib.parse.urlencode({"user.fields": "username,name"})
     data = _get(f"{ME_URL}?{params}", access_token)

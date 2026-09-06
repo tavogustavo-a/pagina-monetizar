@@ -2196,6 +2196,12 @@ def admin_publicaciones(request: Request):
             "scheduled_publications": _filter_scheduled_for_viewer(
                 db.list_scheduled_publications(limit=30, viewer=u), u
             ),
+            "pending_retry_publications": (
+                db.list_awaiting_retry_publications(limit=50, viewer=u)
+                if is_publish_admin
+                else []
+            ),
+            "can_manage_publish_retry": is_publish_admin,
             "show_pub_log_user": False,
             "show_comment_user_filter": is_publish_admin,
             "account_filter_label": account_filter_label,
@@ -2495,6 +2501,93 @@ async def admin_upload_video(request: Request):
     else:
         request.session["admin_ok"] = _msg(request, "pub.flash.all_ok", n=ok_n)
 
+    return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+
+
+def _require_publish_retry_admin(request: Request) -> db.User:
+    u = _require_publicaciones_user(request)
+    if not db.user_can_access_servers(u):
+        raise PermissionError("forbidden")
+    return u
+
+
+@app.post("/admin/publicaciones/pending/{sched_id}/retry", name="admin_retry_pending_publish")
+def admin_retry_pending_publish(request: Request, sched_id: str):
+    try:
+        u = _require_publish_retry_admin(request)
+    except PermissionError as e:
+        if str(e) == "login_required":
+            return _publicaciones_redirect_login()
+        return HTMLResponse("Permission denied.", status_code=403)
+    lang = i18n.resolve_lang(request)
+    row = db.get_scheduled_publication(sched_id)
+    if not row or str(row.get("status") or "") != "awaiting_retry":
+        request.session["admin_error"] = _msg(request, "pub.flash.pending_gone")
+        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+    if not db.mark_scheduled_retry_processing(sched_id):
+        request.session["admin_error"] = _msg(request, "pub.flash.pending_gone")
+        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+    video = db.get_video_by_id(row["video_id"])
+    if not video:
+        db.complete_scheduled_publication(sched_id, "failed", "Video not found")
+        request.session["admin_error"] = _msg(request, "pub.flash.pending_no_video")
+        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+    path = UPLOAD_DIR / video.file_name
+    if not path.is_file():
+        try:
+            leftover = json.loads(row.get("platforms_json") or "[]")
+        except (TypeError, ValueError):
+            leftover = []
+        db.set_scheduled_awaiting_retry(sched_id, leftover, "Video file missing")
+        request.session["admin_error"] = _msg(request, "pub.flash.pending_no_file")
+        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+    try:
+        platforms_list = json.loads(row.get("platforms_json") or "[]")
+    except (TypeError, ValueError):
+        platforms_list = []
+    if not isinstance(platforms_list, list) or not platforms_list:
+        db.complete_scheduled_publication(sched_id, "failed", "No platforms selected")
+        request.session["admin_error"] = _msg(request, "pub.flash.no_platforms")
+        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+    ok_n, fail_n, _ = publish_schedule.execute_video_publish(
+        upload_dir=UPLOAD_DIR,
+        user_id=row["user_id"],
+        video=video,
+        selected_platforms=[str(p) for p in platforms_list if str(p).strip()],
+        tiktoker_config_id=(row.get("tiktok_config_id") or "").strip(),
+        content_type=row.get("content_type") or "video",
+        lang=row.get("lang") or lang,
+        account_link_id=(row.get("account_link_id") or "").strip(),
+        retry_sched_id=sched_id,
+    )
+    if fail_n and ok_n:
+        request.session["admin_ok"] = _msg(
+            request, "pub.flash.partial", ok=ok_n, fail=fail_n
+        )
+    elif fail_n:
+        request.session["admin_error"] = _msg(
+            request, "pub.flash.partial", ok=ok_n, fail=fail_n
+        )
+    else:
+        request.session["admin_ok"] = _msg(request, "pub.flash.retry_all_ok", n=ok_n)
+    return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+
+
+@app.post("/admin/publicaciones/pending/{sched_id}/cancel", name="admin_cancel_pending_publish")
+def admin_cancel_pending_publish(request: Request, sched_id: str):
+    try:
+        u = _require_publish_retry_admin(request)
+    except PermissionError as e:
+        if str(e) == "login_required":
+            return _publicaciones_redirect_login()
+        return HTMLResponse("Permission denied.", status_code=403)
+    lang = i18n.resolve_lang(request)
+    if publish_schedule.cancel_awaiting_retry(
+        sched_id=sched_id, actor_user_id=u.id, lang=lang
+    ):
+        request.session["admin_ok"] = _msg(request, "pub.flash.pending_cancelled")
+    else:
+        request.session["admin_error"] = _msg(request, "pub.flash.pending_gone")
     return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
 
 
@@ -3378,6 +3471,57 @@ def _pop_oauth_redirect(request: Request, session_key: str, oauth_mod) -> str:
     return stored or oauth_mod.redirect_uri(request)
 
 
+def _store_oauth_link_target(request: Request) -> None:
+    """Si el connect viene desde una cuenta lógica (?link_name=), recuérdala para el callback."""
+    name = (request.query_params.get("link_name") or "").strip()
+    if name:
+        request.session["oauth_link_target_name"] = name
+    else:
+        request.session.pop("oauth_link_target_name", None)
+
+
+def _pop_oauth_link_target(request: Request) -> str:
+    return str(request.session.pop("oauth_link_target_name", "") or "").strip()
+
+
+def _bind_oauth_link_target(request: Request, oauth_account_id: str) -> None:
+    """Une la cuenta OAuth recién conectada a la cuenta lógica elegida en Servidores."""
+    name = _pop_oauth_link_target(request)
+    if not name or not oauth_account_id:
+        return
+    try:
+        db.bind_oauth_account_name(oauth_account_id, name)
+    except Exception:
+        pass
+
+
+def _revoke_oauth_remote(row: dict) -> None:
+    """Revoca el token en el proveedor antes de borrar en local (mejor esfuerzo)."""
+    pid = str(row.get("platform_id") or "").strip()
+    access = str(row.get("access_token") or "").strip()
+    refresh = str(row.get("refresh_token") or "").strip()
+    try:
+        if pid == "youtube":
+            youtube_oauth.revoke_tokens(access, refresh)
+        elif pid == "x":
+            x_oauth.revoke_tokens(access, refresh)
+        elif pid == "dailymotion":
+            dailymotion_oauth.revoke_tokens(access, refresh)
+        elif pid == "snapchat":
+            snapchat_oauth.revoke_tokens(access, refresh)
+        elif pid == "instagram":
+            instagram_oauth.revoke_tokens(access, refresh)
+        elif pid == "facebook":
+            # El refresh_token guarda el user token; revoca la app solo si esta
+            # es la última página conectada de ese usuario.
+            if refresh and not db.count_other_oauth_accounts_with_refresh(
+                "facebook", refresh, exclude_id=str(row.get("id") or "")
+            ):
+                facebook_oauth.revoke_user_permissions(refresh)
+    except Exception:
+        pass
+
+
 def _oauth_redirect(request: Request, user: db.User) -> RedirectResponse:
     return RedirectResponse(url=_oauth_return_path(user), status_code=303)
 
@@ -3536,6 +3680,7 @@ def tiktok_oauth_connect(request: Request):
     state = tiktok_oauth.new_csrf_state()
     request.session["tiktok_oauth_state"] = state
     request.session["tiktok_oauth_user_id"] = admin.id
+    _store_oauth_link_target(request)
     ru = _store_oauth_redirect(request, "tiktok_oauth_redirect_uri", tiktok_oauth)
     url = tiktok_oauth.build_authorize_url(state=state, redirect_uri_value=ru)
     return RedirectResponse(url=url, status_code=303)
@@ -3588,6 +3733,9 @@ def tiktok_oauth_callback(request: Request):
             linked_by_user_id=str(linked_by) if linked_by else None,
         )
         db.attach_tiktok_config_to_user(cid, str(linked_by))
+        link_name = _pop_oauth_link_target(request)
+        if link_name:
+            db.bind_tiktok_config_name(cid, link_name)
         uname = profile.get("username") or "account"
         request.session["tiktok_ok"] = f"Connected @{uname} successfully."
     except (ValueError, urllib.error.URLError, OSError) as e:
@@ -3633,6 +3781,7 @@ def youtube_oauth_connect(request: Request):
     state = youtube_oauth.new_csrf_state()
     request.session["youtube_oauth_state"] = state
     request.session["youtube_oauth_user_id"] = admin.id
+    _store_oauth_link_target(request)
     ru = _store_oauth_redirect(request, "youtube_oauth_redirect_uri", youtube_oauth)
     url = youtube_oauth.build_authorize_url(state=state, redirect_uri_value=ru)
     return RedirectResponse(url=url, status_code=303)
@@ -3672,7 +3821,7 @@ def youtube_oauth_callback(request: Request):
         open_id = profile.get("open_id") or ""
         if not open_id:
             raise ValueError("YouTube did not return a channel id.")
-        db.save_oauth_connection(
+        cid = db.save_oauth_connection(
             platform_id="youtube",
             open_id=str(open_id),
             username=profile.get("username"),
@@ -3686,6 +3835,7 @@ def youtube_oauth_callback(request: Request):
             redirect_uri=ru,
             linked_by_user_id=str(linked_by) if linked_by else None,
         )
+        _bind_oauth_link_target(request, cid)
         label = profile.get("display_name") or profile.get("username") or "YouTube"
         request.session["tiktok_ok"] = i18n.t("servers.youtube_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
@@ -3706,6 +3856,7 @@ def instagram_oauth_connect(request: Request):
     state = instagram_oauth.new_csrf_state()
     request.session["instagram_oauth_state"] = state
     request.session["instagram_oauth_user_id"] = admin.id
+    _store_oauth_link_target(request)
     ru = _store_oauth_redirect(request, "instagram_oauth_redirect_uri", instagram_oauth)
     url = instagram_oauth.build_authorize_url(state=state, redirect_uri_value=ru)
     return RedirectResponse(url=url, status_code=303)
@@ -3752,7 +3903,7 @@ def instagram_oauth_callback(request: Request):
         open_id = profile.get("open_id") or token_data.get("user_id") or ""
         if not open_id:
             raise ValueError("Instagram did not return a user id.")
-        db.save_oauth_connection(
+        cid = db.save_oauth_connection(
             platform_id="instagram",
             open_id=str(open_id),
             username=profile.get("username"),
@@ -3766,6 +3917,7 @@ def instagram_oauth_callback(request: Request):
             redirect_uri=ru,
             linked_by_user_id=str(linked_by) if linked_by else None,
         )
+        _bind_oauth_link_target(request, cid)
         label = profile.get("username") or profile.get("display_name") or "Instagram"
         request.session["tiktok_ok"] = i18n.t("servers.instagram_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
@@ -3786,6 +3938,7 @@ def facebook_oauth_connect(request: Request):
     state = facebook_oauth.new_csrf_state()
     request.session["facebook_oauth_state"] = state
     request.session["facebook_oauth_user_id"] = admin.id
+    _store_oauth_link_target(request)
     ru = _store_oauth_redirect(request, "facebook_oauth_redirect_uri", facebook_oauth)
     url = facebook_oauth.build_authorize_url(state=state, redirect_uri_value=ru)
     return RedirectResponse(url=url, status_code=303)
@@ -3831,8 +3984,9 @@ def facebook_oauth_callback(request: Request):
         pages = facebook_oauth.list_pages(access)
         if not pages:
             raise ValueError(i18n.t("servers.facebook_no_pages", lang))
+        saved_ids: list[str] = []
         for page in pages:
-            db.save_oauth_connection(
+            cid = db.save_oauth_connection(
                 platform_id="facebook",
                 open_id=page["open_id"],
                 username=page.get("username"),
@@ -3846,6 +4000,11 @@ def facebook_oauth_callback(request: Request):
                 redirect_uri=ru,
                 linked_by_user_id=str(linked_by) if linked_by else None,
             )
+            saved_ids.append(cid)
+        if len(saved_ids) == 1:
+            _bind_oauth_link_target(request, saved_ids[0])
+        else:
+            _pop_oauth_link_target(request)
         request.session["tiktok_ok"] = i18n.t(
             "servers.facebook_connected", lang, n=len(pages)
         )
@@ -3869,6 +4028,7 @@ def x_oauth_connect(request: Request):
     request.session["x_oauth_state"] = state
     request.session["x_oauth_verifier"] = verifier
     request.session["x_oauth_user_id"] = admin.id
+    _store_oauth_link_target(request)
     ru = _store_oauth_redirect(request, "x_oauth_redirect_uri", x_oauth)
     url = x_oauth.build_authorize_url(
         state=state, code_challenge=challenge, redirect_uri_value=ru
@@ -3913,7 +4073,7 @@ def x_oauth_callback(request: Request):
         open_id = profile.get("open_id") or ""
         if not open_id:
             raise ValueError("X did not return a user id.")
-        db.save_oauth_connection(
+        cid = db.save_oauth_connection(
             platform_id="x",
             open_id=str(open_id),
             username=profile.get("username"),
@@ -3927,6 +4087,7 @@ def x_oauth_callback(request: Request):
             redirect_uri=ru,
             linked_by_user_id=str(linked_by) if linked_by else None,
         )
+        _bind_oauth_link_target(request, cid)
         label = profile.get("username") or profile.get("display_name") or "X"
         request.session["tiktok_ok"] = i18n.t("servers.x_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
@@ -3947,6 +4108,7 @@ def dailymotion_oauth_connect(request: Request):
     state = dailymotion_oauth.new_csrf_state()
     request.session["dailymotion_oauth_state"] = state
     request.session["dailymotion_oauth_user_id"] = admin.id
+    _store_oauth_link_target(request)
     ru = _store_oauth_redirect(request, "dailymotion_oauth_redirect_uri", dailymotion_oauth)
     url = dailymotion_oauth.build_authorize_url(state=state, redirect_uri_value=ru)
     return RedirectResponse(url=url, status_code=303)
@@ -3990,7 +4152,7 @@ def dailymotion_oauth_callback(request: Request):
         open_id = profile.get("open_id") or ""
         if not open_id:
             raise ValueError("Dailymotion did not return a user id.")
-        db.save_oauth_connection(
+        cid = db.save_oauth_connection(
             platform_id="dailymotion",
             open_id=str(open_id),
             username=profile.get("username"),
@@ -4004,6 +4166,7 @@ def dailymotion_oauth_callback(request: Request):
             redirect_uri=ru,
             linked_by_user_id=str(linked_by) if linked_by else None,
         )
+        _bind_oauth_link_target(request, cid)
         label = profile.get("username") or profile.get("display_name") or "Dailymotion"
         request.session["tiktok_ok"] = i18n.t("servers.dailymotion_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
@@ -4024,6 +4187,7 @@ def bilibili_oauth_connect(request: Request):
     state = bilibili_oauth.new_csrf_state()
     request.session["bilibili_oauth_state"] = state
     request.session["bilibili_oauth_user_id"] = admin.id
+    _store_oauth_link_target(request)
     ru = _store_oauth_redirect(request, "bilibili_oauth_redirect_uri", bilibili_oauth)
     url = bilibili_oauth.build_authorize_url(state=state, redirect_uri_value=ru)
     return RedirectResponse(url=url, status_code=303)
@@ -4067,7 +4231,7 @@ def bilibili_oauth_callback(request: Request):
         )
         if not open_id:
             raise ValueError("Bilibili did not return an openid.")
-        db.save_oauth_connection(
+        cid = db.save_oauth_connection(
             platform_id="bilibili",
             open_id=str(open_id),
             username=profile.get("username"),
@@ -4081,6 +4245,7 @@ def bilibili_oauth_callback(request: Request):
             redirect_uri=ru,
             linked_by_user_id=str(linked_by) if linked_by else None,
         )
+        _bind_oauth_link_target(request, cid)
         label = profile.get("username") or profile.get("display_name") or "Bilibili"
         request.session["tiktok_ok"] = i18n.t("servers.bilibili_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
@@ -4101,6 +4266,7 @@ def snapchat_oauth_connect(request: Request):
     state = snapchat_oauth.new_csrf_state()
     request.session["snapchat_oauth_state"] = state
     request.session["snapchat_oauth_user_id"] = admin.id
+    _store_oauth_link_target(request)
     ru = _store_oauth_redirect(request, "snapchat_oauth_redirect_uri", snapchat_oauth)
     url = snapchat_oauth.build_authorize_url(state=state, redirect_uri_value=ru)
     return RedirectResponse(url=url, status_code=303)
@@ -4142,7 +4308,7 @@ def snapchat_oauth_callback(request: Request):
         open_id = profile.get("open_id") or ""
         if not open_id:
             raise ValueError("Snapchat did not return a public profile id.")
-        db.save_oauth_connection(
+        cid = db.save_oauth_connection(
             platform_id="snapchat",
             open_id=str(open_id),
             username=profile.get("username"),
@@ -4156,6 +4322,7 @@ def snapchat_oauth_callback(request: Request):
             redirect_uri=ru,
             linked_by_user_id=str(linked_by) if linked_by else None,
         )
+        _bind_oauth_link_target(request, cid)
         label = profile.get("username") or profile.get("display_name") or "Snapchat"
         request.session["tiktok_ok"] = i18n.t("servers.snapchat_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
@@ -4176,6 +4343,9 @@ def api_oauth_delete(request: Request, account_id: str):
         return JSONResponse({"ok": False, "error": "Permission denied."}, status_code=403)
     if not db.user_can_manage_oauth_account(me, account_id):
         return JSONResponse({"ok": False, "error": "Permission denied."}, status_code=403)
+    row = db.get_oauth_account_row(account_id)
+    if row:
+        _revoke_oauth_remote(row)
     try:
         db.delete_oauth_account(account_id)
     except ValueError as e:
@@ -4890,3 +5060,34 @@ def admin_create_user(
     except ValueError as e:
         request.session["panel_error"] = str(e)
     return RedirectResponse(url=request.url_for("admin_panel"), status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Archivos de verificación de dominio (TikTok, Google, Meta…)
+# Coloca en la carpeta `verification/` el archivo de firma que te dé la
+# plataforma (p. ej. tiktokXXXX.txt) y quedará servido en la raíz del sitio.
+# Debe registrarse al final: solo captura rutas de un segmento no usadas.
+# ---------------------------------------------------------------------------
+VERIFICATION_DIR = BASE_DIR / "verification"
+_VERIFICATION_EXT = {".txt", ".html", ".json", ".xml"}
+
+
+@app.get("/{verification_file}", include_in_schema=False)
+def serve_verification_file(verification_file: str):
+    name = os.path.basename((verification_file or "").strip())
+    if (
+        not name
+        or name.startswith(".")
+        or Path(name).suffix.lower() not in _VERIFICATION_EXT
+    ):
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+    path = VERIFICATION_DIR / name
+    if not path.is_file():
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+    media = {
+        ".txt": "text/plain",
+        ".html": "text/html",
+        ".json": "application/json",
+        ".xml": "application/xml",
+    }[Path(name).suffix.lower()]
+    return FileResponse(path, media_type=media)

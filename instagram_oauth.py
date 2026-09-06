@@ -144,6 +144,23 @@ def _get(url: str) -> dict[str, Any]:
     return json.loads(raw) if raw else {}
 
 
+def revoke_tokens(access_token: str, refresh_token: str | None = None) -> None:
+    """Intenta revocar la autorización en Instagram (mejor esfuerzo, sin garantía)."""
+    token = (access_token or "").strip()
+    if not token:
+        return
+    params = urllib.parse.urlencode({"access_token": token})
+    req = urllib.request.Request(
+        f"https://graph.instagram.com/v21.0/me/permissions?{params}",
+        method="DELETE",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30):
+            return
+    except (urllib.error.URLError, OSError, ValueError):
+        return
+
+
 def _unwrap_token_payload(data: dict[str, Any]) -> dict[str, Any]:
     inner = data.get("data")
     if isinstance(inner, list) and inner and isinstance(inner[0], dict):

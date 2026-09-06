@@ -1,6 +1,7 @@
 """Save and live-test platform API credentials."""
 from __future__ import annotations
 
+import base64
 import json
 import urllib.error
 import urllib.parse
@@ -454,11 +455,229 @@ def _validate_draft_client_credentials(lang: str, platform_id: str) -> tuple[boo
         return False, t("api.need_credentials", lang)
     if _looks_like_placeholder(client_id):
         return False, t("api.err.invalid_credentials", lang)
-    if platform_id in {"dailymotion", "x", "instagram", "facebook", "youtube"} and not client_secret:
+    if (
+        platform_id
+        in {"dailymotion", "x", "instagram", "facebook", "youtube", "snapchat", "bilibili"}
+        and not client_secret
+    ):
         return False, t("api.err.need_secret", lang)
     if client_secret and _looks_like_placeholder(client_secret):
         return False, t("api.err.invalid_credentials", lang)
     return None
+
+
+_PROBE_CODE = "credential-probe"
+_PROBE_REDIRECT = "https://example.com/oauth/callback"
+_PROBE_VERIFIER = "credential-probe-verifier-credential-probe-verifier-0123456789"
+
+_BAD_CLIENT_NEEDLES = (
+    "invalid_client",
+    "unauthorized_client",
+    "client authentication failed",
+    "invalid client",
+    "unknown client",
+    "invalid app id",
+    "invalid client id",
+    "invalid platform app",
+    "error validating application",
+    "invalid application",
+    "incorrect client credentials",
+    "invalid api key",
+    "app not found",
+)
+
+_CLIENT_OK_NEEDLES = (
+    "invalid_grant",
+    "authorization code",
+    "authorization_code",
+    "auth code",
+    "invalid code",
+    "code was invalid",
+    "expired code",
+    "malformed auth code",
+    "matching code was not found",
+    "invalid oauth code",
+    "code has been used",
+    "invalid_request",
+)
+
+
+def _classify_client_probe(status: int, body: str) -> str:
+    """'ok' = client válido (solo falló el code falso); 'bad' = client inválido."""
+    data = _json_body(body)
+    blob = (json.dumps(data) if data else (body or "")[:400]).lower()
+    if any(n in blob for n in _BAD_CLIENT_NEEDLES):
+        return "bad"
+    if any(n in blob for n in _CLIENT_OK_NEEDLES):
+        return "ok"
+    if status >= 500:
+        return "network"
+    return "unknown"
+
+
+def _probe_error_detail(body: str, status: int) -> str:
+    data = _json_body(body)
+    if data:
+        err = data.get("error")
+        if isinstance(err, dict):
+            msg = str(err.get("message") or err.get("error_description") or "").strip()
+            if msg:
+                return msg[:200]
+        for key in ("error_description", "message", "error_message", "error", "msg"):
+            val = str(data.get(key) or "").strip()
+            if val:
+                return val[:200]
+    return (body or f"HTTP {status}")[:200]
+
+
+def _probe_draft_credentials(
+    platform_id: str, client_id: str, client_secret: str
+) -> tuple[str, str]:
+    """Prueba real de Client ID/Secret contra el proveedor. (veredicto, detalle)."""
+    try:
+        if platform_id == "facebook":
+            q = urllib.parse.urlencode(
+                {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "grant_type": "client_credentials",
+                }
+            )
+            status, body = _http(f"https://graph.facebook.com/v21.0/oauth/access_token?{q}")
+            data = _json_body(body)
+            if status == 200 and data.get("access_token"):
+                return "ok", ""
+            verdict = "bad" if status in (400, 401, 403) else _classify_client_probe(status, body)
+            return verdict, _probe_error_detail(body, status)
+
+        if platform_id == "dailymotion":
+            import dailymotion_oauth
+
+            status, body = _http(
+                dailymotion_oauth.TOKEN_URL,
+                method="POST",
+                form={
+                    "grant_type": "client_credentials",
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                },
+            )
+            data = _json_body(body)
+            if status == 200 and data.get("access_token"):
+                return "ok", ""
+            verdict = "bad" if status in (400, 401, 403) else _classify_client_probe(status, body)
+            return verdict, _probe_error_detail(body, status)
+
+        if platform_id == "youtube":
+            import youtube_oauth
+
+            status, body = _http(
+                youtube_oauth.GOOGLE_TOKEN_URL,
+                method="POST",
+                form={
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "code": _PROBE_CODE,
+                    "grant_type": "authorization_code",
+                    "redirect_uri": _PROBE_REDIRECT,
+                },
+            )
+            return _classify_client_probe(status, body), _probe_error_detail(body, status)
+
+        if platform_id == "instagram":
+            import instagram_oauth
+
+            status, body = _http(
+                instagram_oauth.TOKEN_URL,
+                method="POST",
+                form={
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "grant_type": "authorization_code",
+                    "redirect_uri": _PROBE_REDIRECT,
+                    "code": _PROBE_CODE,
+                },
+            )
+            return _classify_client_probe(status, body), _probe_error_detail(body, status)
+
+        if platform_id == "x":
+            import x_oauth
+
+            basic = base64.b64encode(
+                f"{client_id}:{client_secret}".encode("utf-8")
+            ).decode("ascii")
+            status, body = _http(
+                x_oauth.TOKEN_URL,
+                method="POST",
+                form={
+                    "grant_type": "authorization_code",
+                    "code": _PROBE_CODE,
+                    "redirect_uri": _PROBE_REDIRECT,
+                    "client_id": client_id,
+                    "code_verifier": _PROBE_VERIFIER,
+                },
+                headers={"Authorization": f"Basic {basic}"},
+            )
+            return _classify_client_probe(status, body), _probe_error_detail(body, status)
+
+        if platform_id == "snapchat":
+            import snapchat_oauth
+
+            status, body = _http(
+                snapchat_oauth.TOKEN_URL,
+                method="POST",
+                form={
+                    "grant_type": "authorization_code",
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "code": _PROBE_CODE,
+                    "redirect_uri": _PROBE_REDIRECT,
+                },
+            )
+            return _classify_client_probe(status, body), _probe_error_detail(body, status)
+
+        if platform_id == "bilibili":
+            import bilibili_oauth
+
+            q = urllib.parse.urlencode(
+                {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "grant_type": "authorization_code",
+                    "code": _PROBE_CODE,
+                }
+            )
+            status, body = _http(
+                f"{bilibili_oauth.TOKEN_URL}?{q}",
+                method="POST",
+                headers={"User-Agent": bilibili_oauth.UA, "Accept": "application/json"},
+            )
+            return _classify_client_probe(status, body), _probe_error_detail(body, status)
+    except (urllib.error.URLError, OSError, TimeoutError) as e:
+        return "network", str(e)[:200]
+    return "unknown", ""
+
+
+def _client_probe_result(
+    lang: str, platform_id: str, ok_key: str, client_id: str, client_secret: str
+) -> tuple[bool, str]:
+    """Resultado del probe real de Client ID/Secret contra el proveedor."""
+    from i18n import t
+
+    if not client_id:
+        return _need_keys(lang)
+    verdict, detail = _probe_draft_credentials(platform_id, client_id, client_secret)
+    if verdict == "ok":
+        return True, t(ok_key, lang)
+    if verdict == "bad":
+        return False, t(
+            "api.err.bad_client", lang, platform=_platform_label(lang, platform_id)
+        )
+    if detail:
+        return False, _fail_message(lang, platform_id, detail)
+    if verdict == "network":
+        return False, t("api.err.network", lang)
+    return False, t("api.err.generic", lang)
 
 
 def _finish_draft_credentials_test(
@@ -466,12 +685,10 @@ def _finish_draft_credentials_test(
 ) -> tuple[bool, str] | None:
     if not _testing_draft_credentials(platform_id):
         return None
-    from i18n import t
-
-    client_id, _secret = _draft_client_pair(platform_id)
-    if client_id:
-        return True, t(ok_key, lang)
-    return _need_keys(lang)
+    client_id, client_secret = _draft_client_pair(platform_id)
+    if not client_id:
+        return _need_keys(lang)
+    return _client_probe_result(lang, platform_id, ok_key, client_id, client_secret)
 
 
 def _fail_message(lang: str, platform_id: str, raw: str) -> str:
@@ -561,6 +778,7 @@ def _test_youtube(lang: str) -> tuple[bool, str]:
                 api_key = ""
     token = (raw.get("access_token") or "").strip()
     client_id = (raw.get("client_id") or "").strip() or youtube_oauth.client_id()
+    client_secret = (raw.get("client_secret") or "").strip() or youtube_oauth.client_secret()
     if token:
         status, body = _http(
             "https://www.googleapis.com/youtube/v3/channels?part=id&mine=true",
@@ -580,7 +798,7 @@ def _test_youtube(lang: str) -> tuple[bool, str]:
         err = (data.get("error") or {}).get("message") if isinstance(data.get("error"), dict) else body[:160]
         return False, _fail_message(lang, "youtube", str(err))
     if client_id:
-        return True, t("api.youtube.client_ok", lang)
+        return _client_probe_result(lang, "youtube", "api.youtube.client_ok", client_id, client_secret)
     return _need_keys(lang)
 
 
@@ -627,6 +845,7 @@ def _test_instagram(lang: str) -> tuple[bool, str]:
     raw = _creds("instagram")
     token = (raw.get("access_token") or "").strip()
     client_id = (raw.get("client_id") or "").strip() or instagram_oauth.client_id()
+    client_secret = (raw.get("client_secret") or "").strip() or instagram_oauth.client_secret()
     if token:
         try:
             profile = instagram_oauth.fetch_profile(token)
@@ -637,7 +856,9 @@ def _test_instagram(lang: str) -> tuple[bool, str]:
                 "https://graph.facebook.com/v21.0/me?", token, lang, "api.instagram.ok", "instagram"
             )
     if client_id:
-        return True, t("api.instagram.client_ok", lang)
+        return _client_probe_result(
+            lang, "instagram", "api.instagram.client_ok", client_id, client_secret
+        )
     return _need_keys(lang)
 
 
@@ -668,10 +889,13 @@ def _test_facebook(lang: str) -> tuple[bool, str]:
     raw = _creds("facebook")
     token = (raw.get("access_token") or "").strip()
     client_id = (raw.get("client_id") or "").strip() or facebook_oauth.client_id()
+    client_secret = (raw.get("client_secret") or "").strip() or facebook_oauth.client_secret()
     if token:
         return _test_graph("https://graph.facebook.com/v21.0/me?", token, lang, "api.facebook.ok", "facebook")
     if client_id:
-        return True, t("api.facebook.client_ok", lang)
+        return _client_probe_result(
+            lang, "facebook", "api.facebook.client_ok", client_id, client_secret
+        )
     return _need_keys(lang)
 
 
@@ -702,6 +926,7 @@ def _test_x(lang: str) -> tuple[bool, str]:
     raw = _creds("x")
     token = (raw.get("access_token") or "").strip()
     client_id = (raw.get("client_id") or "").strip() or x_oauth.client_id()
+    client_secret = (raw.get("client_secret") or "").strip() or x_oauth.client_secret()
     if token:
         try:
             profile = x_oauth.fetch_profile(token)
@@ -710,7 +935,7 @@ def _test_x(lang: str) -> tuple[bool, str]:
         except Exception as e:
             return False, _fail_message(lang, "x", str(e))
     if client_id:
-        return True, t("api.x.client_ok", lang)
+        return _client_probe_result(lang, "x", "api.x.client_ok", client_id, client_secret)
     return _need_keys(lang)
 
 
@@ -749,10 +974,10 @@ def _test_dailymotion(lang: str) -> tuple[bool, str]:
             return True, t("api.dailymotion.ok", lang, name=name)
         except Exception as e:
             return False, _fail_message(lang, "dailymotion", str(e))
-    if client_id and secret:
-        return True, t("api.dailymotion.client_ok", lang)
     if client_id:
-        return True, t("api.dailymotion.client_ok", lang)
+        return _client_probe_result(
+            lang, "dailymotion", "api.dailymotion.client_ok", client_id, secret
+        )
     return _need_keys(lang)
 
 
@@ -783,10 +1008,10 @@ def _test_bilibili(lang: str) -> tuple[bool, str]:
     raw = _creds("bilibili")
     client_id = (raw.get("client_id") or "").strip() or bilibili_oauth.client_id()
     secret = (raw.get("client_secret") or "").strip() or bilibili_oauth.client_secret()
-    if client_id and secret:
-        return True, t("api.bilibili.client_ok", lang)
     if client_id:
-        return True, t("api.bilibili.client_ok", lang)
+        return _client_probe_result(
+            lang, "bilibili", "api.bilibili.client_ok", client_id, secret
+        )
     return _need_keys(lang)
 
 
@@ -846,8 +1071,8 @@ def _test_snapchat(lang: str) -> tuple[bool, str]:
             return True, t("api.snapchat.ok", lang, name=name)
         except Exception as e:
             return False, _fail_message(lang, "snapchat", str(e))
-    if client_id and secret:
-        return True, t("api.snapchat.client_ok", lang)
     if client_id:
-        return True, t("api.snapchat.client_ok", lang)
+        return _client_probe_result(
+            lang, "snapchat", "api.snapchat.client_ok", client_id, secret
+        )
     return _need_keys(lang)

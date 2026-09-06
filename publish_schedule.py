@@ -63,6 +63,52 @@ def format_scheduled_local(utc_iso: str, lang: str) -> str:
         return str(utc_iso)[:16]
 
 
+def remaining_platform_ids(failures: list[dict]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in failures:
+        pid = str(item.get("platform_id") or "").strip()
+        if not pid or pid in seen:
+            continue
+        seen.add(pid)
+        out.append(pid)
+    return out
+
+
+def persist_awaiting_retry(
+    *,
+    sched_id: str | None,
+    user_id: str,
+    video_id: str,
+    failures: list[dict],
+    tiktoker_config_id: str,
+    content_type: str,
+    lang: str,
+    account_link_id: str,
+    error_message: str = "",
+) -> str | None:
+    """Deja el video en cola hasta que un admin republica o cancela."""
+    remaining = remaining_platform_ids(failures)
+    if not remaining:
+        if sched_id:
+            db.complete_scheduled_publication(sched_id, "done")
+        return None
+    if sched_id:
+        db.set_scheduled_awaiting_retry(sched_id, remaining, error_message)
+        return sched_id
+    return db.create_scheduled_publication(
+        user_id=user_id,
+        video_id=video_id,
+        platforms=remaining,
+        tiktok_config_id=tiktoker_config_id,
+        content_type=content_type,
+        scheduled_at_utc=datetime.now(timezone.utc),
+        lang=lang,
+        account_link_id=account_link_id,
+        status="awaiting_retry",
+    )
+
+
 def execute_video_publish(
     *,
     upload_dir: Path,
@@ -73,6 +119,7 @@ def execute_video_publish(
     content_type: str,
     lang: str,
     account_link_id: str = "",
+    retry_sched_id: str = "",
 ) -> tuple[int, int, list[dict]]:
     """Publica un video en las plataformas indicadas. Devuelve ok, fail y fallos para email."""
     path = upload_dir / video.file_name
@@ -80,6 +127,7 @@ def execute_video_publish(
     fail_n = 0
     failures_for_email: list[dict] = []
     batch_id = str(uuid.uuid4())
+    sched_id = (retry_sched_id or "").strip() or None
 
     for pid in selected_platforms:
         ok, message = platform_publish.publish_to_platform(
@@ -116,12 +164,25 @@ def execute_video_publish(
         )
 
     if failures_for_email:
+        persist_awaiting_retry(
+            sched_id=sched_id,
+            user_id=user_id,
+            video_id=video.id,
+            failures=failures_for_email,
+            tiktoker_config_id=tiktoker_config_id,
+            content_type=content_type,
+            lang=lang,
+            account_link_id=account_link_id,
+        )
         notify.send_publish_failure_alert(
             video_title=video.title,
             failures=failures_for_email,
             lang=lang,
             user_id=user_id,
+            tiktok_config_id=tiktoker_config_id,
         )
+    elif sched_id:
+        db.complete_scheduled_publication(sched_id, "done")
 
     return ok_n, fail_n, failures_for_email
 
@@ -146,7 +207,7 @@ def process_due_scheduled_publications(*, upload_dir: Path) -> int:
                     sched_id, "failed", "No platforms selected"
                 )
                 continue
-            ok_n, fail_n, _ = execute_video_publish(
+            execute_video_publish(
                 upload_dir=upload_dir,
                 user_id=row["user_id"],
                 video=video,
@@ -155,18 +216,55 @@ def process_due_scheduled_publications(*, upload_dir: Path) -> int:
                 content_type=row.get("content_type") or "video",
                 lang=row.get("lang") or "es",
                 account_link_id=(row.get("account_link_id") or "").strip(),
+                retry_sched_id=sched_id,
             )
-            if fail_n and not ok_n:
-                db.complete_scheduled_publication(
-                    sched_id,
-                    "failed",
-                    f"All platforms failed ({fail_n})",
-                )
-            else:
-                db.complete_scheduled_publication(sched_id, "done")
             processed += 1
-        except OSError as e:
-            db.complete_scheduled_publication(sched_id, "failed", str(e))
-        except Exception as e:
-            db.complete_scheduled_publication(sched_id, "failed", str(e))
+        except (OSError, Exception) as e:
+            try:
+                raw_platforms = json.loads(row.get("platforms_json") or "[]")
+            except (TypeError, ValueError):
+                raw_platforms = []
+            if not isinstance(raw_platforms, list):
+                raw_platforms = []
+            persist_awaiting_retry(
+                sched_id=sched_id,
+                user_id=row["user_id"],
+                video_id=row["video_id"],
+                failures=[{"platform_id": p} for p in raw_platforms],
+                tiktoker_config_id=(row.get("tiktok_config_id") or "").strip(),
+                content_type=row.get("content_type") or "video",
+                lang=row.get("lang") or "es",
+                account_link_id=(row.get("account_link_id") or "").strip(),
+                error_message=str(e),
+            )
     return processed
+
+
+def cancel_awaiting_retry(*, sched_id: str, actor_user_id: str, lang: str) -> bool:
+    row = db.get_scheduled_publication(sched_id)
+    if not row or str(row.get("status") or "") != "awaiting_retry":
+        return False
+    try:
+        platforms_list = json.loads(row.get("platforms_json") or "[]")
+    except (TypeError, ValueError):
+        platforms_list = []
+    if not isinstance(platforms_list, list):
+        platforms_list = []
+    message = i18n.t("pub.pending_cancelled_log", lang)
+    batch_id = str(uuid.uuid4())
+    for pid in platforms_list:
+        pid_s = str(pid or "").strip()
+        if not pid_s:
+            continue
+        db.insert_publication_log(
+            user_id=actor_user_id,
+            video_id=row.get("video_id"),
+            platform_id=pid_s,
+            content_type=row.get("content_type") or "video",
+            status="skipped",
+            message=message,
+            account_link_id=(row.get("account_link_id") or "").strip(),
+            batch_id=batch_id,
+        )
+    db.complete_scheduled_publication(sched_id, "cancelled")
+    return True

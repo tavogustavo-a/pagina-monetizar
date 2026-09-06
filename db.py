@@ -243,6 +243,7 @@ def _ensure_oauth_accounts_table() -> None:
                 redirect_uri TEXT,
                 linked_by_user_id TEXT,
                 active INTEGER NOT NULL DEFAULT 1,
+                account_name TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 UNIQUE (platform_id, open_id)
@@ -255,6 +256,7 @@ def _ensure_oauth_accounts_table() -> None:
         conn.commit()
     finally:
         conn.close()
+    _ensure_column("oauth_accounts", "account_name", "TEXT NOT NULL DEFAULT ''")
 
 
 def _ensure_users_linked_tiktok_config_column() -> None:
@@ -4587,6 +4589,64 @@ def save_oauth_connection(
     return cid
 
 
+def count_other_oauth_accounts_with_refresh(
+    platform_id: str, refresh_token: str, *, exclude_id: str = ""
+) -> int:
+    """Cuántas otras cuentas de la plataforma comparten el mismo refresh/user token."""
+    pid = (platform_id or "").strip()
+    tok = (refresh_token or "").strip()
+    if not pid or not tok:
+        return 0
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS n FROM oauth_accounts
+            WHERE platform_id = ? AND refresh_token = ? AND id != ?
+            """,
+            (pid, tok, (exclude_id or "").strip()),
+        ).fetchone()
+        return int(row["n"] or 0)
+    finally:
+        conn.close()
+
+
+def bind_oauth_account_name(oauth_account_id: str, account_name: str) -> None:
+    """Une la cuenta OAuth a una cuenta lógica de Servidores por nombre (alias persistente)."""
+    oid = (oauth_account_id or "").strip()
+    name = (account_name or "").strip()
+    if not oid or not name:
+        return
+    conn = _connect()
+    try:
+        conn.execute(
+            "UPDATE oauth_accounts SET account_name = ?, updated_at = ? WHERE id = ?",
+            (name, datetime.now(timezone.utc).isoformat(), oid),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    sync_server_accounts_from_links()
+
+
+def bind_tiktok_config_name(config_id: str, account_name: str) -> None:
+    """Renombra la config TikTok para que coincida con la cuenta lógica elegida."""
+    cid = (config_id or "").strip()
+    name = (account_name or "").strip()
+    if not cid or not name:
+        return
+    conn = _connect()
+    try:
+        conn.execute(
+            "UPDATE tiktok_api_configs SET name = ?, updated_at = ? WHERE id = ?",
+            (name, datetime.now(timezone.utc).isoformat(), cid),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    sync_server_accounts_from_links()
+
+
 def update_oauth_tokens(
     account_id: str,
     *,
@@ -4659,16 +4719,18 @@ def get_oauth_account_id_for_account_name(platform_id: str, account_name: str) -
             """
             SELECT id FROM oauth_accounts
             WHERE platform_id = ?
+              AND active = 1
               AND access_token IS NOT NULL AND TRIM(access_token) != ''
               AND (
-                lower(trim(display_name)) = lower(trim(?))
+                lower(trim(account_name)) = lower(trim(?))
+                OR lower(trim(display_name)) = lower(trim(?))
                 OR lower(trim(username)) = lower(trim(?))
                 OR lower(trim(username)) = lower(trim(?))
               )
             ORDER BY updated_at DESC
             LIMIT 1
             """,
-            (pid, label, label, f"@{label}"),
+            (pid, label, label, label, f"@{label}"),
         ).fetchone()
         return str(row["id"]) if row else None
     finally:
@@ -4690,10 +4752,13 @@ def resolve_oauth_account_id(
     lid = (account_link_id or "").strip()
     if lid:
         row = get_account_platform_row(lid, pid)
-        if row and str(row.get("source_kind") or "") == "oauth":
-            ref = str(row.get("source_ref") or "").strip()
-            if ref:
-                return ref
+        if row:
+            if not bool(row.get("active", 1)):
+                return None
+            if str(row.get("source_kind") or "") == "oauth":
+                ref = str(row.get("source_ref") or "").strip()
+                if ref:
+                    return ref
         name = get_account_link_name(lid) or ""
         found = get_oauth_account_id_for_account_name(pid, name)
         if found:
@@ -4705,6 +4770,7 @@ def resolve_oauth_account_id(
             """
             SELECT id FROM oauth_accounts
             WHERE platform_id = ?
+              AND active = 1
               AND access_token IS NOT NULL AND TRIM(access_token) != ''
             ORDER BY updated_at DESC
             LIMIT 1
@@ -4950,7 +5016,8 @@ def get_tiktok_access_token_for_config(config_id: str) -> str | None:
         row = conn.execute(
             """
             SELECT access_token FROM tiktok_api_configs
-            WHERE id = ? AND access_token IS NOT NULL AND TRIM(access_token) != ''
+            WHERE id = ? AND active = 1
+              AND access_token IS NOT NULL AND TRIM(access_token) != ''
             """,
             (cid,),
         ).fetchone()
@@ -5000,7 +5067,8 @@ def get_tiktok_config_id_for_account_name(account_name: str) -> str | None:
         row = conn.execute(
             """
             SELECT id FROM tiktok_api_configs
-            WHERE access_token IS NOT NULL AND TRIM(access_token) != ''
+            WHERE active = 1
+              AND access_token IS NOT NULL AND TRIM(access_token) != ''
               AND (
                 lower(trim(name)) = lower(trim(?))
                 OR lower(trim(tiktok_username)) = lower(trim(?))
@@ -5085,10 +5153,13 @@ def resolve_tiktok_config_id(
     lid = (account_link_id or "").strip()
     if lid:
         row = get_account_platform_row(lid, "tiktok")
-        if row and str(row.get("source_kind") or "") == "tiktok":
-            ref = str(row.get("source_ref") or "").strip()
-            if ref:
-                return ref
+        if row:
+            if not bool(row.get("active", 1)):
+                return None
+            if str(row.get("source_kind") or "") == "tiktok":
+                ref = str(row.get("source_ref") or "").strip()
+                if ref:
+                    return ref
         name = get_account_link_name(lid) or ""
         found = get_tiktok_config_id_for_account_name(name)
         if found:
@@ -5294,7 +5365,7 @@ def sync_server_accounts_from_links() -> None:
         oauth_platforms: set[str] = set()
         oauth_rows = conn.execute(
             """
-            SELECT id, platform_id, username, display_name, active
+            SELECT id, platform_id, username, display_name, active, account_name
             FROM oauth_accounts
             WHERE access_token IS NOT NULL AND TRIM(access_token) != ''
             """
@@ -5306,7 +5377,12 @@ def sync_server_accounts_from_links() -> None:
             if pid:
                 oauth_platforms.add(pid)
             uname = str(row["username"] or "").strip()
-            label = str(row["display_name"] or "").strip() or (f"@{uname}" if uname else pid)
+            alias = str(row["account_name"] or "").strip()
+            label = (
+                alias
+                or str(row["display_name"] or "").strip()
+                or (f"@{uname}" if uname else pid)
+            )
             _upsert_linked_server_account(
                 conn,
                 source_kind="oauth",
@@ -5595,6 +5671,11 @@ def set_server_account_active(account_id: str, active: bool, *, lang: str = "es"
         if kind == "tiktok" and ref:
             conn.execute(
                 "UPDATE tiktok_api_configs SET active = ?, updated_at = ? WHERE id = ?",
+                (1 if active else 0, now, ref),
+            )
+        if kind == "oauth" and ref:
+            conn.execute(
+                "UPDATE oauth_accounts SET active = ?, updated_at = ? WHERE id = ?",
                 (1 if active else 0, now, ref),
             )
         conn.commit()
@@ -6068,6 +6149,7 @@ def create_scheduled_publication(
     scheduled_at_utc: datetime,
     lang: str = "es",
     account_link_id: str = "",
+    status: str = "pending",
 ) -> str:
     import json
 
@@ -6075,6 +6157,9 @@ def create_scheduled_publication(
     sid = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     sched = scheduled_at_utc.astimezone(timezone.utc).isoformat()
+    st = (status or "pending").strip() or "pending"
+    if st not in ("pending", "awaiting_retry"):
+        st = "pending"
     conn = _connect()
     try:
         conn.execute(
@@ -6082,7 +6167,7 @@ def create_scheduled_publication(
             INSERT INTO scheduled_publications (
                 id, user_id, video_id, platforms_json, tiktok_config_id,
                 content_type, scheduled_at, lang, status, created_at, account_link_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 sid,
@@ -6093,6 +6178,7 @@ def create_scheduled_publication(
                 content_type,
                 sched,
                 lang,
+                st,
                 now,
                 (account_link_id or "").strip(),
             ),
@@ -6188,6 +6274,102 @@ def complete_scheduled_publication(
             (status, now, (error_message or "")[:500], sched_id),
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+def get_scheduled_publication(sched_id: str) -> dict[str, Any] | None:
+    seed_admin_if_missing()
+    sid = (sched_id or "").strip()
+    if not sid:
+        return None
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT sp.*, v.title AS video_title
+            FROM scheduled_publications sp
+            LEFT JOIN videos v ON v.id = sp.video_id
+            WHERE sp.id = ?
+            """,
+            (sid,),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def set_scheduled_awaiting_retry(
+    sched_id: str, platforms: list[str], error_message: str | None = None
+) -> None:
+    import json
+
+    seed_admin_if_missing()
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            UPDATE scheduled_publications
+            SET status = 'awaiting_retry',
+                platforms_json = ?,
+                processed_at = NULL,
+                error_message = ?
+            WHERE id = ?
+            """,
+            (json.dumps(platforms), (error_message or "")[:500], sched_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def mark_scheduled_retry_processing(sched_id: str) -> bool:
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            """
+            UPDATE scheduled_publications
+            SET status = 'processing'
+            WHERE id = ? AND status = 'awaiting_retry'
+            """,
+            (sched_id,),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def list_awaiting_retry_publications(
+    *, limit: int = 50, viewer: User | None = None
+) -> list[dict[str, Any]]:
+    seed_admin_if_missing()
+    scope = publication_log_viewer_scope(viewer) if viewer is not None else None
+    conn = _connect()
+    try:
+        if scope is not None and not scope:
+            return []
+        where = "sp.status = 'awaiting_retry'"
+        params: list[Any] = []
+        if scope is not None:
+            ph = ",".join("?" * len(scope))
+            where += f" AND (sp.user_id IN ({ph}) OR v.user_id IN ({ph}))"
+            params.extend(scope)
+            params.extend(scope)
+        rows = conn.execute(
+            f"""
+            SELECT sp.*, v.title AS video_title
+            FROM scheduled_publications sp
+            LEFT JOIN videos v ON v.id = sp.video_id
+            WHERE {where}
+            ORDER BY sp.created_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, min(limit, 100))),
+        ).fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()
 
@@ -6641,6 +6823,49 @@ def set_user_notification_email(user_id: str, email: str) -> str:
 
 def notification_email_for_user_id(user_id: str) -> str:
     return get_user_notification_email(user_id)
+
+
+def _unique_notification_emails(users: list[User]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for u in users:
+        if u.role == "user" and not u.active:
+            continue
+        email = (u.notification_email or "").strip()
+        if not email:
+            continue
+        key = email.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(email)
+    return out
+
+
+def list_admin_notification_emails() -> list[str]:
+    """Correos de la cuenta maestra y de usuarios en modo admin."""
+    admins = [
+        u
+        for u in list_users()
+        if user_is_site_admin(u) or user_is_admin_mode_user(u)
+    ]
+    return _unique_notification_emails(admins)
+
+
+def list_tiktok_mode_notification_emails_for_config(config_id: str) -> list[str]:
+    """Usuarios modo TikTok vinculados a esa cuenta (no el resto del equipo)."""
+    cid = (config_id or "").strip()
+    if not cid:
+        return []
+    owner_id = (get_config_internal_user_id(cid) or "").strip()
+    matched: list[User] = []
+    for u in list_users():
+        if not user_is_tiktok_mode(u):
+            continue
+        linked = (u.linked_tiktok_config_id or "").strip()
+        if linked == cid or (owner_id and u.id == owner_id):
+            matched.append(u)
+    return _unique_notification_emails(matched)
 
 
 def create_password_reset_token(user_id: str, *, ttl_hours: int = 2) -> str:

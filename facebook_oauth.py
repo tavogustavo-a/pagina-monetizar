@@ -171,6 +171,23 @@ def list_pages(user_token: str) -> list[dict[str, str]]:
     return out
 
 
+def revoke_user_permissions(user_token: str) -> None:
+    """Revoca la autorización de la app para el usuario (mejor esfuerzo)."""
+    token = (user_token or "").strip()
+    if not token:
+        return
+    params = urllib.parse.urlencode({"access_token": token})
+    req = urllib.request.Request(
+        f"{GRAPH}/me/permissions?{params}",
+        method="DELETE",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30):
+            return
+    except (urllib.error.URLError, OSError, ValueError):
+        return
+
+
 def fetch_page_profile(page_token: str) -> dict[str, Any]:
     params = urllib.parse.urlencode(
         {

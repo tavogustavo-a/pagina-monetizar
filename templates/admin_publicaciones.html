@@ -149,10 +149,23 @@
           <div class="pub-field pub-field--dropzone">
             <div class="dropzone pub-control pub-control--dropzone" id="video-dropzone">
               <input type="file" name="file" id="video-file" accept=".mp4,.webm,.mov,.mkv,.jpg,.jpeg,.png,.webp,.gif,video/*,image/*" class="dropzone__input" />
-              <div class="dropzone__content">
+              <div class="dropzone__content" id="video-dropzone-empty">
                 <p class="dropzone__text">{{ t('pub.dropzone_text') }}</p>
                 <button type="button" class="btn btn-ghost btn-sm" id="video-browse">{{ t('pub.browse_files') }}</button>
-                <p class="dropzone__filename sub" id="video-filename" hidden></p>
+              </div>
+              <div class="dropzone__preview" id="video-preview" hidden>
+                <div class="dropzone__thumb-wrap">
+                  <img id="video-preview-img" class="dropzone__thumb" alt="" hidden />
+                  <span class="dropzone__thumb-fallback" id="video-preview-fallback" hidden aria-hidden="true">▶</span>
+                </div>
+                <p class="dropzone__filename sub" id="video-filename"></p>
+                <button
+                  type="button"
+                  class="dropzone__clear"
+                  id="video-clear"
+                  aria-label="{{ t('pub.remove_file') }}"
+                  title="{{ t('pub.remove_file') }}"
+                >×</button>
               </div>
             </div>
           </div>
@@ -435,6 +448,49 @@
         })();
       </script>
 
+      {% if can_manage_publish_retry and pending_retry_publications | length > 0 %}
+      <section class="section dashboard-section pub-pending-section">
+        <h2>{{ t('pub.pending_section') }}</h2>
+        <p class="sub pub-pending-section__hint">{{ t('pub.pending_hint') }}</p>
+        <div class="pub-log-wrap">
+          <table class="pub-log-table pub-scheduled-table">
+            <thead>
+              <tr>
+                <th>{{ t('pub.scheduled_col_title') }}</th>
+                <th>{{ t('pub.scheduled_col_platforms') }}</th>
+                <th>{{ t('pub.pending_col_actions') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in pending_retry_publications %}
+              <tr>
+                <td>{{ row.video_title or '—' }}</td>
+                <td>
+                  {% for pid in row.platforms_json | fromjson %}
+                  <span class="cap cap--yes">{{ t('platform.' ~ pid) }}</span>
+                  {% endfor %}
+                </td>
+                <td class="pub-pending-actions">
+                  <form method="post" action="{{ url_for('admin_retry_pending_publish', sched_id=row.id) }}" class="pub-pending-form">
+                    <button type="submit" class="btn btn-accent btn-sm">{{ t('pub.retry_btn') }}</button>
+                  </form>
+                  <form
+                    method="post"
+                    action="{{ url_for('admin_cancel_pending_publish', sched_id=row.id) }}"
+                    class="pub-pending-form"
+                    onsubmit="return confirm({{ t('pub.cancel_pending_confirm') | tojson }});"
+                  >
+                    <button type="submit" class="btn btn-ghost btn-sm btn-user-delete">{{ t('pub.cancel_pending_btn') }}</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {% endif %}
+
       {% if scheduled_publications | length > 0 %}
       <section class="section dashboard-section">
         <h2>{{ t('pub.scheduled_section') }}</h2>
@@ -626,8 +682,14 @@
     var input = document.getElementById("video-file");
     var browse = document.getElementById("video-browse");
     var fname = document.getElementById("video-filename");
+    var emptyState = document.getElementById("video-dropzone-empty");
+    var preview = document.getElementById("video-preview");
+    var previewImg = document.getElementById("video-preview-img");
+    var previewFallback = document.getElementById("video-preview-fallback");
+    var clearBtn = document.getElementById("video-clear");
     var form = document.getElementById("publish-form");
     if (!zone || !input) return;
+    var previewObjectUrl = "";
 
     var msgFile = {{ t('pub.flash.missing_file') | tojson }};
     var msgDesc = {{ t('pub.flash.missing_description') | tojson }};
@@ -663,6 +725,139 @@
       }
     }
 
+    function revokePreviewUrl() {
+      if (previewObjectUrl) {
+        try { URL.revokeObjectURL(previewObjectUrl); } catch (e) {}
+        previewObjectUrl = "";
+      }
+    }
+
+    function setPreviewVisible(on) {
+      zone.classList.toggle("dropzone--has-file", !!on);
+      if (emptyState) emptyState.hidden = !!on;
+      if (preview) preview.hidden = !on;
+    }
+
+    function setThumbSrc(src) {
+      if (!previewImg) return;
+      if (src) {
+        previewImg.src = src;
+        previewImg.hidden = false;
+        if (previewFallback) previewFallback.hidden = true;
+      } else {
+        previewImg.removeAttribute("src");
+        previewImg.hidden = true;
+        if (previewFallback) previewFallback.hidden = false;
+      }
+    }
+
+    function captureVideoFrame(src, done) {
+      var video = document.createElement("video");
+      var settled = false;
+      function finish(url) {
+        if (settled) return;
+        settled = true;
+        video.removeAttribute("src");
+        try { video.load(); } catch (e) {}
+        done(url || "");
+      }
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = "auto";
+      video.addEventListener("error", function () { finish(""); });
+      video.addEventListener("seeked", function () {
+        try {
+          var canvas = document.createElement("canvas");
+          var size = 96;
+          var vw = video.videoWidth || size;
+          var vh = video.videoHeight || size;
+          canvas.width = size;
+          canvas.height = size;
+          var ctx = canvas.getContext("2d");
+          if (!ctx || !vw || !vh) {
+            finish("");
+            return;
+          }
+          var scale = Math.max(size / vw, size / vh);
+          var dw = vw * scale;
+          var dh = vh * scale;
+          ctx.drawImage(video, (size - dw) / 2, (size - dh) / 2, dw, dh);
+          finish(canvas.toDataURL("image/jpeg", 0.72));
+        } catch (e) {
+          finish("");
+        }
+      });
+      video.addEventListener("loadeddata", function () {
+        try {
+          var t = 0.15;
+          if (video.duration && isFinite(video.duration)) {
+            t = Math.min(0.4, Math.max(0.05, video.duration * 0.08));
+          }
+          video.currentTime = t;
+        } catch (e) {
+          finish("");
+        }
+      });
+      video.src = src;
+      window.setTimeout(function () { finish(""); }, 4000);
+    }
+
+    function showLocalPreview(file, nameOverride) {
+      var name = nameOverride || (file && file.name) || "";
+      if (fname) fname.textContent = name;
+      setPreviewVisible(!!name);
+      revokePreviewUrl();
+      if (!file) {
+        setThumbSrc("");
+        return;
+      }
+      var type = file.type || "";
+      var lower = (file.name || "").toLowerCase();
+      if (type.indexOf("image/") === 0 || /\.(jpe?g|png|webp|gif)$/.test(lower)) {
+        previewObjectUrl = URL.createObjectURL(file);
+        setThumbSrc(previewObjectUrl);
+        return;
+      }
+      if (isVideoFile(file)) {
+        previewObjectUrl = URL.createObjectURL(file);
+        setThumbSrc("");
+        captureVideoFrame(previewObjectUrl, function (url) {
+          if (url) setThumbSrc(url);
+        });
+        return;
+      }
+      setThumbSrc("");
+    }
+
+    function showUrlPreview(url, name) {
+      if (fname) fname.textContent = name || "";
+      setPreviewVisible(!!(url || name));
+      revokePreviewUrl();
+      if (!url) {
+        setThumbSrc("");
+        return;
+      }
+      var lower = (name || url || "").toLowerCase();
+      if (/\.(jpe?g|png|webp|gif)(\?|$)/.test(lower)) {
+        setThumbSrc(url);
+        return;
+      }
+      setThumbSrc("");
+      captureVideoFrame(url, function (frame) {
+        if (frame) setThumbSrc(frame);
+      });
+    }
+
+    function resetSelectedMedia() {
+      if (tempToken) discardTemp(tempToken, false);
+      setTempToken("", "", "");
+      clearFileInput();
+      revokePreviewUrl();
+      setThumbSrc("");
+      if (fname) fname.textContent = "";
+      setPreviewVisible(false);
+    }
+
     function setTempToken(token, url, name) {
       if (tempToken && tempToken !== token) discardTemp(tempToken, false);
       tempToken = token || "";
@@ -685,17 +880,6 @@
       return /\.(mp4|webm|mov|mkv|m4v)$/.test(name) || (file.type || "").indexOf("video/") === 0;
     }
 
-    function showName(file) {
-      if (!fname) return;
-      if (!file || !file.name) {
-        fname.hidden = true;
-        fname.textContent = "";
-        return;
-      }
-      fname.textContent = file.name;
-      fname.hidden = false;
-    }
-
     function handleSelectedFile(file) {
       if (!file) return;
       if (isVideoFile(file)) {
@@ -703,10 +887,7 @@
           alert(uploadI18n.fileTooLarge);
           return;
         }
-        if (fname) {
-          fname.textContent = uploadI18n.uploading;
-          fname.hidden = false;
-        }
+        showLocalPreview(file, uploadI18n.uploading);
         var fd = new FormData();
         fd.append("file", file);
         fetch("/admin/api/videos/temp", {
@@ -727,11 +908,10 @@
             var data = res.data;
             clearFileInput();
             setTempToken(data.token, data.url, data.name || file.name);
-            showName({ name: data.name || file.name });
+            if (fname) fname.textContent = data.name || file.name;
           })
           .catch(function (err) {
-            setTempToken("", "", "");
-            if (fname) fname.hidden = true;
+            resetSelectedMedia();
             alert((err && err.message && err.message !== "upload")
               ? err.message
               : uploadI18n.uploadFail);
@@ -742,7 +922,7 @@
         discardTemp(tempToken, false);
         setTempToken("", "", "");
       }
-      showName(file);
+      showLocalPreview(file);
     }
 
     var savedTempRaw = sessionStorage.getItem(tempStorageKey);
@@ -754,11 +934,19 @@
           tempVideoUrl = savedTemp.url;
           tempDisplayName = savedTemp.name || "";
           if (tempTokenInput) tempTokenInput.value = tempToken;
-          showName({ name: tempDisplayName });
+          showUrlPreview(tempVideoUrl, tempDisplayName);
         }
       } catch (e) {
         sessionStorage.removeItem(tempStorageKey);
       }
+    }
+
+    if (clearBtn) {
+      clearBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        resetSelectedMedia();
+      });
     }
 
     window.addEventListener("pagehide", function () {

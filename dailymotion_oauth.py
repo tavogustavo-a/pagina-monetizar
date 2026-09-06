@@ -162,6 +162,20 @@ def refresh_access_token(refresh_token: str) -> dict[str, Any]:
     return data
 
 
+def revoke_tokens(access_token: str, refresh_token: str | None = None) -> None:
+    """Revoca la sesión en Dailymotion (mejor esfuerzo)."""
+    token = (access_token or "").strip()
+    if not token:
+        return
+    try:
+        _request(
+            "https://api.dailymotion.com/logout",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    except (ValueError, urllib.error.URLError, OSError):
+        return
+
+
 def fetch_profile(access_token: str) -> dict[str, Any]:
     token = (access_token or "").strip()
     try:

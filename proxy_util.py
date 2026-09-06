@@ -190,6 +190,7 @@ def _make_proxy_opener(proxy_url: str):
             kind,
             str(data["host"]),
             int(data["port"]),
+            rdns=True,
             username=user,
             password=password,
         )

@@ -165,6 +165,28 @@ def refresh_access_token(refresh_token: str) -> dict[str, Any]:
     return data
 
 
+REVOKE_URL = "https://accounts.snapchat.com/accounts/oauth2/revoke"
+
+
+def revoke_tokens(access_token: str, refresh_token: str | None = None) -> None:
+    """Revoca los tokens en Snapchat (mejor esfuerzo)."""
+    for token in ((refresh_token or "").strip(), (access_token or "").strip()):
+        if not token:
+            continue
+        try:
+            _form_post(
+                REVOKE_URL,
+                {
+                    "client_id": client_id(),
+                    "client_secret": client_secret(),
+                    "token": token,
+                },
+            )
+            return
+        except (ValueError, urllib.error.URLError, OSError):
+            continue
+
+
 def _unwrap_profile(data: dict[str, Any]) -> dict[str, Any]:
     for key in ("public_profile", "profile", "me"):
         inner = data.get(key)

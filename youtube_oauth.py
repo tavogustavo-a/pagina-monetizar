@@ -148,6 +148,17 @@ def refresh_access_token(
     return data
 
 
+def revoke_tokens(access_token: str, refresh_token: str | None = None) -> None:
+    """Revoca el grant en Google (mejor esfuerzo). Revocar el refresh anula todo."""
+    token = (refresh_token or "").strip() or (access_token or "").strip()
+    if not token:
+        return
+    try:
+        _post_form("https://oauth2.googleapis.com/revoke", {"token": token})
+    except (ValueError, urllib.error.URLError, OSError, json.JSONDecodeError):
+        return
+
+
 def fetch_channel_profile(access_token: str) -> dict[str, Any]:
     url = YOUTUBE_CHANNELS_URL + "?" + urllib.parse.urlencode(
         {"part": "snippet", "mine": "true"}

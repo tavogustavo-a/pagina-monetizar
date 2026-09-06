@@ -32,8 +32,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "panel.title": {"en": "Admin panel", "es": "Panel de administración"},
     "panel.title_prefix": {"en": "Panel of", "es": "Panel de"},
     "panel.page_hint": {
-        "en": "Notification email: used for password reset and publication failure alerts. Password: we send a reset link to that email.",
-        "es": "Correo de notificaciones: se usa para cambiar contraseña y alertas si falla una publicación. Contraseña: enviamos el enlace de restablecimiento a ese correo.",
+        "en": "Notification email: used for password reset and publication failure alerts. Admins receive every failed platform. TikTok users only receive failures of their linked TikTok account. Other users are not emailed when the only failure is TikTok. Password: we send the reset link to that email.",
+        "es": "Correo de notificaciones: se usa para cambiar contraseña y alertas si falla una publicación. Los administradores reciben todos los fallos. El usuario TikTok solo recibe fallos de su cuenta vinculada. Al resto no les llega un correo si el único problema es TikTok. Contraseña: enviamos el enlace de restablecimiento a ese correo.",
     },
     "panel.tiktok_title": {"en": "TikTok account", "es": "Cuenta TikTok"},
     "panel.accounts_title": {"en": "Accounts", "es": "Cuenta"},
@@ -933,6 +933,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Arrastra y suelta tu video aquí",
     },
     "pub.browse_files": {"en": "Browse files", "es": "Explorar archivos"},
+    "pub.remove_file": {"en": "Remove file", "es": "Quitar archivo"},
     "pub.captions_uploading": {
         "en": "Uploading temporary video…",
         "es": "Subiendo video temporal…",
@@ -1497,12 +1498,51 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Selecciona al menos una plataforma.",
     },
     "pub.flash.partial": {
-        "en": "Saved locally. {ok} OK, {fail} failed — see log below.",
-        "es": "Guardado localmente. {ok} OK, {fail} fallaron — revisa el registro.",
+        "en": "Saved locally. {ok} OK, {fail} still pending — an admin can republish or cancel below.",
+        "es": "Guardado localmente. {ok} OK, {fail} pendientes — un admin puede republicar o cancelar abajo.",
     },
     "pub.flash.all_ok": {
         "en": "Published to {n} platform(s).",
         "es": "Publicado en {n} plataforma(s).",
+    },
+    "pub.pending_section": {
+        "en": "Pending republication",
+        "es": "Pendientes de republicar",
+    },
+    "pub.pending_hint": {
+        "en": "These videos stay available until an admin republishes the remaining platforms or cancels.",
+        "es": "Estos videos siguen disponibles hasta que un admin republica en las plataformas restantes o cancela.",
+    },
+    "pub.pending_col_actions": {"en": "Actions", "es": "Acciones"},
+    "pub.retry_btn": {"en": "Republish remaining", "es": "Republicar restantes"},
+    "pub.cancel_pending_btn": {"en": "Cancel remaining", "es": "Cancelar restantes"},
+    "pub.cancel_pending_confirm": {
+        "en": "Cancel the remaining platforms for this video?",
+        "es": "¿Cancelar las plataformas restantes de este video?",
+    },
+    "pub.pending_cancelled_log": {
+        "en": "Remaining publish cancelled by an admin.",
+        "es": "Publicación restante cancelada por un administrador.",
+    },
+    "pub.flash.retry_all_ok": {
+        "en": "Republished to {n} remaining platform(s).",
+        "es": "Republicado en {n} plataforma(s) restante(s).",
+    },
+    "pub.flash.pending_cancelled": {
+        "en": "Remaining publications cancelled. The video is no longer queued.",
+        "es": "Publicaciones restantes canceladas. El video ya no está en cola.",
+    },
+    "pub.flash.pending_gone": {
+        "en": "That pending publication is no longer available.",
+        "es": "Esa publicación pendiente ya no está disponible.",
+    },
+    "pub.flash.pending_no_video": {
+        "en": "The video record was not found.",
+        "es": "No se encontró el registro del video.",
+    },
+    "pub.flash.pending_no_file": {
+        "en": "The video file is missing from disk. It stays pending until you cancel or restore the file.",
+        "es": "Falta el archivo del video en disco. Sigue pendiente hasta que canceles o restaures el archivo.",
     },
     "pub.upload_media_hint": {
         "en": "Video or photo — each platform uses what its API allows.",
