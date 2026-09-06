@@ -14,7 +14,8 @@ TIKTOK_TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
 TIKTOK_REVOKE_URL = "https://open.tiktokapis.com/v2/oauth/revoke/"
 TIKTOK_USERINFO_URL = "https://open.tiktokapis.com/v2/user/info/"
 
-DEFAULT_SCOPES = "user.info.basic,video.upload,video.publish"
+# Primera revisión: Login Kit + subida a bandeja. video.publish (Direct Post) va en una 2ª revisión.
+DEFAULT_SCOPES = "user.info.basic,video.upload"
 
 
 def client_key() -> str:

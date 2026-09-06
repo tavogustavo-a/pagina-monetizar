@@ -2376,8 +2376,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Crea una app en TikTok for Developers (developers.tiktok.com).",
     },
     "apidoc.tiktok.step2": {
-        "en": "Enable Login Kit and Content Posting API (user.info.basic, video.upload, video.publish).",
-        "es": "Activa Login Kit y Content Posting API (user.info.basic, video.upload, video.publish).",
+        "en": "Enable Login Kit and Content Posting API (user.info.basic, video.upload).",
+        "es": "Activa Login Kit y Content Posting API (user.info.basic, video.upload).",
     },
     "apidoc.tiktok.step3": {
         "en": "Register the redirect URI: SITE_URL/oauth/tiktok/callback.",
