@@ -1,0 +1,434 @@
+"""Odysee: login LBRY (email/contraseña → auth_token) y publicación real por TUS + asynqueries."""
+from __future__ import annotations
+
+import base64
+import json
+import re
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
+from pathlib import Path
+from typing import Any
+
+UA = "Tuyaho/1.0 (Odysee LBRY publish)"
+INTERNAL = "https://api.odysee.com"
+SDK = "https://api.na-backend.odysee.com"
+VIDEO_EXT = {".mp4", ".mov", ".avi", ".wmv", ".flv", ".mkv", ".webm", ".m4v"}
+PHOTO_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+TUS_CHUNK = 50 * 1024 * 1024
+FILE_PATH_RE = re.compile(r"^https?://([^/]+)/.+/([a-zA-Z0-9+_.\-]{32,})$")
+
+
+class OdyseeError(ValueError):
+    pass
+
+
+def _parse(raw: str) -> dict[str, Any]:
+    try:
+        data = json.loads(raw) if raw else {}
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _read_error(exc: urllib.error.HTTPError) -> str:
+    raw = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+    data = _parse(raw)
+    msg = str(
+        data.get("error")
+        or data.get("message")
+        or (data.get("data") if isinstance(data.get("data"), str) else "")
+        or raw
+        or exc.reason
+        or f"HTTP {exc.code}"
+    ).strip()
+    return msg[:280]
+
+
+def _request(
+    url: str,
+    *,
+    method: str = "GET",
+    data: bytes | None = None,
+    headers: dict[str, str] | None = None,
+    timeout: int = 60,
+) -> tuple[int, dict[str, str], bytes]:
+    hdrs = {"User-Agent": UA, "Accept": "application/json"}
+    if headers:
+        hdrs.update(headers)
+    req = urllib.request.Request(url, data=data, method=method, headers=hdrs)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read()
+            return int(resp.status), {k.lower(): v for k, v in resp.headers.items()}, body
+    except urllib.error.HTTPError as e:
+        raw = e.read() if e.fp else b""
+        return int(e.code), {k.lower(): v for k, v in (e.headers.items() if e.headers else [])}, raw
+
+
+def _form(url: str, fields: dict[str, str], *, headers: dict[str, str] | None = None) -> dict[str, Any]:
+    payload = urllib.parse.urlencode({k: v for k, v in fields.items() if v is not None}).encode()
+    hdrs = {"Content-Type": "application/x-www-form-urlencoded"}
+    if headers:
+        hdrs.update(headers)
+    code, _, body = _request(url, method="POST", data=payload, headers=hdrs, timeout=45)
+    data = _parse(body.decode("utf-8", errors="replace"))
+    if code >= 400 and not data:
+        raise OdyseeError(f"HTTP {code}")
+    return data
+
+
+def _json(
+    url: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    method: str = "POST",
+    headers: dict[str, str] | None = None,
+    timeout: int = 90,
+) -> tuple[int, dict[str, Any], bytes]:
+    hdrs = {"Content-Type": "application/json"}
+    if headers:
+        hdrs.update(headers)
+    raw = json.dumps(payload).encode("utf-8") if payload is not None else None
+    code, _, body = _request(url, method=method, data=raw, headers=hdrs, timeout=timeout)
+    return code, _parse(body.decode("utf-8", errors="replace")), body
+
+
+def status_ok() -> tuple[bool, str]:
+    code, data, body = _json(f"{SDK}/api/v2/status", None, method="GET", timeout=20)
+    state = ""
+    if isinstance(data.get("general_state"), str):
+        state = data["general_state"]
+    elif isinstance(data.get("status"), dict):
+        state = str(data["status"].get("general_state") or "")
+    ok = code == 200 and (state.lower() == "ok" or bool(data))
+    return ok, state or (body.decode("utf-8", errors="replace")[:120] if body else f"HTTP {code}")
+
+
+def signin(email: str, password: str) -> tuple[str, str]:
+    em = (email or "").strip()
+    pw = (password or "").strip()
+    if not em or not pw:
+        raise OdyseeError("email_password_required")
+    data = _form(f"{INTERNAL}/user/signin", {"email": em, "password": pw})
+    err = data.get("error")
+    if err:
+        raise OdyseeError(str(err)[:280])
+    inner = data.get("data") if isinstance(data.get("data"), dict) else data
+    token = str((inner or {}).get("auth_token") or data.get("auth_token") or "").strip()
+    if not token:
+        raise OdyseeError(str(data.get("message") or "signin failed")[:280])
+    name = str(
+        (inner or {}).get("name")
+        or (inner or {}).get("primary_email")
+        or em
+    ).strip()
+    return token, name
+
+
+def user_me(auth_token: str) -> dict[str, Any]:
+    token = (auth_token or "").strip()
+    if not token:
+        raise OdyseeError("missing_token")
+    data = _form(
+        f"{INTERNAL}/user/me",
+        {"auth_token": token},
+        headers={"X-Lbry-Auth-Token": token},
+    )
+    err = data.get("error")
+    if err:
+        raise OdyseeError(str(err)[:280])
+    inner = data.get("data") if isinstance(data.get("data"), dict) else data
+    if not inner:
+        raise OdyseeError("user/me empty")
+    return inner
+
+
+def probe_account(email: str, secret: str, extra: str = "") -> tuple[bool, str]:
+    """secret = contraseña (conectar) o auth_token ya guardado."""
+    login = (email or "").strip()
+    sec = (secret or "").strip()
+    if not login or not sec:
+        return False, "missing_fields"
+    try:
+        if "@" in login and len(sec) < 40:
+            token, name = signin(login, sec)
+            me = user_me(token)
+            shown = str(me.get("name") or me.get("primary_email") or name or login).strip()
+            return True, shown
+        me = user_me(sec)
+        shown = str(me.get("name") or me.get("primary_email") or login).strip()
+        return True, shown
+    except OdyseeError as e:
+        return False, str(e)
+    except Exception as e:
+        return False, str(e)[:280]
+
+
+def resolve_auth_token(email: str, secret: str) -> str:
+    login = (email or "").strip()
+    sec = (secret or "").strip()
+    if not sec:
+        raise OdyseeError("missing_token")
+    if "@" in login and len(sec) < 40:
+        token, _ = signin(login, sec)
+        return token
+    return sec
+
+
+def _claim_name(title: str) -> str:
+    base = re.sub(r"[^a-z0-9]+", "-", (title or "video").lower()).strip("-")[:40]
+    if not base or base[0].isdigit():
+        base = f"v-{base or 'video'}"
+    return f"{base}-{uuid.uuid4().hex[:8]}"
+
+
+def _b64(value: str) -> str:
+    return base64.b64encode(value.encode("utf-8")).decode("ascii")
+
+
+def _create_upload(auth_token: str) -> tuple[str, str]:
+    code, data, body = _json(
+        f"{SDK}/api/v1/asynqueries/uploads/",
+        {},
+        headers={"X-Lbry-Auth-Token": auth_token},
+        timeout=45,
+    )
+    payload = data.get("payload") if isinstance(data.get("payload"), dict) else data
+    token = str((payload or {}).get("token") or "").strip()
+    location = str((payload or {}).get("location") or "").strip()
+    if data.get("status") == "upload_token_created" and token and location:
+        return token, location
+    if token and location:
+        return token, location
+    raise OdyseeError(
+        str(data.get("error") or data.get("message") or body.decode("utf-8", errors="replace")[:200] or f"HTTP {code}")
+    )
+
+
+def _tus_headers(upload_token: str, extra: dict[str, str] | None = None) -> dict[str, str]:
+    hdrs = {
+        "Tus-Resumable": "1.0.0",
+        "Authorization": f"Bearer {upload_token}",
+        "User-Agent": UA,
+    }
+    if extra:
+        hdrs.update(extra)
+    return hdrs
+
+
+def _tus_offset(location: str, upload_token: str) -> int:
+    code, headers, _ = _request(
+        location,
+        method="HEAD",
+        headers=_tus_headers(upload_token),
+        timeout=45,
+    )
+    if code in (404, 410):
+        return 0
+    raw = headers.get("upload-offset") or "0"
+    try:
+        return int(raw)
+    except ValueError:
+        return 0
+
+
+def _tus_upload(location: str, upload_token: str, file_path: Path) -> None:
+    size = file_path.stat().st_size
+    meta = f"filename {_b64(file_path.name)},filetype {_b64('video/mp4')}"
+    code, headers, body = _request(
+        location,
+        method="POST",
+        data=b"",
+        headers=_tus_headers(
+            upload_token,
+            {
+                "Upload-Length": str(size),
+                "Upload-Metadata": meta,
+                "Content-Length": "0",
+            },
+        ),
+        timeout=45,
+    )
+    loc = headers.get("location") or location
+    if code not in (201, 204, 409, 200) and code >= 400:
+        text = body.decode("utf-8", errors="replace")[:200]
+        if code not in (404, 405):
+            raise OdyseeError(text or f"TUS POST HTTP {code}")
+        loc = location
+    offset = _tus_offset(loc, upload_token)
+    with file_path.open("rb") as fh:
+        if offset:
+            fh.seek(offset)
+        while offset < size:
+            chunk = fh.read(min(TUS_CHUNK, size - offset))
+            if not chunk:
+                break
+            p_code, p_headers, p_body = _request(
+                loc,
+                method="PATCH",
+                data=chunk,
+                headers=_tus_headers(
+                    upload_token,
+                    {
+                        "Upload-Offset": str(offset),
+                        "Content-Type": "application/offset+octet-stream",
+                        "Content-Length": str(len(chunk)),
+                    },
+                ),
+                timeout=300,
+            )
+            if p_code not in (204, 200):
+                raise OdyseeError(
+                    p_body.decode("utf-8", errors="replace")[:200] or f"TUS PATCH HTTP {p_code}"
+                )
+            nxt = p_headers.get("upload-offset")
+            offset = int(nxt) if nxt and nxt.isdigit() else offset + len(chunk)
+    if offset < size:
+        raise OdyseeError("TUS upload incomplete")
+
+
+def _asynquery(auth_token: str, params: dict[str, Any]) -> str:
+    payload = {
+        "jsonrpc": "2.0",
+        "method": "stream_create",
+        "params": params,
+        "id": int(time.time()),
+    }
+    code, data, body = _json(
+        f"{SDK}/api/v1/asynqueries/",
+        payload,
+        headers={"X-Lbry-Auth-Token": auth_token},
+        timeout=60,
+    )
+    payload_id = ""
+    inner_payload = data.get("payload")
+    if isinstance(inner_payload, dict):
+        payload_id = str(inner_payload.get("id") or "").strip()
+    qid = str(data.get("id") or payload_id or data.get("query_id") or "").strip()
+    if data.get("status") == "query_created" and qid:
+        return qid
+    if qid:
+        return qid
+    inner = data.get("result") if isinstance(data.get("result"), dict) else {}
+    qid = str((inner or {}).get("id") or "").strip()
+    if qid:
+        return qid
+    raise OdyseeError(
+        str(data.get("error") or data.get("message") or body.decode("utf-8", errors="replace")[:220] or f"HTTP {code}")
+    )
+
+
+def _poll(auth_token: str, query_id: str, timeout_s: int = 420) -> dict[str, Any]:
+    url = f"{SDK}/api/v1/asynqueries/{urllib.parse.quote(query_id)}"
+    deadline = time.time() + timeout_s
+    last = b""
+    while time.time() < deadline:
+        code, headers, body = _request(
+            url,
+            method="GET",
+            headers={"X-Lbry-Auth-Token": auth_token, "Accept": "application/json"},
+            timeout=45,
+        )
+        last = body
+        if code == 204:
+            time.sleep(3)
+            continue
+        if code == 404:
+            time.sleep(2)
+            continue
+        data = _parse(body.decode("utf-8", errors="replace"))
+        if code >= 400:
+            raise OdyseeError(str(data.get("error") or data.get("message") or f"HTTP {code}")[:280])
+        err = data.get("error")
+        if isinstance(err, dict) and err.get("message"):
+            raise OdyseeError(str(err.get("message"))[:280])
+        if isinstance(err, str) and err.strip():
+            raise OdyseeError(err[:280])
+        result = data.get("result") if isinstance(data.get("result"), dict) else data
+        if result.get("outputs") or result.get("claim_id") or result.get("lbry_url") or result.get("txid"):
+            return result if isinstance(result, dict) else data
+        status = str(data.get("status") or "").lower()
+        if status in {"succeeded", "complete", "completed"}:
+            return result if isinstance(result, dict) else data
+        if status in {"failed", "error"}:
+            raise OdyseeError(str(data.get("message") or status)[:280])
+        time.sleep(3)
+    raise OdyseeError(last.decode("utf-8", errors="replace")[:200] or "asynquery timeout")
+
+
+def _watch_url(result: dict[str, Any], claim_name: str) -> str:
+    for key in ("canonical_url", "permanent_url", "lbry_url", "short_url"):
+        raw = str(result.get(key) or "").strip()
+        if raw.startswith("lbry://"):
+            path = raw.replace("lbry://", "").lstrip("/")
+            return f"https://odysee.com/{path}"
+        if raw.startswith("http"):
+            return raw
+    outputs = result.get("outputs")
+    if isinstance(outputs, list) and outputs:
+        first = outputs[0] if isinstance(outputs[0], dict) else {}
+        cid = str(first.get("claim_id") or "").strip()
+        name = str(first.get("name") or claim_name).strip()
+        if cid:
+            return f"https://odysee.com/{name}:{cid}"
+    cid = str(result.get("claim_id") or "").strip()
+    if cid:
+        return f"https://odysee.com/{claim_name}:{cid}"
+    return f"https://odysee.com/{claim_name}"
+
+
+def publish_video(
+    *,
+    file_path: Path,
+    content_type: str,
+    title: str,
+    description: str,
+    lang: str,
+    account: dict[str, Any],
+) -> tuple[bool, str]:
+    from i18n import t
+
+    path = Path(file_path)
+    if content_type == "photo" or path.suffix.lower() in PHOTO_EXT:
+        return False, t("pub.odysee.no_photo", lang)
+    if not path.is_file() or path.stat().st_size <= 0:
+        return False, t("pub.odysee.file_missing", lang)
+    if path.suffix.lower() not in VIDEO_EXT:
+        return False, t("pub.odysee.bad_video", lang)
+    login = str(account.get("login") or "").strip()
+    secret = str(account.get("secret") or "").strip()
+    channel = str(account.get("extra") or "").strip()
+    if not secret:
+        return False, t("pub.odysee.no_account", lang)
+    try:
+        token = resolve_auth_token(login, secret)
+        upload_token, location = _create_upload(token)
+        if not FILE_PATH_RE.match(location):
+            raise OdyseeError("upload location is not a TUS URL")
+        name = _claim_name(title)
+        params: dict[str, Any] = {
+            "name": name,
+            "bid": "0.01",
+            "file_path": location,
+            "title": (title or path.stem)[:255],
+            "description": description or "",
+            "languages": ["en"],
+            "tags": ["video"],
+            "_defer": True,
+        }
+        if channel:
+            params["channel_id"] = channel
+        qid = _asynquery(token, params)
+        _tus_upload(location, upload_token, path)
+        params.pop("_defer", None)
+        qid = _asynquery(token, params) or qid
+        result = _poll(token, qid)
+        url = _watch_url(result, name)
+        return True, t("pub.odysee.ok", lang, url=url)
+    except OdyseeError as e:
+        return False, t("pub.odysee.upload_fail", lang, error=str(e)[:180])
+    except Exception as e:
+        return False, t("pub.odysee.upload_fail", lang, error=str(e)[:180])

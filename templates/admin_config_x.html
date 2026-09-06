@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+{% block title %}{{ t('configx.title') }}{% endblock %}
+{% block body %}
+<div class="layout">
+  {% include "_sidebar.html" %}
+
+  <main class="main main--scroll">
+    <div class="admin-layout">
+      <div class="admin-inner admin-inner--wide">
+        <section class="section dashboard-section configx-section">
+          <header class="admin-head admin-head--title">
+            <h1 class="admin-head__title-row">
+              {{ t('configx.title') }}
+              <button
+                type="button"
+                class="servers-info-btn panel-info-btn admin-head__info-btn js-panel-info-open"
+                data-info-title="{{ t('configx.title') }}"
+                data-info-text="{{ t('configx.intro') }}"
+                aria-label="{{ t('configx.info_btn') }}"
+                title="{{ t('configx.info_btn') }}"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h.008v.008H11.25v-.008zM12 17.25h.01M12 21a9 9 0 100-18 9 9 0 000 18z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v.008M12 11.25V16.5" />
+                </svg>
+              </button>
+            </h1>
+          </header>
+
+          <p id="configx-msg" class="configx-msg" hidden></p>
+
+          <!-- Cuenta que recarga -->
+          <div class="configx-card">
+            <h2 class="configx-card__title">{{ t('configx.sources_title') }}</h2>
+            <p class="sub">{{ t('configx.sources_hint') }}</p>
+
+            {% if x_accounts %}
+            <form class="configx-form" id="configx-source-form">
+              <label class="field configx-field">
+                <span>{{ t('configx.account_label') }}</span>
+                <select id="configx-source-account" required>
+                  <option value="">—</option>
+                  {% for acc in x_accounts %}
+                  <option value="{{ acc.id }}">{{ acc.name }}{% if acc.username %} (@{{ acc.username }}){% endif %}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label class="field configx-field">
+                <span>{{ t('configx.cost_label') }}</span>
+                <input type="text" id="configx-source-cost" inputmode="decimal" placeholder="0.00" />
+              </label>
+              <button type="submit" class="btn btn-accent btn-sm">{{ t('configx.save') }}</button>
+            </form>
+            <p class="sub configx-hint">{{ t('configx.cost_hint') }}</p>
+            {% else %}
+            <p class="sub">{{ t('configx.no_x_accounts') }}</p>
+            {% endif %}
+
+            {% if sources %}
+            <ul class="user-list configx-sources" role="list">
+              {% for src in sources %}
+              <li class="configx-source" data-source-id="{{ src.id }}">
+                <div class="configx-source__head">
+                  <strong>{{ src.name }}</strong>
+                  {% if src.username %}<span class="sub">@{{ src.username }}</span>{% endif %}
+                  <span class="configx-badge {{ 'configx-badge--on' if src.active and src.connected else 'configx-badge--off' }}">
+                    {{ t('configx.active') if src.active and src.connected else t('configx.inactive') }}
+                  </span>
+                </div>
+                <div class="configx-source__stats">
+                  <span>{{ t('configx.recharged_label') }}: <strong>{{ fmt_money(src.recharged_cents) }}</strong></span>
+                  <span>{{ t('configx.spent_label') }}: <strong>{{ fmt_money(src.spent_cents) }}</strong></span>
+                  <span>{{ t('configx.available_label') }}: <strong>{{ fmt_money(src.available_cents) }}</strong></span>
+                  <span>{{ t('configx.cost_label') }}: <strong>{{ fmt_money(src.cost_per_post_cents) }}</strong></span>
+                </div>
+                <div class="configx-source__actions">
+                  <input
+                    type="text"
+                    class="configx-recharge-amount"
+                    inputmode="decimal"
+                    placeholder="{{ t('configx.recharge_ph') }}"
+                    aria-label="{{ t('configx.recharge_ph') }}"
+                  />
+                  <button type="button" class="btn btn-accent btn-sm js-configx-recharge">{{ t('configx.recharge_btn') }}</button>
+                  <button type="button" class="btn btn-ghost btn-sm btn-user-delete js-configx-delete">{% include '_icon_trash.html' %}</button>
+                </div>
+              </li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+          </div>
+
+          <!-- Requisitos para monetizar -->
+          <div class="configx-card">
+            <h2 class="configx-card__title">{{ t('configx.checks_title') }}</h2>
+            <p class="sub">{{ t('configx.checks_hint') }}</p>
+            {% if last_check %}
+            <p class="sub">{{ t('configx.last_check', date=last_check) }}</p>
+            {% endif %}
+            <form class="configx-form" id="configx-settings-form">
+              <label class="field configx-field">
+                <span>{{ t('configx.min_followers_label') }}</span>
+                <input type="number" id="configx-min-followers" min="1" value="{{ min_followers }}" />
+              </label>
+              <button type="submit" class="btn btn-sm">{{ t('configx.save') }}</button>
+              <button type="button" class="btn btn-accent btn-sm" id="configx-check-now">{{ t('configx.check_now') }}</button>
+            </form>
+
+            {% if x_accounts %}
+            <div class="configx-table-wrap">
+              <table class="pub-log-table configx-table">
+                <thead>
+                  <tr>
+                    <th>{{ t('configx.col_account') }}</th>
+                    <th>{{ t('configx.col_followers') }}</th>
+                    <th>{{ t('configx.col_posts') }}</th>
+                    <th>{{ t('configx.col_meets') }}</th>
+                    <th>{{ t('configx.col_checked') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for acc in x_accounts %}
+                  <tr data-check-oauth-id="{{ acc.id }}">
+                    <td>{{ acc.name }}{% if acc.is_source %} <span class="configx-badge configx-badge--on">{{ t('configx.source_badge') }}</span>{% endif %}</td>
+                    <td class="js-chk-followers">{{ acc.followers if acc.followers is not none else '—' }}</td>
+                    <td class="js-chk-posts">{{ acc.posts_count if acc.posts_count is not none else '—' }}</td>
+                    <td class="js-chk-meets">
+                      {% if acc.meets is none %}—
+                      {% elif acc.meets %}<span class="configx-badge configx-badge--on">{{ t('configx.meets_yes') }}</span>
+                      {% else %}<span class="configx-badge configx-badge--off">{{ t('configx.meets_no') }}</span>
+                      {% endif %}
+                    </td>
+                    <td class="js-chk-date">{{ acc.checked_at[:16].replace('T', ' ') if acc.checked_at else t('configx.never_checked') }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <p class="sub">{{ t('configx.no_x_accounts') }}</p>
+            {% endif %}
+          </div>
+
+          <!-- Consumo reciente -->
+          <div class="configx-card">
+            <h2 class="configx-card__title">{{ t('configx.usage_title') }}</h2>
+            {% if usage %}
+            <div class="configx-table-wrap">
+              <table class="pub-log-table configx-table">
+                <thead>
+                  <tr>
+                    <th>{{ t('configx.col_date') }}</th>
+                    <th>{{ t('configx.col_account') }}</th>
+                    <th>{{ t('configx.col_video') }}</th>
+                    <th>{{ t('configx.col_cost') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in usage %}
+                  <tr>
+                    <td>{{ row.created_at[:16].replace('T', ' ') }}</td>
+                    <td>{{ row.account or '—' }}</td>
+                    <td>{{ row.video_title or '—' }}</td>
+                    <td>{{ fmt_money(row.cost_cents) }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <p class="sub">{{ t('configx.usage_empty') }}</p>
+            {% endif %}
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  (function () {
+    var msg = document.getElementById("configx-msg");
+    var i18n = {
+      deleteConfirm: {{ t('configx.delete_confirm') | tojson }},
+      genericFail: {{ t('configx.err.generic') | tojson }},
+      checking: {{ t('configx.checking') | tojson }},
+      meetsYes: {{ t('configx.meets_yes') | tojson }},
+      meetsNo: {{ t('configx.meets_no') | tojson }},
+    };
+
+    function showMsg(text, isError) {
+      if (!msg) return;
+      msg.textContent = text || "";
+      msg.hidden = !text;
+      msg.classList.toggle("configx-msg--error", !!isError);
+    }
+
+    function postJson(url, body, method) {
+      return fetch(url, {
+        method: method || "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: body ? JSON.stringify(body) : undefined,
+      }).then(function (r) {
+        return r.json().catch(function () { return { ok: false }; });
+      });
+    }
+
+    var sourceForm = document.getElementById("configx-source-form");
+    if (sourceForm) {
+      sourceForm.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        var account = document.getElementById("configx-source-account").value;
+        var cost = document.getElementById("configx-source-cost").value;
+        if (!account) return;
+        postJson("/admin/api/xconfig/source", {
+          oauth_account_id: account,
+          cost_per_post: cost,
+          active: true,
+        }).then(function (data) {
+          if (data.ok) window.location.reload();
+          else showMsg(data.error || i18n.genericFail, true);
+        });
+      });
+    }
+
+    document.querySelectorAll(".js-configx-recharge").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var li = btn.closest("[data-source-id]");
+        if (!li) return;
+        var amount = li.querySelector(".configx-recharge-amount").value;
+        postJson("/admin/api/xconfig/recharge", {
+          source_id: li.getAttribute("data-source-id"),
+          amount: amount,
+        }).then(function (data) {
+          if (data.ok) window.location.reload();
+          else showMsg(data.error || i18n.genericFail, true);
+        });
+      });
+    });
+
+    document.querySelectorAll(".js-configx-delete").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var li = btn.closest("[data-source-id]");
+        if (!li) return;
+        if (!window.confirm(i18n.deleteConfirm)) return;
+        postJson(
+          "/admin/api/xconfig/source/" + encodeURIComponent(li.getAttribute("data-source-id")),
+          null,
+          "DELETE"
+        ).then(function (data) {
+          if (data.ok) window.location.reload();
+          else showMsg(data.error || i18n.genericFail, true);
+        });
+      });
+    });
+
+    var settingsForm = document.getElementById("configx-settings-form");
+    if (settingsForm) {
+      settingsForm.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        var val = parseInt(document.getElementById("configx-min-followers").value, 10) || 0;
+        postJson("/admin/api/xconfig/settings", { min_followers: val }).then(function (data) {
+          showMsg(data.message || data.error || i18n.genericFail, !data.ok);
+        });
+      });
+    }
+
+    var checkBtn = document.getElementById("configx-check-now");
+    if (checkBtn) {
+      checkBtn.addEventListener("click", function () {
+        checkBtn.disabled = true;
+        showMsg(i18n.checking, false);
+        postJson("/admin/api/xconfig/check", {}).then(function (data) {
+          checkBtn.disabled = false;
+          if (!data.ok) {
+            showMsg(data.error || i18n.genericFail, true);
+            return;
+          }
+          showMsg(data.message || "", false);
+          (data.results || []).forEach(function (res) {
+            var tr = document.querySelector(
+              '[data-check-oauth-id="' + res.oauth_account_id + '"]'
+            );
+            if (!tr) return;
+            tr.querySelector(".js-chk-followers").textContent = res.ok ? res.followers : "—";
+            tr.querySelector(".js-chk-posts").textContent = res.ok ? res.posts_count : "—";
+            var meets = tr.querySelector(".js-chk-meets");
+            if (res.ok) {
+              meets.innerHTML =
+                '<span class="configx-badge ' +
+                (res.meets ? "configx-badge--on" : "configx-badge--off") +
+                '">' +
+                (res.meets ? i18n.meetsYes : i18n.meetsNo) +
+                "</span>";
+            } else {
+              meets.textContent = res.detail || "—";
+            }
+            tr.querySelector(".js-chk-date").textContent = new Date()
+              .toISOString()
+              .slice(0, 16)
+              .replace("T", " ");
+          });
+        });
+      });
+    }
+  })();
+</script>
+{% endblock %}

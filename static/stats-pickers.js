@@ -57,6 +57,50 @@
     document.body.style.overflow = "hidden";
   }
 
+  function accountViaKind(choice, platformId) {
+    var sources = (choice && choice.platform_sources) || {};
+    if (platformId && platformId !== "all") {
+      return sources[platformId] || "";
+    }
+    var kinds = [];
+    Object.keys(sources).forEach(function (pid) {
+      var kind = sources[pid];
+      if (kind && kinds.indexOf(kind) === -1) kinds.push(kind);
+    });
+    if (!kinds.length) return "";
+    if (kinds.length === 1) return kinds[0];
+    return "mixed";
+  }
+
+  function viaBadgeHtml(kind, labels) {
+    labels = labels || {};
+    var text = "";
+    var cls = "api";
+    if (kind === "vmos") {
+      text = labels.vmos || "VMOS";
+      cls = "vmos";
+    } else if (kind === "filehost") {
+      text = labels.filehost || labels.ppv || "PPV";
+      cls = "filehost";
+    } else if (kind === "chain") {
+      text = labels.chain || "Chain";
+      cls = "chain";
+    } else if (kind === "mixed") {
+      text = labels.mixed || "";
+      cls = "mixed";
+    } else if (kind) {
+      text = labels.api || "API";
+    }
+    if (!text) return "";
+    return (
+      '<span class="stats-picker-modal__via stats-picker-modal__via--' +
+      cls +
+      '">' +
+      escapeHtml(text) +
+      "</span>"
+    );
+  }
+
   function renderDefaultOption(item, selected, extraHtml) {
     return (
       '<li role="option" tabindex="0" class="stats-picker-modal__option' +
@@ -332,7 +376,19 @@
         },
         renderOption: function (c, selected) {
           var kind = c.kind === "group" ? config.account.kindGroup : config.account.kindAccount;
-          var meta = '<span class="stats-picker-modal__kind">' + escapeHtml(kind) + "</span>";
+          var platformId = document.getElementById("stats-platform-id");
+          var via = viaBadgeHtml(accountViaKind(c, platformId ? platformId.value : "all"), {
+            vmos: config.account.viaVmos,
+            filehost: config.account.viaFilehost,
+            chain: config.account.viaChain,
+            api: config.account.viaApi,
+            mixed: config.account.viaMixed,
+          });
+          var meta =
+            '<span class="stats-picker-modal__kind">' +
+            escapeHtml(kind) +
+            "</span>" +
+            via;
           return renderDefaultOption(c, selected, meta);
         },
         updateTrigger: function (picked) {
@@ -399,7 +455,15 @@
       renderOption: function (c, selected) {
         var kind =
           c.kind === "group" ? config.kindGroup || "Group" : config.kindAccount || "Account";
-        var meta = '<span class="stats-picker-modal__kind">' + escapeHtml(kind) + "</span>";
+        var via = viaBadgeHtml(accountViaKind(c, "all"), {
+          vmos: config.viaVmos,
+          filehost: config.viaFilehost,
+          chain: config.viaChain,
+          api: config.viaApi,
+          mixed: config.viaMixed,
+        });
+        var meta =
+          '<span class="stats-picker-modal__kind">' + escapeHtml(kind) + "</span>" + via;
         return renderDefaultOption(c, selected, meta);
       },
       updateTrigger: function (picked) {

@@ -85,6 +85,9 @@
                     <span class="pub-platforms-table__name">
                       <span class="pub-platforms-table__icon" aria-hidden="true">{{ p.icon }}</span>
                       {{ p.name }}
+                      <span class="pub-platforms-table__via{% if p.via_vmos %} is-vmos{% elif p.via_filehost %} is-filehost{% elif p.via_chain %} is-chain{% endif %}" data-platform-via>
+                        {% if p.via_vmos %}{{ t('servers.vmos_badge') }}{% elif p.via_filehost %}{{ t('servers.filehost_badge') }}{% elif p.via_chain %}{{ t('servers.chain_badge') }}{% elif p.configured %}{{ t('admin.via_api') }}{% endif %}
+                      </span>
                     </span>
                   </td>
                   <td class="pub-platforms-table__caps pub-platforms-table__supports-col">
@@ -179,6 +182,16 @@
           <label class="pub-field pub-field--description">
             <textarea class="pub-control pub-control--textarea" name="description" rows="3" required placeholder="{{ t('pub.caption_ph') }}" aria-label="{{ t('pub.caption_ph') }}"></textarea>
           </label>
+
+          {% if x_funding_source %}
+          <div class="pub-field pub-x-funding" id="pub-x-funding" hidden>
+            <label class="pub-x-funding__label">
+              <input type="checkbox" name="x_use_funding" value="1" checked />
+              <span>{{ t('pub.x_use_funding', name=x_funding_source.name) }}</span>
+            </label>
+            <p class="sub pub-x-funding__hint">{{ t('pub.x_use_funding_hint') }}</p>
+          </div>
+          {% endif %}
 
           <div class="pub-schedule-block">
             <span class="pub-field__label pub-schedule-block__label">{{ t('pub.schedule_datetime') }}</span>
@@ -1038,10 +1051,14 @@
       document.querySelectorAll(".pub-platforms-table tbody tr[data-platform-id]")
     );
 
-    function applyPlatformFilter(platformIds, emptyHint, requireSelection) {
+    function applyPlatformFilter(platformIds, emptyHint, requireSelection, platformSources) {
       var ids = platformIds || [];
       var hasFilter = ids.length > 0;
       var visibleCount = 0;
+      var viaApi = {{ t('admin.via_api') | tojson }};
+      var viaVmos = {{ t('servers.vmos_badge') | tojson }};
+      var viaFilehost = {{ t('servers.filehost_badge') | tojson }};
+      var viaChain = {{ t('servers.chain_badge') | tojson }};
       platformRows.forEach(function (row) {
         var pid = row.getAttribute("data-platform-id") || "";
         var show;
@@ -1058,6 +1075,19 @@
           if (!show || cb.disabled) cb.checked = false;
           else cb.checked = true;
         }
+        var viaEl = row.querySelector("[data-platform-via]");
+        if (viaEl) {
+          var kind = platformSources ? platformSources[pid] || "" : "";
+          var label = "";
+          if (show && kind === "vmos") label = viaVmos;
+          else if (show && kind === "filehost") label = viaFilehost;
+          else if (show && kind === "chain") label = viaChain;
+          else if (show && kind) label = viaApi;
+          viaEl.textContent = label;
+          viaEl.classList.toggle("is-vmos", show && kind === "vmos");
+          viaEl.classList.toggle("is-filehost", show && kind === "filehost");
+          viaEl.classList.toggle("is-chain", show && kind === "chain");
+        }
         if (show) visibleCount += 1;
       });
       if (emptyHint) emptyHint.hidden = !hasFilter || visibleCount > 0;
@@ -1072,8 +1102,47 @@
       publishAccounts.length === 1 &&
       !document.getElementById("pub-account-open")
     ) {
-      applyPlatformFilter(publishAccounts[0].platform_ids || [], null, false);
+      applyPlatformFilter(
+        publishAccounts[0].platform_ids || [],
+        null,
+        false,
+        publishAccounts[0].platform_sources || {}
+      );
     }
+  })();
+
+  (function () {
+    var block = document.getElementById("pub-x-funding");
+    if (!block) return;
+
+    function xSelected() {
+      var boxes = document.querySelectorAll('input[name="platforms"]');
+      for (var i = 0; i < boxes.length; i++) {
+        var el = boxes[i];
+        if (el.value !== "x") continue;
+        if (el.type === "hidden") return true;
+        if (el.checked && !el.disabled && !el.closest("tr[hidden]")) return true;
+      }
+      return false;
+    }
+
+    function sync() {
+      block.hidden = !xSelected();
+    }
+
+    document.addEventListener("change", function (e) {
+      if (e.target && e.target.name === "platforms") sync();
+    });
+
+    var prevFilter = window.__pubApplyPlatformFilter;
+    if (typeof prevFilter === "function") {
+      window.__pubApplyPlatformFilter = function () {
+        prevFilter.apply(this, arguments);
+        sync();
+      };
+    }
+
+    sync();
   })();
 
   (function () {
@@ -1094,11 +1163,15 @@
   })();
 </script>
 <script src="/static/js/ajax-search.js?v=1"></script>
-<script src="/static/stats-pickers.js?v=11"></script>
+<script src="/static/stats-pickers.js?v=15"></script>
 <script>
   (function () {
     if (!window.initPubAccountPicker || !document.getElementById("pub-account-open")) return;
     var emptyHint = document.getElementById("pub-account-platforms-empty");
+    var viaApi = {{ t('admin.via_api') | tojson }};
+    var viaVmos = {{ t('servers.vmos_badge') | tojson }};
+    var viaFilehost = {{ t('servers.filehost_badge') | tojson }};
+    var viaChain = {{ t('servers.chain_badge') | tojson }};
     window.initPubAccountPicker({
       modalId: "pub-account-modal",
       openId: "pub-account-open",
@@ -1112,18 +1185,24 @@
       pickLabel: {{ pub_account_i18n.select | tojson }},
       kindGroup: {{ t('admin.stats_kind_group') | tojson }},
       kindAccount: {{ t('admin.stats_kind_account') | tojson }},
+      viaVmos: viaVmos,
+      viaFilehost: viaFilehost,
+      viaChain: viaChain,
+      viaApi: viaApi,
+      viaMixed: {{ t('admin.via_mixed') | tojson }},
       onPick: function (picked) {
         if (window.__pubApplyPlatformFilter) {
           window.__pubApplyPlatformFilter(
             picked ? picked.platform_ids || [] : [],
             emptyHint,
-            true
+            true,
+            picked ? picked.platform_sources || {} : null
           );
         }
       },
     });
     if (window.__pubApplyPlatformFilter) {
-      window.__pubApplyPlatformFilter([], emptyHint, true);
+      window.__pubApplyPlatformFilter([], emptyHint, true, null);
     }
   })();
 </script>

@@ -24,6 +24,18 @@
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v.008M12 11.25V16.5" />
                 </svg>
               </button>
+              <button
+                type="button"
+                class="servers-info-btn admin-head__info-btn"
+                id="chat-refresh"
+                aria-label="{{ t('support.chat_refresh') }}"
+                title="{{ t('support.chat_refresh') }}"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992V4.356M2.985 19.644v-4.992h4.992M3.51 9a9 9 0 0114.878-3.3L21.015 9.348M20.49 15a9 9 0 01-14.878 3.3L2.985 14.652" />
+                </svg>
+              </button>
+              <button type="button" class="btn btn-ghost btn-sm" id="chat-live">{{ t('support.chat_off') }}</button>
             </h1>
           </header>
 
@@ -159,6 +171,16 @@
     var expandThreadsLabel = {{ t('support.threads_expand') | tojson }};
     var adminLabel = {{ t('support.admin_label') | tojson }};
     var anonymousLabel = {{ t('support.anonymous_label') | tojson }};
+    var refreshBtn = document.getElementById("chat-refresh");
+    var liveBtn = document.getElementById("chat-live");
+    var offLabel = {{ t('support.chat_off') | tojson }};
+    var onLabel = {{ t('support.chat_on') | tojson }};
+    var poll = null;
+    var liveKey = "tuyahoChatLive";
+    var liveOn = true;
+    try {
+      if (window.localStorage && localStorage.getItem(liveKey) === "0") liveOn = false;
+    } catch (e) {}
     var currentUserId = null;
     var currentThreadLabel = "";
     var lastCount = -1;
@@ -401,11 +423,48 @@
       });
     }
 
+    function stopPoll() {
+      if (poll) {
+        clearInterval(poll);
+        poll = null;
+      }
+    }
+
+    function startPoll() {
+      stopPoll();
+      if (liveOn) {
+        poll = setInterval(function () {
+          loadThreads();
+          loadMessages();
+        }, 5000);
+      }
+    }
+
+    function syncLiveBtn() {
+      if (!liveBtn) return;
+      liveBtn.textContent = liveOn ? offLabel : onLabel;
+      liveBtn.setAttribute("aria-pressed", liveOn ? "true" : "false");
+    }
+
     loadThreads();
-    setInterval(function () {
-      loadThreads();
-      loadMessages();
-    }, 5000);
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", function () {
+        lastCount = -1;
+        loadThreads();
+        loadMessages();
+      });
+    }
+    if (liveBtn) {
+      liveBtn.addEventListener("click", function () {
+        liveOn = !liveOn;
+        try { localStorage.setItem(liveKey, liveOn ? "1" : "0"); } catch (e) {}
+        syncLiveBtn();
+        if (liveOn) startPoll();
+        else stopPoll();
+      });
+    }
+    syncLiveBtn();
+    startPoll();
 
     if (window.wireLogPurge) {
       window.wireLogPurge({

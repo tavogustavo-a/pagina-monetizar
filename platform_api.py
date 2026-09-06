@@ -9,8 +9,11 @@ import urllib.request
 from typing import Any
 
 import db
+import filehost
+import chain
 import platforms
 import tiktok_oauth
+import vmos
 
 
 def _http(
@@ -105,6 +108,12 @@ def test_platform(
         "snapchat": _test_snapchat,
         "facebook": _test_facebook,
     }
+    for hid in filehost.PLATFORM_IDS:
+        testers[hid] = lambda lang, p=hid: _test_filehost(p, lang)
+    for cid in chain.PLATFORM_IDS:
+        testers[cid] = lambda lang, p=cid: _test_chain(p, lang)
+    if pid not in testers:
+        return {"ok": False, "message": t("api.unknown_platform", lang)}
     try:
         if draft is not None:
             _set_test_overlay(pid, draft)
@@ -123,11 +132,33 @@ def verify_account_platform(
     lang: str = "es",
 ) -> dict[str, Any]:
     """Consulta la API de esa cuenta/servidor antes de buscar o extraer videos."""
+    import proxy_util
+
+    pid = (platform_id or "").strip()
+    if pid in vmos.PLATFORM_IDS and db.resolve_vmos_account_for_publish(
+        pid, account_link_id
+    ):
+        return _verify_account_platform_inner(platform_id, account_link_id, lang)
+
+    proxy_url = db.get_active_proxy_url_for_account(account_link_id)
+    with proxy_util.using_proxy(proxy_url):
+        return _verify_account_platform_inner(platform_id, account_link_id, lang)
+
+
+def _verify_account_platform_inner(
+    platform_id: str,
+    account_link_id: str,
+    lang: str = "es",
+) -> dict[str, Any]:
     from i18n import t
 
     pid = (platform_id or "").strip()
     if pid not in platforms.PLATFORM_IDS:
         return {"ok": False, "message": t("api.unknown_platform", lang)}
+    if pid in vmos.PLATFORM_IDS:
+        vmos_row = db.resolve_vmos_account_for_publish(pid, account_link_id)
+        if vmos_row:
+            return _verify_vmos_account(vmos_row, lang)
     if pid == "tiktok":
         return _verify_tiktok_account(account_link_id, lang)
     if pid == "youtube":
@@ -146,7 +177,73 @@ def verify_account_platform(
         return _verify_rumble_account(account_link_id, lang)
     if pid == "snapchat":
         return _verify_snapchat_account(account_link_id, lang)
+    if pid in filehost.PLATFORM_IDS:
+        return _verify_filehost_account(pid, account_link_id, lang)
+    if pid in chain.PLATFORM_IDS:
+        return _verify_chain_account(pid, account_link_id, lang)
     return test_platform(pid, lang, save_result=True)
+
+
+def _verify_vmos_account(account: dict[str, Any], lang: str) -> dict[str, Any]:
+    from i18n import t
+
+    try:
+        data = vmos.pad_info(
+            str(account.get("access_key") or ""),
+            str(account.get("secret_key") or ""),
+            str(account.get("pad_code") or ""),
+            lang=lang,
+        )
+    except vmos.VmosError as e:
+        return {"ok": False, "message": str(e)[:300]}
+    info = data.get("data") if isinstance(data.get("data"), dict) else {}
+    pad = str((info or {}).get("padCode") or account.get("pad_code") or "").strip()
+    return {"ok": True, "message": t("servers.vmos_test_ok", lang, pad=pad or "ok")}
+
+
+def _verify_filehost_account(
+    platform_id: str, account_link_id: str, lang: str
+) -> dict[str, Any]:
+    from i18n import t
+
+    row = db.resolve_filehost_account_for_publish(platform_id, account_link_id)
+    if not row:
+        return {"ok": False, "message": t("api.filehost.need_account", lang)}
+    ok, detail = filehost.probe_account(
+        platform_id,
+        str(row.get("api_key") or ""),
+        str(row.get("extra") or ""),
+    )
+    if ok:
+        message = t("api.filehost.ok", lang, name=detail)
+        db.save_platform_test_result(platform_id, True, message)
+        return {"ok": True, "message": message}
+    message = t("api.filehost.fail", lang, error=detail)
+    db.save_platform_test_result(platform_id, False, message)
+    return {"ok": False, "message": message}
+
+
+def _verify_chain_account(
+    platform_id: str, account_link_id: str, lang: str
+) -> dict[str, Any]:
+    from i18n import t
+
+    row = db.resolve_chain_account_for_publish(platform_id, account_link_id)
+    if not row:
+        return {"ok": False, "message": t("api.chain.need_account", lang)}
+    ok, detail = chain.probe_account(
+        platform_id,
+        str(row.get("login") or ""),
+        str(row.get("secret") or ""),
+        str(row.get("extra") or ""),
+    )
+    if ok:
+        message = t("api.chain.ok", lang, name=detail)
+        db.save_platform_test_result(platform_id, True, message)
+        return {"ok": True, "message": message}
+    message = t("api.chain.fail", lang, error=detail)
+    db.save_platform_test_result(platform_id, False, message)
+    return {"ok": False, "message": message}
 
 
 def _verify_tiktok_account(account_link_id: str, lang: str) -> dict[str, Any]:
@@ -1076,3 +1173,42 @@ def _test_snapchat(lang: str) -> tuple[bool, str]:
             lang, "snapchat", "api.snapchat.client_ok", client_id, secret
         )
     return _need_keys(lang)
+
+
+def _test_filehost(platform_id: str, lang: str) -> tuple[bool, str]:
+    from i18n import t
+
+    rows = db.list_filehost_accounts_public(platform_id)
+    if not rows:
+        return False, t("api.filehost.need_account", lang)
+    raw = db.get_filehost_account_raw(str(rows[0].get("id") or ""))
+    if not raw:
+        return False, t("api.filehost.need_account", lang)
+    ok, detail = filehost.probe_account(
+        platform_id,
+        str(raw.get("api_key") or ""),
+        str(raw.get("extra") or ""),
+    )
+    if ok:
+        return True, t("api.filehost.ok", lang, name=detail)
+    return False, t("api.filehost.fail", lang, error=detail)
+
+
+def _test_chain(platform_id: str, lang: str) -> tuple[bool, str]:
+    from i18n import t
+
+    rows = db.list_chain_accounts_public(platform_id)
+    if not rows:
+        return False, t("api.chain.need_account", lang)
+    raw = db.get_chain_account_raw(str(rows[0].get("id") or ""))
+    if not raw:
+        return False, t("api.chain.need_account", lang)
+    ok, detail = chain.probe_account(
+        platform_id,
+        str(raw.get("login") or ""),
+        str(raw.get("secret") or ""),
+        str(raw.get("extra") or ""),
+    )
+    if ok:
+        return True, t("api.chain.ok", lang, name=detail)
+    return False, t("api.chain.fail", lang, error=detail)

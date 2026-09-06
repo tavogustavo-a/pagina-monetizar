@@ -1,0 +1,11 @@
+{% if platform.id in filehost_platform_ids %}
+<button
+  type="button"
+  class="btn btn-filehost js-open-filehost"
+  data-platform-id="{{ platform.id }}"
+  data-platform-name="{{ platform.name }}"
+>
+  <span class="btn-filehost__icon" aria-hidden="true">▶</span>
+  {{ t('servers.connect_with_filehost', name=platform.name) }}
+</button>
+{% endif %}

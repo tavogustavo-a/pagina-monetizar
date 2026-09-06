@@ -239,7 +239,30 @@ MESSAGES: dict[str, dict[str, str]] = {
     "platform.bilibili": {"en": "Bilibili", "es": "Bilibili"},
     "platform.rumble": {"en": "Rumble", "es": "Rumble"},
     "platform.snapchat": {"en": "Snapchat", "es": "Snapchat"},
+    "platform.odysee": {"en": "Odysee", "es": "Odysee"},
+    "platform.dtube": {"en": "DTube", "es": "DTube"},
     "platform.facebook": {"en": "Facebook", "es": "Facebook"},
+    "platform.threads": {"en": "Threads", "es": "Threads"},
+    "platform.doodstream": {"en": "DoodStream", "es": "DoodStream"},
+    "platform.streamwish": {"en": "StreamWish", "es": "StreamWish"},
+    "platform.filemoon": {"en": "FileMoon", "es": "FileMoon"},
+    "platform.mixdrop": {"en": "MixDrop", "es": "MixDrop"},
+    "platform.streamtape": {"en": "Streamtape", "es": "Streamtape"},
+    "platform.voe": {"en": "VOE", "es": "VOE"},
+    "platform.vidoza": {"en": "Vidoza", "es": "Vidoza"},
+    "platform.lulustream": {"en": "LuluStream", "es": "LuluStream"},
+    "platform.loadvid": {"en": "Loadvid (pago)", "es": "Loadvid (pago)"},
+    "platform.vidsonic": {"en": "VidSonic (pago)", "es": "VidSonic (pago)"},
+    "platform.flyfile": {"en": "FlyFile (pago)", "es": "FlyFile (pago)"},
+    "platform.venvo": {"en": "VenVo (pago)", "es": "VenVo (pago)"},
+    "limits.note.odysee": {
+        "en": "Video only. Sign in from Servers with the Odysee email and password (no public OAuth). The panel publishes with TUS + LBRY stream_create.",
+        "es": "Solo video. En Servidores entra con el email y la contraseña de Odysee (no hay OAuth público). El panel publica con TUS + stream_create de LBRY.",
+    },
+    "limits.note.dtube": {
+        "en": "Video only. Hive username + posting WIF. The file goes to the DTube IPFS cluster, then a Hive post is broadcast. Not a PPV host API.",
+        "es": "Solo video. Usuario Hive + posting WIF. El archivo va al cluster IPFS de DTube y luego se emite un post en Hive. No es una API de host PPV.",
+    },
     "servers.intro": {
         "en": "Connect creator accounts on each platform. TikTok is available now; more platforms are coming soon.",
         "es": "Conecta cuentas de creador en cada plataforma. TikTok ya está disponible; más plataformas llegarán pronto.",
@@ -282,6 +305,104 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Redirect URI en el portal de desarrolladores de TikTok:",
     },
     "servers.connect_with_tiktok": {"en": "Connect with TikTok", "es": "Conectar con TikTok"},
+    "servers.connect_with_vmos": {
+        "en": "Connect with VMOS {short}",
+        "es": "Conectar con VMOS {short}",
+    },
+    "servers.vmos_hint": {
+        "en": "VMOS Cloud alternative: Access Key, Secret, cloud phone ID (padCode) and optional template. Developer → API in vmoscloud.com.",
+        "es": "Alternativa VMOS Cloud: Access Key, Secret, ID del móvil (padCode) y plantilla opcional. Developer → API en vmoscloud.com.",
+    },
+    "servers.vmos_title": {
+        "en": "VMOS Cloud · {platform}",
+        "es": "VMOS Cloud · {platform}",
+    },
+    "servers.vmos_save": {"en": "Save VMOS", "es": "Guardar VMOS"},
+    "servers.vmos_saved": {"en": "VMOS account saved.", "es": "Cuenta VMOS guardada."},
+    "servers.vmos_missing": {
+        "en": "Access Key, Secret Access Key and padCode are required.",
+        "es": "Hacen falta Access Key, Secret Access Key y padCode.",
+    },
+    "servers.vmos_badge": {"en": "VMOS", "es": "VMOS"},
+    "servers.vmos_field_access_key": {"en": "Access Key ID", "es": "Access Key ID"},
+    "servers.vmos_field_secret": {"en": "Secret Access Key", "es": "Secret Access Key"},
+    "servers.vmos_field_pad": {"en": "Cloud phone ID (padCode)", "es": "ID del móvil (padCode)"},
+    "servers.vmos_field_template": {
+        "en": "Flow template ID (scriptId, required to publish)",
+        "es": "ID de plantilla RPA (scriptId, obligatorio para publicar)",
+    },
+    "servers.vmos_test": {"en": "Test VMOS", "es": "Probar VMOS"},
+    "servers.vmos_test_ok": {
+        "en": "VMOS Cloud phone reachable: {pad}.",
+        "es": "Móvil VMOS Cloud accesible: {pad}.",
+    },
+    "servers.connect_with_filehost": {
+        "en": "Connect {name}",
+        "es": "Conectar {name}",
+    },
+    "servers.filehost_title": {
+        "en": "Connect {platform}",
+        "es": "Conectar {platform}",
+    },
+    "servers.filehost_hint": {
+        "en": "Paste the API key from the host dashboard (Settings / API). MixDrop also needs the account email; Streamtape needs the API login.",
+        "es": "Pega la API key del panel del host (Settings / API). MixDrop también pide el email de la cuenta; Streamtape el API login.",
+    },
+    "servers.filehost_field_key": {"en": "API key", "es": "API key"},
+    "servers.filehost_field_email": {"en": "API email", "es": "Email de la API"},
+    "servers.filehost_field_login": {"en": "API login", "es": "API login"},
+    "servers.filehost_save": {"en": "Save host", "es": "Guardar host"},
+    "servers.filehost_saved": {
+        "en": "Host account saved ({name}).",
+        "es": "Cuenta del host guardada ({name}).",
+    },
+    "servers.filehost_missing": {
+        "en": "API key is required. MixDrop needs email; Streamtape needs API login.",
+        "es": "La API key es obligatoria. MixDrop pide email; Streamtape pide API login.",
+    },
+    "servers.filehost_test": {"en": "Test API", "es": "Probar API"},
+    "servers.filehost_badge": {"en": "PPV", "es": "PPV"},
+    "servers.connect_with_chain": {
+        "en": "Connect {name}",
+        "es": "Conectar {name}",
+    },
+    "servers.chain_title": {
+        "en": "Connect {platform}",
+        "es": "Conectar {platform}",
+    },
+    "servers.chain_hint_odysee": {
+        "en": "Odysee has no public OAuth for third-party apps. Sign in with the email and password of the Odysee account. The panel keeps the auth token, not the password. Channel claim ID is optional.",
+        "es": "Odysee no ofrece OAuth público para apps de terceros. Entra con el email y la contraseña de la cuenta de Odysee. El panel guarda el auth token, no la contraseña. El claim ID del canal es opcional.",
+    },
+    "servers.chain_hint_dtube": {
+        "en": "DTube posts on Hive. Use the Hive username and the posting WIF (not the master key). The video is uploaded to the DTube IPFS cluster, then a real Hive comment is broadcast. Do not paste the owner key.",
+        "es": "DTube publica en Hive. Usa el usuario de Hive y el posting WIF (no la clave master). El video se sube al cluster IPFS de DTube y luego se emite un comentario real en Hive. No pegues la owner key.",
+    },
+    "servers.chain_field_email": {"en": "Odysee email", "es": "Email de Odysee"},
+    "servers.chain_field_password": {
+        "en": "Odysee password",
+        "es": "Contraseña de Odysee",
+    },
+    "servers.chain_field_hive": {"en": "Hive username", "es": "Usuario de Hive"},
+    "servers.chain_field_wif": {"en": "Posting WIF", "es": "Posting WIF"},
+    "servers.chain_field_channel": {
+        "en": "Channel claim ID (optional)",
+        "es": "Claim ID del canal (opcional)",
+    },
+    "servers.chain_save": {"en": "Save account", "es": "Guardar cuenta"},
+    "servers.chain_saved": {
+        "en": "Account saved ({name}).",
+        "es": "Cuenta guardada ({name}).",
+    },
+    "servers.chain_missing": {
+        "en": "Odysee needs email and password. DTube needs Hive username and posting WIF.",
+        "es": "Odysee pide email y contraseña. DTube pide usuario de Hive y posting WIF.",
+    },
+    "servers.chain_test": {"en": "Test API", "es": "Probar API"},
+    "servers.chain_badge_odysee": {"en": "LBRY", "es": "LBRY"},
+    "servers.chain_badge_dtube": {"en": "Hive", "es": "Hive"},
+    "servers.chain_badge": {"en": "Chain", "es": "Cadena"},
+    "servers.vmos_field_remark": {"en": "Remark", "es": "Nota"},
     "servers.oauth_missing": {
         "en": "Save the TikTok Client Key and Client Secret first, then connect an account.",
         "es": "Guarda primero el Client Key y el Client Secret de TikTok, luego conecta una cuenta.",
@@ -699,6 +820,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Pages only (not personal profiles). Photos and videos.",
         "es": "Páginas (no perfiles personales): fotos y videos.",
     },
+    "limits.note.threads": {
+        "en": "No official API in this panel yet. Connect with VMOS Threads (cloud phone).",
+        "es": "Aún no hay API oficial en este panel. Conecta con VMOS Threads (móvil en la nube).",
+    },
     "limits.note.x": {
         "en": "Photos, GIF and short video. Paid X API access is required to publish.",
         "es": "Fotos, GIF y video corto. Hace falta acceso de pago a la API de X para publicar.",
@@ -718,6 +843,54 @@ MESSAGES: dict[str, dict[str, str]] = {
     "limits.note.snapchat": {
         "en": "Public Profile: photos as 24h Stories; MP4 5–60 s (Spotlight 6–60 s, min. 540×960). Needs OpenSSL.",
         "es": "Perfil público: fotos como Stories de 24 h; MP4 5–60 s (Spotlight 6–60 s, mín. 540×960). Hace falta OpenSSL.",
+    },
+    "limits.note.doodstream": {
+        "en": "Video only. API key from DoodStream dashboard. Payout is on the host (PPV ads), not in this panel.",
+        "es": "Solo video. API key del panel de DoodStream. El cobro es en el host (anuncios PPV), no en este panel.",
+    },
+    "limits.note.streamwish": {
+        "en": "Video only. API key from StreamWish dashboard. Payout is on the host (PPV ads), not in this panel.",
+        "es": "Solo video. API key del panel de StreamWish. El cobro es en el host (anuncios PPV), no en este panel.",
+    },
+    "limits.note.filemoon": {
+        "en": "Video only. API key from FileMoon dashboard. Payout is on the host (PPV ads), not in this panel.",
+        "es": "Solo video. API key del panel de FileMoon. El cobro es en el host (anuncios PPV), no en este panel.",
+    },
+    "limits.note.mixdrop": {
+        "en": "Video only. MixDrop API email + key. Payout is on MixDrop, not in this panel.",
+        "es": "Solo video. Email + API key de MixDrop. El cobro es en MixDrop, no en este panel.",
+    },
+    "limits.note.streamtape": {
+        "en": "Video only. Streamtape API login + key. Payout is on Streamtape, not in this panel.",
+        "es": "Solo video. API login + key de Streamtape. El cobro es en Streamtape, no en este panel.",
+    },
+    "limits.note.voe": {
+        "en": "Video only. API key from VOE dashboard. Payout is on the host (PPV ads), not in this panel.",
+        "es": "Solo video. API key del panel de VOE. El cobro es en el host (anuncios PPV), no en este panel.",
+    },
+    "limits.note.vidoza": {
+        "en": "Video only. API key from Vidoza dashboard. Payout is on the host (PPV ads), not in this panel.",
+        "es": "Solo video. API key del panel de Vidoza. El cobro es en el host (anuncios PPV), no en este panel.",
+    },
+    "limits.note.lulustream": {
+        "en": "Video only. API key from LuluStream dashboard. Payout is on the host (PPV ads), not in this panel.",
+        "es": "Solo video. API key del panel de LuluStream. El cobro es en el host (anuncios PPV), no en este panel.",
+    },
+    "limits.note.loadvid": {
+        "en": "Trial payout host. Video only. API key from Loadvid. Marked (pago) until payouts are proven.",
+        "es": "Host de prueba de cobro. Solo video. API key de Loadvid. Marcado (pago) hasta comprobar que pagan.",
+    },
+    "limits.note.vidsonic": {
+        "en": "Trial payout host. Video only. API key from VidSonic. Marked (pago) until payouts are proven.",
+        "es": "Host de prueba de cobro. Solo video. API key de VidSonic. Marcado (pago) hasta comprobar que pagan.",
+    },
+    "limits.note.flyfile": {
+        "en": "Trial payout host. Video only. API key header from FlyFile. Marked (pago) until payouts are proven.",
+        "es": "Host de prueba de cobro. Solo video. API key de FlyFile. Marcado (pago) hasta comprobar que pagan.",
+    },
+    "limits.note.venvo": {
+        "en": "Trial payout host. Video only. API key from VenVo. Marked (pago) until payouts are proven.",
+        "es": "Host de prueba de cobro. Solo video. API key de VenVo. Marcado (pago) hasta comprobar que pagan.",
     },
     "api.save": {"en": "Save API", "es": "Guardar API"},
     "api.test": {"en": "Test API", "es": "Probar API"},
@@ -873,6 +1046,30 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "La Upload API de Rumble aceptó el token. Añade un Channel ID para publicar.",
     },
     "api.rumble.fail": {"en": "Rumble error: {error}", "es": "Error de Rumble: {error}"},
+    "api.filehost.ok": {
+        "en": "Host API works ({name}).",
+        "es": "La API del host funciona ({name}).",
+    },
+    "api.filehost.fail": {
+        "en": "Host API error: {error}",
+        "es": "Error de la API del host: {error}",
+    },
+    "api.filehost.need_account": {
+        "en": "Connect this host in Servers with an API key first.",
+        "es": "Primero conecta este host en Servidores con una API key.",
+    },
+    "api.chain.ok": {
+        "en": "Account works ({name}).",
+        "es": "La cuenta funciona ({name}).",
+    },
+    "api.chain.fail": {
+        "en": "Connection error: {error}",
+        "es": "Error de conexión: {error}",
+    },
+    "api.chain.need_account": {
+        "en": "Connect this network in Servers first.",
+        "es": "Primero conecta esta red en Servidores.",
+    },
     "api.snapchat.ok": {
         "en": "Snapchat public profile works ({name}).",
         "es": "El perfil público de Snapchat funciona ({name}).",
@@ -1224,6 +1421,30 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "This platform has no publish API wired. The post was not sent.",
         "es": "Esta plataforma no tiene API de publicación cableada. El post no se envió.",
     },
+    "pub.fail_vmos_pending": {
+        "en": "VMOS Cloud is saved in Servers, but publishing through the cloud phone is not wired yet. The post was not sent.",
+        "es": "VMOS Cloud está guardado en Servidores, pero la publicación por el móvil en la nube aún no está cableada. El post no se envió.",
+    },
+    "pub.vmos_no_account": {
+        "en": "No VMOS Cloud account with Access Key, Secret and padCode for this server.",
+        "es": "No hay cuenta VMOS Cloud con Access Key, Secret y padCode para este servidor.",
+    },
+    "pub.vmos_no_template": {
+        "en": "Save the VMOS flow template ID (scriptId) in Servers. The post was not sent.",
+        "es": "Guarda el ID de plantilla RPA (scriptId) de VMOS en Servidores. El post no se envió.",
+    },
+    "pub.vmos_no_file": {
+        "en": "The media file was not found. The post was not sent.",
+        "es": "No se encontró el archivo. El post no se envió.",
+    },
+    "pub.vmos_task_failed": {
+        "en": "VMOS Cloud task {task} failed. The post was not sent.",
+        "es": "La tarea VMOS Cloud {task} falló. El post no se envió.",
+    },
+    "pub.vmos_ok": {
+        "en": "Sent to the VMOS Cloud phone (task {task}, {status}).",
+        "es": "Enviado al móvil VMOS Cloud (tarea {task}, {status}).",
+    },
     "pub.fail_tiktok_token": {
         "en": "No TikTok account connected with a valid token.",
         "es": "No hay cuenta TikTok conectada con token válido.",
@@ -1448,6 +1669,90 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pub.rumble.bad_video": {
         "en": "Rumble videos must be MP4, MOV, AVI, WMV, FLV, MKV or WebM.",
         "es": "Los videos de Rumble deben ser MP4, MOV, AVI, WMV, FLV, MKV o WebM.",
+    },
+    "pub.filehost.ok": {
+        "en": "Uploaded to the host: {url}",
+        "es": "Subido al host: {url}",
+    },
+    "pub.filehost.upload_fail": {
+        "en": "Host upload failed: {error}",
+        "es": "Falló la subida al host: {error}",
+    },
+    "pub.filehost.no_key": {
+        "en": "Connect this host in Servers with an API key first.",
+        "es": "Primero conecta este host en Servidores con una API key.",
+    },
+    "pub.filehost.no_extra": {
+        "en": "This host also needs {field} (MixDrop: email, Streamtape: login).",
+        "es": "Este host también pide {field} (MixDrop: email, Streamtape: login).",
+    },
+    "pub.filehost.file_missing": {
+        "en": "The video file was not found on the server.",
+        "es": "No se encontró el archivo de video en el servidor.",
+    },
+    "pub.filehost.no_photo": {
+        "en": "This host does not accept photo posts. Upload a video.",
+        "es": "Este host no acepta publicaciones de foto. Sube un video.",
+    },
+    "pub.filehost.bad_video": {
+        "en": "Host videos must be MP4, MOV, AVI, WMV, FLV, MKV, WebM or M4V.",
+        "es": "Los videos del host deben ser MP4, MOV, AVI, WMV, FLV, MKV, WebM o M4V.",
+    },
+    "pub.chain.no_account": {
+        "en": "Connect this network in Servers first.",
+        "es": "Primero conecta esta red en Servidores.",
+    },
+    "pub.odysee.ok": {
+        "en": "Published on Odysee: {url}",
+        "es": "Publicado en Odysee: {url}",
+    },
+    "pub.odysee.upload_fail": {
+        "en": "Odysee publish failed: {error}",
+        "es": "Falló la publicación en Odysee: {error}",
+    },
+    "pub.odysee.no_account": {
+        "en": "Connect Odysee in Servers with email and password first.",
+        "es": "Primero conecta Odysee en Servidores con email y contraseña.",
+    },
+    "pub.odysee.file_missing": {
+        "en": "The video file was not found on the server.",
+        "es": "No se encontró el archivo de video en el servidor.",
+    },
+    "pub.odysee.no_photo": {
+        "en": "Odysee from this panel is video only.",
+        "es": "Odysee en este panel solo acepta video.",
+    },
+    "pub.odysee.bad_video": {
+        "en": "Odysee videos must be MP4, MOV, AVI, WMV, FLV, MKV, WebM or M4V.",
+        "es": "Los videos de Odysee deben ser MP4, MOV, AVI, WMV, FLV, MKV, WebM o M4V.",
+    },
+    "pub.dtube.ok": {
+        "en": "Published on DTube: {url}",
+        "es": "Publicado en DTube: {url}",
+    },
+    "pub.dtube.upload_fail": {
+        "en": "DTube publish failed: {error}",
+        "es": "Falló la publicación en DTube: {error}",
+    },
+    "pub.dtube.no_account": {
+        "en": "Connect DTube in Servers with Hive username and posting WIF first.",
+        "es": "Primero conecta DTube en Servidores con usuario Hive y posting WIF.",
+    },
+    "pub.dtube.bad_wif": {
+        "en": "The posting WIF is not valid.",
+        "es": "El posting WIF no es válido.",
+    },
+    "pub.dtube.file_missing": {
+        "en": "The video file was not found on the server.",
+        "es": "No se encontró el archivo de video en el servidor.",
+    },
+    "pub.dtube.no_photo": {
+        "en": "DTube from this panel is video only.",
+        "es": "DTube en este panel solo acepta video.",
+    },
+    "pub.dtube.bad_video": {
+        "en": "DTube videos must be MP4, MOV, AVI, WMV, FLV, MKV, WebM or M4V.",
+        "es": "Los videos de DTube deben ser MP4, MOV, AVI, WMV, FLV, MKV, WebM o M4V.",
     },
     "pub.snapchat.ok_spotlight": {
         "en": "Posted to Snapchat Spotlight ({id}).",
@@ -1870,6 +2175,9 @@ MESSAGES: dict[str, dict[str, str]] = {
     "support.widget_open": {"en": "Chat with support", "es": "Chatea con soporte"},
     "support.widget_title": {"en": "Support chat", "es": "Chat de soporte"},
     "support.widget_close": {"en": "Close chat", "es": "Cerrar chat"},
+    "support.chat_refresh": {"en": "Refresh", "es": "Actualizar"},
+    "support.chat_off": {"en": "Turn off chat", "es": "Apagar chat"},
+    "support.chat_on": {"en": "Turn on chat", "es": "Encender chat"},
     "login.error": {
         "en": "Invalid username or password",
         "es": "Usuario o contraseña incorrectos",
@@ -1911,6 +2219,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "admin.stats_kind_group": {"en": "Group", "es": "Grupo"},
     "admin.stats_kind_account": {"en": "Account", "es": "Cuenta"},
+    "admin.via_api": {"en": "API", "es": "API"},
+    "admin.via_mixed": {"en": "Mixed", "es": "Mixto"},
     "offline.title": {"en": "No connection", "es": "Sin conexión"},
     "offline.message": {
         "en": "There is no internet or the server is not responding right now.",
@@ -2164,8 +2474,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     # Condiciones de servidores (cuotas API)
     # ------------------------------------------------------------------
     "cond.intro": {
-        "en": "Official API limits for each connected account (YouTube is per Google Cloud project). Going over them can pause publishing or flag the account. The Safe column is a conservative pace so you do not abuse the API. Networks change these numbers; stay under Safe, not at the hard ceiling.",
-        "es": "Límites oficiales de la API de cada cuenta conectada (YouTube es por proyecto de Google Cloud). Pasarse puede pausar la publicación o marcar la cuenta. La columna Uso seguro es un ritmo conservador para no abusar. Las redes cambian estas cifras; quédate en Uso seguro, no en el tope máximo.",
+        "en": "Official API limits for each connected account (YouTube is per Google Cloud project). Going over them can pause publishing or flag the account. The Safe column is a conservative pace so you do not abuse the API. Networks change these numbers; stay under Safe, not at the hard ceiling. VMOS Cloud is an alternative for TikTok, Instagram, Facebook, YouTube, X, Threads and Snapchat: those official caps do not apply; the cloud phone and the app’s own limits do. Panel proxies are not used on VMOS accounts. Proven PPV hosts (DoodStream, StreamWish, FileMoon, MixDrop, Streamtape, VOE, Vidoza, LuluStream) have no social quota: the host’s upload and unique-view rules apply, payouts stay on the host, and a linked proxy is used like OAuth. Names ending in (pago) — Loadvid, VidSonic, FlyFile, VenVo — are newer trial hosts to test whether they actually pay. Odysee uses LBRY (email/password, TUS upload). DTube uses Hive + IPFS (username + posting WIF). Neither is a PPV host.",
+        "es": "Límites oficiales de la API de cada cuenta conectada (YouTube es por proyecto de Google Cloud). Pasarse puede pausar la publicación o marcar la cuenta. La columna Uso seguro es un ritmo conservador para no abusar. Las redes cambian estas cifras; quédate en Uso seguro, no en el tope máximo. VMOS Cloud es una alternativa para TikTok, Instagram, Facebook, YouTube, X, Threads y Snapchat: esos topes oficiales no aplican; rigen el móvil en la nube y los límites de la app. Las cuentas VMOS no usan el proxy del panel. Los hosts PPV contrastados (DoodStream, StreamWish, FileMoon, MixDrop, Streamtape, VOE, Vidoza, LuluStream) no tienen cuota de red social: rigen subidas y vistas únicas del host, el cobro es en el host y el proxy vinculado se usa como en OAuth. Los que llevan (pago) — Loadvid, VidSonic, FlyFile, VenVo — son hosts más nuevos, de prueba, para ver si realmente pagan. Odysee usa LBRY (email/contraseña, subida TUS). DTube usa Hive + IPFS (usuario + posting WIF). Ninguna es un host PPV.",
     },
     "cond.col_server": {"en": "Server", "es": "Servidor"},
     "cond.col_api": {"en": "API", "es": "API"},
@@ -2174,6 +2484,94 @@ MESSAGES: dict[str, dict[str, str]] = {
     "cond.col_rate": {"en": "API pace", "es": "Ritmo de la API"},
     "cond.col_safe": {"en": "Safe use", "es": "Uso seguro"},
     "cond.col_detail": {"en": "Conditions", "es": "Condiciones"},
+    "cond.vmos.cap": {
+        "en": "No official OAuth quota. Limits come from the VMOS Cloud phone and the social app signed in on that pad.",
+        "es": "Sin cuota OAuth oficial. Los límites los pone el móvil VMOS Cloud y la app con la que iniciaste sesión en ese pad.",
+    },
+    "cond.vmos.window": {
+        "en": "Depends on the RPA template and the app on the cloud phone (not a midnight API reset).",
+        "es": "Depende de la plantilla RPA y de la app en el móvil en la nube (no hay reinicio de cuota a medianoche).",
+    },
+    "cond.vmos.rate": {
+        "en": "One automation task at a time per pad. Space posts; bursts look like a real phone tapping too fast.",
+        "es": "Una tarea de automatización a la vez por pad. Separa las publicaciones; las ráfagas parecen un móvil tocando demasiado rápido.",
+    },
+    "cond.vmos.safe": {
+        "en": "Few posts per day per cloud phone until the account is stable. Do not share one pad across many accounts at once.",
+        "es": "Pocas publicaciones al día por móvil hasta que la cuenta esté estable. No compartas un pad entre muchas cuentas a la vez.",
+    },
+    "cond.vmos.detail": {
+        "en": "Alternative to official OAuth for TikTok, Instagram, Facebook, YouTube, X, Threads and Snapchat. In Servers, Connect with VMOS: Access Key, Secret, padCode and template/scriptId. The panel uploads the file to the pad and runs the template. Dailymotion, Bilibili and Rumble stay on their APIs. Panel proxies are not used.",
+        "es": "Alternativa al OAuth oficial para TikTok, Instagram, Facebook, YouTube, X, Threads y Snapchat. En Servidores, Conectar con VMOS: Access Key, Secret, padCode y plantilla/scriptId. El panel sube el archivo al pad y lanza la plantilla. Dailymotion, Bilibili y Rumble siguen por su API. No se usa el proxy del panel.",
+    },
+    "cond.vmos_alt": {
+        "en": "If this account is linked with VMOS instead of OAuth, the official API caps in this row do not apply; see the VMOS Cloud row. Panel proxies are not used.",
+        "es": "Si esta cuenta está unida por VMOS en lugar de OAuth, los topes oficiales de esta fila no aplican; mira la fila VMOS Cloud. No se usa el proxy del panel.",
+    },
+    "cond.filehost.cap": {
+        "en": "No social-network post quota. Limits come from the host (file size, daily uploads) and PPV rules: unique views, often ~10k/day, country-based rates.",
+        "es": "Sin cuota de red social. Los límites los pone el host (tamaño, subidas/día) y las reglas PPV: vistas únicas, a menudo ~10 mil/día, tarifas por país.",
+    },
+    "cond.filehost.window": {
+        "en": "Host dashboard (not a midnight social API reset). Payouts follow that host’s reporting, usually unique views.",
+        "es": "El panel del host (no hay reinicio de cuota de red a medianoche). Los pagos siguen su reporte, normalmente vistas únicas.",
+    },
+    "cond.filehost.rate": {
+        "en": "Upload one file per request. Space large uploads; the host may reject bursts or oversized files.",
+        "es": "Un archivo por petición. Separa subidas grandes; el host puede rechazar ráfagas o archivos demasiado pesados.",
+    },
+    "cond.filehost.safe": {
+        "en": "You bring the traffic. AdBlock, VPN and fake/duplicate views usually do not pay. Do not mark a post sent unless the host returned a file URL.",
+        "es": "Tú llevas el tráfico. AdBlock, VPN y vistas falsas o duplicadas casi nunca pagan. No marques enviado si el host no devolvió una URL.",
+    },
+    "cond.filehost.detail": {
+        "en": "{name}: connect in Servers with the API key from the host dashboard (MixDrop: email+key, Streamtape: login+key). Video only. Money is paid by the host, not this panel. Linked panel proxies are used like OAuth.",
+        "es": "{name}: en Servidores conecta con la API key del panel del host (MixDrop: email+key, Streamtape: login+key). Solo video. El dinero lo paga el host, no este panel. El proxy vinculado se usa como en OAuth.",
+    },
+    "cond.filehost.trial": {
+        "en": "(pago) means trial payout: newer host, not proven. Confirm they pay before depending on them.",
+        "es": "(pago) significa prueba de cobro: host más nuevo, no contrastado. Confirma que pagan antes de depender de ellos.",
+    },
+    "cond.odysee.cap": {
+        "en": "No social-network post quota. Limited by LBC bid, wallet balance and Odysee/LBRY publish pipeline.",
+        "es": "Sin cuota de red social. Limitan el bid en LBC, el saldo del monedero y el pipeline de publicación de Odysee/LBRY.",
+    },
+    "cond.odysee.window": {
+        "en": "On-chain confirmations plus Odysee asynquery processing (minutes, not a midnight reset).",
+        "es": "Confirmaciones en cadena más el asynquery de Odysee (minutos, no un reinicio a medianoche).",
+    },
+    "cond.odysee.rate": {
+        "en": "One TUS upload + stream_create at a time. Space large files; do not start several publishes on the same account at once.",
+        "es": "Una subida TUS + stream_create a la vez. Separa archivos grandes; no lances varias publicaciones a la vez en la misma cuenta.",
+    },
+    "cond.odysee.safe": {
+        "en": "Few videos per day until the channel is stable. Do not mark sent unless asynquery returned a claim URL.",
+        "es": "Pocos videos al día hasta que el canal esté estable. No marques enviado si el asynquery no devolvió una URL de claim.",
+    },
+    "cond.odysee.detail": {
+        "en": "Connect in Servers with Odysee email and password. The panel stores the LBRY auth token. Optional channel claim ID. Video only. Linked proxies are used. Stats/comments in this panel stay local.",
+        "es": "En Servidores conecta con email y contraseña de Odysee. El panel guarda el auth token de LBRY. Claim ID de canal opcional. Solo video. Se usa el proxy vinculado. Estadísticas y comentarios de este panel siguen siendo locales.",
+    },
+    "cond.dtube.cap": {
+        "en": "Hive resource credits (RC) plus IPFS cluster capacity. No PPV host quota.",
+        "es": "Resource credits (RC) de Hive más la capacidad del cluster IPFS. No hay cuota de host PPV.",
+    },
+    "cond.dtube.window": {
+        "en": "Hive blocks (~3 s) after IPFS upload finishes. RC regenerates over time.",
+        "es": "Bloques de Hive (~3 s) cuando termina la subida IPFS. Los RC se regeneran con el tiempo.",
+    },
+    "cond.dtube.rate": {
+        "en": "One Hive comment per video. Do not broadcast bursts; low RC will reject the tx.",
+        "es": "Un comentario Hive por video. No emitas en ráfaga; con RC bajos Hive rechaza la transacción.",
+    },
+    "cond.dtube.safe": {
+        "en": "Keep RC headroom. Do not mark sent unless Hive accepted the comment and the cluster returned a video hash.",
+        "es": "Deja margen de RC. No marques enviado si Hive no aceptó el comentario y el cluster no devolvió el hash del video.",
+    },
+    "cond.dtube.detail": {
+        "en": "Connect in Servers with Hive username and posting WIF (never the owner key). Video goes to cluster.d.tube then a real Hive post. Linked proxies are used. Stats/comments in this panel stay local.",
+        "es": "En Servidores conecta con usuario Hive y posting WIF (nunca la owner key). El video va a cluster.d.tube y luego un post real en Hive. Se usa el proxy vinculado. Estadísticas y comentarios de este panel siguen siendo locales.",
+    },
     "cond.tiktok.cap": {
         "en": "Daily post cap exists, number not published. Integrators usually see 15–25 videos per account/day. Error: spam_risk_too_many_posts.",
         "es": "Hay tope diario de posts, pero TikTok no publica el número. Quien integra suele ver 15–25 videos por cuenta/día. Error: spam_risk_too_many_posts.",
@@ -2354,9 +2752,29 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Photos go as 24 h Stories; short vertical MP4 as Spotlight when it meets duration/size. Public profile required. Hitting 429 means wait, do not retry immediately.",
         "es": "Las fotos van como Stories de 24 h; el MP4 vertical corto como Spotlight si cumple duración/tamaño. Hace falta perfil público. Si sale 429, espera; no reintentes al momento.",
     },
+    "cond.threads.cap": {
+        "en": "VMOS Cloud phone automation (no Meta Threads API in this panel).",
+        "es": "Automatización en móvil VMOS Cloud (no hay API de Threads de Meta en este panel).",
+    },
+    "cond.threads.window": {
+        "en": "Depends on the VMOS template and the Threads app on the cloud phone.",
+        "es": "Depende de la plantilla VMOS y de la app Threads en el móvil en la nube.",
+    },
+    "cond.threads.rate": {
+        "en": "Space posts; cloud-phone automation can trigger app limits.",
+        "es": "Separa las publicaciones; la automatización en el móvil puede chocar con límites de la app.",
+    },
+    "cond.threads.safe": {
+        "en": "Few posts per day per cloud phone until you confirm the account is stable.",
+        "es": "Pocas publicaciones al día por móvil hasta confirmar que la cuenta está estable.",
+    },
+    "cond.threads.detail": {
+        "en": "Save Access Key, Secret and padCode in Servers. Publishing via VMOS is the next step.",
+        "es": "Guarda Access Key, Secret y padCode en Servidores. Publicar por VMOS es el siguiente paso.",
+    },
     "apidoc.intro": {
-        "en": "What each server needs so publishing works. All of these have a real API. Tokens marked Automatic are refreshed by the panel when you publish; you do not paste a new token by hand.",
-        "es": "Qué hay que hacer en cada servidor para que la publicación funcione. Todas estas redes tienen API real. Si el token es Automático, el panel lo renueva al publicar; no hace falta pegar uno nuevo a mano.",
+        "en": "What each server needs so publishing works. Official OAuth (or Rumble’s partner API) is the default. VMOS Cloud is an alternative for TikTok, Instagram, Facebook, YouTube, X, Threads and Snapchat: connect from Servers without pasting social access tokens. Proven PPV hosts (DoodStream, StreamWish, FileMoon, MixDrop, Streamtape, VOE, Vidoza, LuluStream) use an API key from the host dashboard, not OAuth; video only. Names with (pago) — Loadvid, VidSonic, FlyFile, VenVo — are trial hosts to verify payouts. Odysee signs in with email/password (LBRY auth token, TUS). DTube uses Hive username + posting WIF and the IPFS cluster. Tokens marked Automatic are refreshed by the panel on OAuth accounts; VMOS, PPV hosts, Odysee and DTube do not use those tokens.",
+        "es": "Qué hay que hacer en cada servidor para que la publicación funcione. El camino por defecto es OAuth oficial (o la API de partners de Rumble). VMOS Cloud es una alternativa para TikTok, Instagram, Facebook, YouTube, X, Threads y Snapchat: se conecta desde Servidores sin pegar tokens de esas redes. Los hosts PPV contrastados (DoodStream, StreamWish, FileMoon, MixDrop, Streamtape, VOE, Vidoza, LuluStream) usan API key del panel del host, no OAuth; solo video. Los que llevan (pago) — Loadvid, VidSonic, FlyFile, VenVo — son de prueba para ver si pagan. Odysee entra con email/contraseña (auth token LBRY, TUS). DTube usa usuario Hive + posting WIF y el cluster IPFS. Si el token es Automático, el panel lo renueva en cuentas OAuth; VMOS, hosts PPV, Odysee y DTube no usan esos tokens.",
     },
     "apidoc.col_server": {"en": "Server", "es": "Servidor"},
     "apidoc.col_api": {"en": "API", "es": "API"},
@@ -2368,8 +2786,90 @@ MESSAGES: dict[str, dict[str, str]] = {
     "apidoc.api.oauth": {"en": "Official OAuth", "es": "OAuth oficial"},
     "apidoc.api.partner": {"en": "Partner API", "es": "API de partners"},
     "apidoc.api.none": {"en": "No API", "es": "No es API"},
+    "apidoc.api.vmos": {"en": "VMOS Cloud", "es": "VMOS Cloud"},
+    "apidoc.api.filehost": {"en": "Host API (PPV)", "es": "API del host (PPV)"},
+    "apidoc.api.lbry": {"en": "LBRY / Odysee", "es": "LBRY / Odysee"},
+    "apidoc.api.hive": {"en": "Hive + IPFS", "es": "Hive + IPFS"},
     "apidoc.token.auto": {"en": "Automatic", "es": "Automático"},
     "apidoc.token.manual": {"en": "Manual", "es": "Manual"},
+    "apidoc.token.none": {"en": "Not used", "es": "No aplica"},
+    "apidoc.vmos.name": {"en": "VMOS Cloud (alternative)", "es": "VMOS Cloud (alternativa)"},
+    "apidoc.vmos.step1": {
+        "en": "In VMOS Cloud (vmoscloud.com), open Developer → API and copy Access Key ID and Secret Access Key.",
+        "es": "En VMOS Cloud (vmoscloud.com) abre Developer → API y copia Access Key ID y Secret Access Key.",
+    },
+    "apidoc.vmos.step2": {
+        "en": "Create a cloud phone, install the social app, sign in, and copy the padCode.",
+        "es": "Crea un móvil en la nube, instala la app de la red, inicia sesión y copia el padCode.",
+    },
+    "apidoc.vmos.step3": {
+        "en": "Create an RPA template that posts from a file/path or URL, and copy its template/scriptId.",
+        "es": "Crea una plantilla RPA que publique desde un archivo/ruta o URL y copia su template/scriptId.",
+    },
+    "apidoc.vmos.step4": {
+        "en": "In Servers, open that network’s accounts and Connect with VMOS. Save Access Key, Secret, padCode and the template. Test VMOS before publishing.",
+        "es": "En Servidores abre las cuentas de esa red y pulsa Conectar con VMOS. Guarda Access Key, Secret, padCode y la plantilla. Prueba VMOS antes de publicar.",
+    },
+    "apidoc.vmos.extra": {
+        "en": "Covers TikTok, Instagram, Facebook, YouTube, X, Threads and Snapchat. The panel picks VMOS or OAuth from how that account+network is linked. Without a template the post is not marked sent. Dailymotion, Bilibili and Rumble stay on their APIs. Panel proxies are not used. Stats/comments stay local to this panel.",
+        "es": "Cubre TikTok, Instagram, Facebook, YouTube, X, Threads y Snapchat. El panel elige VMOS u OAuth según cómo esté unida esa cuenta+red. Sin plantilla no se marca como enviado. Dailymotion, Bilibili y Rumble siguen por su API. No se usa el proxy del panel. Estadísticas y comentarios siguen siendo locales de este panel.",
+    },
+    "apidoc.vmos_alt": {
+        "en": "Alternative: in Servers, Connect with VMOS for this network (Access Key, Secret, padCode and template) instead of official OAuth.",
+        "es": "Alternativa: en Servidores, Conectar con VMOS en esta red (Access Key, Secret, padCode y plantilla) en lugar del OAuth oficial.",
+    },
+    "apidoc.filehost.step1": {
+        "en": "Create an account on {name} and open Settings / API in its dashboard. Copy the API key (MixDrop also copies the account email; Streamtape the API login).",
+        "es": "Crea una cuenta en {name} y abre Settings / API en su panel. Copia la API key (MixDrop también el email de la cuenta; Streamtape el API login).",
+    },
+    "apidoc.filehost.step2": {
+        "en": "In Servers, open {name} accounts and Connect. Paste the key (and extra field if asked). Test the API before publishing.",
+        "es": "En Servidores abre las cuentas de {name} y pulsa Conectar. Pega la key (y el campo extra si lo pide). Prueba la API antes de publicar.",
+    },
+    "apidoc.filehost.step3": {
+        "en": "Publish a video from this panel. The host returns a watch URL. Ads and payouts stay on {name}; this panel does not pay PPV.",
+        "es": "Publica un video desde este panel. El host devuelve una URL. Anuncios y pagos siguen en {name}; este panel no paga PPV.",
+    },
+    "apidoc.filehost.extra": {
+        "en": "No OAuth. Video only. You send viewers; unique views, country rates, AdBlock/VPN and fake traffic follow the host’s rules. Linked proxies are used. Stats/comments in this panel stay local.",
+        "es": "Sin OAuth. Solo video. Tú mandas el tráfico; vistas únicas, tarifas por país, AdBlock/VPN y tráfico falso siguen las reglas del host. Se usa el proxy vinculado. Estadísticas y comentarios de este panel siguen siendo locales.",
+    },
+    "apidoc.filehost.trial": {
+        "en": "(pago) = trial host: newer / less proven. Use it to check whether they actually pay. Do not rely on them like DoodStream or MixDrop yet.",
+        "es": "(pago) = host de prueba: más nuevo o menos contrastado. Sirve para ver si realmente pagan. Aún no los trates como DoodStream o MixDrop.",
+    },
+    "apidoc.odysee.step1": {
+        "en": "Create an Odysee account (odysee.com). There is no public OAuth for third-party apps.",
+        "es": "Crea una cuenta en Odysee (odysee.com). No hay OAuth público para apps de terceros.",
+    },
+    "apidoc.odysee.step2": {
+        "en": "In Servers, open Odysee accounts and Connect. Sign in with email and password. The panel stores the auth token, not the password. Channel claim ID is optional.",
+        "es": "En Servidores abre las cuentas de Odysee y pulsa Conectar. Entra con email y contraseña. El panel guarda el auth token, no la contraseña. El claim ID del canal es opcional.",
+    },
+    "apidoc.odysee.step3": {
+        "en": "Publish a video. The panel requests a TUS upload, sends the file in 50 MB chunks, then stream_create via asynqueries. Do not mark sent unless Odysee returns a claim URL.",
+        "es": "Publica un video. El panel pide una subida TUS, envía el archivo en trozos de 50 MB y luego stream_create por asynqueries. No marques enviado si Odysee no devuelve una URL de claim.",
+    },
+    "apidoc.odysee.extra": {
+        "en": "Needs LBC in the Odysee wallet for the bid. Video only. Linked proxies are used. Stats/comments in this panel stay local.",
+        "es": "Hace falta LBC en el monedero de Odysee para el bid. Solo video. Se usa el proxy vinculado. Estadísticas y comentarios de este panel siguen siendo locales.",
+    },
+    "apidoc.dtube.step1": {
+        "en": "Use a Hive account (not a PPV API key). Export the posting WIF from a Hive wallet. Never use the owner key.",
+        "es": "Usa una cuenta Hive (no una API key PPV). Exporta el posting WIF desde un monedero Hive. Nunca uses la owner key.",
+    },
+    "apidoc.dtube.step2": {
+        "en": "In Servers, open DTube accounts and Connect. Save Hive username and posting WIF. Test before publishing.",
+        "es": "En Servidores abre las cuentas de DTube y pulsa Conectar. Guarda el usuario Hive y el posting WIF. Prueba antes de publicar.",
+    },
+    "apidoc.dtube.step3": {
+        "en": "Publish a video. The file is uploaded to the DTube IPFS cluster; then a Hive comment with DTube json_metadata is broadcast. Do not mark sent unless Hive accepted the transaction.",
+        "es": "Publica un video. El archivo se sube al cluster IPFS de DTube; luego se emite un comentario Hive con json_metadata de DTube. No marques enviado si Hive no aceptó la transacción.",
+    },
+    "apidoc.dtube.extra": {
+        "en": "Needs Hive resource credits. Video only. Linked proxies are used. Stats/comments in this panel stay local.",
+        "es": "Hacen falta resource credits de Hive. Solo video. Se usa el proxy vinculado. Estadísticas y comentarios de este panel siguen siendo locales.",
+    },
     "apidoc.extra_none": {"en": "None", "es": "Ninguno"},
     "apidoc.tiktok.step1": {
         "en": "Create an app in TikTok for Developers (developers.tiktok.com).",
@@ -2442,6 +2942,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     "apidoc.facebook.extra": {
         "en": "Pages only (not personal profiles). Photos and videos.",
         "es": "Solo Páginas (no perfiles personales). Fotos y videos.",
+    },
+    "apidoc.threads.step1": {
+        "en": "In VMOS Cloud, create a cloud phone, install Threads, sign in, then copy Access Key, Secret and padCode from Developer → API.",
+        "es": "En VMOS Cloud crea un móvil, instala Threads, inicia sesión y copia Access Key, Secret y padCode en Developer → API.",
+    },
+    "apidoc.threads.step2": {
+        "en": "In Servers, open Threads accounts and Connect with VMOS Threads.",
+        "es": "En Servidores abre Cuentas de Threads y pulsa Conectar con VMOS Threads.",
     },
     "apidoc.x.step1": {
         "en": "In the X Developer Portal, create an OAuth 2.0 app with PKCE.",
@@ -2528,8 +3036,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     # ------------------------------------------------------------------
     "proxys.title": {"en": "Proxies", "es": "Proxys"},
     "proxys.intro": {
-        "en": "Add proxies in any common format. Test each one to detect its country.",
-        "es": "Añade proxys en cualquier formato habitual. Prueba cada uno para detectar su país.",
+        "en": "Add proxies in any common format. Test each one to detect its country. OAuth, PPV host, Odysee and DTube accounts use the linked proxy. VMOS accounts do not: the cloud phone’s own network is used.",
+        "es": "Añade proxys en cualquier formato habitual. Prueba cada uno para detectar su país. Las cuentas OAuth, las de hosts PPV, Odysee y DTube sí usan el proxy vinculado. Las de VMOS no: sale la red del móvil en la nube.",
     },
     "proxys.info_btn": {"en": "About proxies", "es": "Información sobre proxys"},
     "proxys.add": {"en": "Add proxy", "es": "Añadir proxy"},
@@ -2904,6 +3412,110 @@ MESSAGES: dict[str, dict[str, str]] = {
     # ------------------------------------------------------------------
     "nav.extractor": {"en": "Extractor", "es": "Extractor"},
     "nav.proxys": {"en": "Proxies", "es": "Proxys"},
+    "nav.config_x": {"en": "Config X", "es": "Config X"},
+    # ------------------------------------------------------------------
+    # Config X (cuenta X que recarga y paga la API por las demás)
+    # ------------------------------------------------------------------
+    "configx.title": {"en": "Config X", "es": "Config X"},
+    "configx.intro": {
+        "en": "Pick one X account whose balance pays for publishing on every other X account. Recharge that account, track how much has been spent and how much is left, and get a daily check at 4 AM (panel time) that tells you which X accounts already meet the requirements to start earning, so you only pay the subscription on those.",
+        "es": "Elige una cuenta de X cuyo saldo paga las publicaciones de todas las demás cuentas de X. Recarga esa cuenta, mira cuánto saldo se ha gastado y cuánto queda, y recibe un chequeo diario a las 4 am (hora del panel) que te dice qué cuentas de X ya cumplen los requisitos para empezar a ganar, para pagar la suscripción solo en esas.",
+    },
+    "configx.info_btn": {"en": "About Config X", "es": "Acerca de Config X"},
+    "configx.sources_title": {
+        "en": "Account that recharges (pays the API)",
+        "es": "Cuenta que recarga (paga la API)",
+    },
+    "configx.sources_hint": {
+        "en": "Choose which connected X account holds the balance. Every publish to X made with the checkbox enabled deducts the cost per post from this balance instead of spending on each account.",
+        "es": "Elige qué cuenta de X conectada tiene el saldo. Cada publicación en X hecha con el checkbox activado descuenta el costo por publicación de este saldo, en vez de gastar en cada cuenta.",
+    },
+    "configx.account_label": {"en": "X account", "es": "Cuenta de X"},
+    "configx.cost_label": {"en": "Cost per post (USD)", "es": "Costo por publicación (USD)"},
+    "configx.cost_hint": {
+        "en": "Set the cost each post deducts from the balance. Use 0 if you only want to count posts without deducting money.",
+        "es": "Define cuánto descuenta del saldo cada publicación. Usa 0 si solo quieres contar publicaciones sin descontar dinero.",
+    },
+    "configx.save": {"en": "Save", "es": "Guardar"},
+    "configx.saved": {"en": "Saved.", "es": "Guardado."},
+    "configx.no_x_accounts": {
+        "en": "No X accounts connected yet. Connect them from Servers with “Connect with X”.",
+        "es": "Aún no hay cuentas de X conectadas. Conéctalas desde Servidores con «Conectar con X».",
+    },
+    "configx.active": {"en": "Active", "es": "Activa"},
+    "configx.inactive": {"en": "Inactive", "es": "Inactiva"},
+    "configx.recharged_label": {"en": "Recharged", "es": "Recargado"},
+    "configx.spent_label": {"en": "Spent", "es": "Gastado"},
+    "configx.available_label": {"en": "Available", "es": "Disponible"},
+    "configx.recharge_ph": {"en": "Amount (USD)", "es": "Monto (USD)"},
+    "configx.recharge_btn": {"en": "Recharge", "es": "Recargar"},
+    "configx.recharged": {
+        "en": "Recharge of {amount} applied to {name}.",
+        "es": "Recarga de {amount} aplicada a {name}.",
+    },
+    "configx.delete_confirm": {
+        "en": "Remove this recharge account? Its balance history is deleted too.",
+        "es": "¿Quitar esta cuenta de recarga? Su historial de saldo también se elimina.",
+    },
+    "configx.err.bad_amount": {
+        "en": "Enter a valid amount.",
+        "es": "Ingresa un monto válido.",
+    },
+    "configx.err.account_not_found": {
+        "en": "That X account was not found.",
+        "es": "No se encontró esa cuenta de X.",
+    },
+    "configx.err.generic": {
+        "en": "Something went wrong. Try again.",
+        "es": "Algo salió mal. Inténtalo de nuevo.",
+    },
+    "configx.checks_title": {
+        "en": "Accounts that already qualify to earn",
+        "es": "Cuentas que ya cumplen para ganar",
+    },
+    "configx.checks_hint": {
+        "en": "Every day at 4 AM (panel time) the panel queries the X API for each connected account and marks the ones that reach the follower threshold. X also requires Premium and 5M organic impressions in 3 months to share revenue; impressions are not exposed by the API, so verify them in X before paying.",
+        "es": "Todos los días a las 4 am (hora del panel) se consulta la API de X para cada cuenta conectada y se marcan las que llegan al mínimo de seguidores. X además exige Premium y 5M de impresiones orgánicas en 3 meses para repartir ingresos; la API no expone impresiones, así que verifícalas en X antes de pagar.",
+    },
+    "configx.min_followers_label": {
+        "en": "Minimum followers to qualify",
+        "es": "Mínimo de seguidores para cumplir",
+    },
+    "configx.check_now": {"en": "Check now", "es": "Comprobar ahora"},
+    "configx.checking": {"en": "Checking accounts…", "es": "Comprobando cuentas…"},
+    "configx.check_done": {
+        "en": "Check finished: {n} accounts, {meets} already qualify.",
+        "es": "Chequeo terminado: {n} cuentas, {meets} ya cumplen.",
+    },
+    "configx.last_check": {
+        "en": "Last daily check: {date}",
+        "es": "Último chequeo diario: {date}",
+    },
+    "configx.col_account": {"en": "Account", "es": "Cuenta"},
+    "configx.col_followers": {"en": "Followers", "es": "Seguidores"},
+    "configx.col_posts": {"en": "Posts", "es": "Publicaciones"},
+    "configx.col_meets": {"en": "Qualifies", "es": "Cumple"},
+    "configx.col_checked": {"en": "Last check", "es": "Última revisión"},
+    "configx.col_date": {"en": "Date", "es": "Fecha"},
+    "configx.col_video": {"en": "Video", "es": "Video"},
+    "configx.col_cost": {"en": "Cost", "es": "Costo"},
+    "configx.meets_yes": {"en": "Qualifies ✔", "es": "Ya cumple ✔"},
+    "configx.meets_no": {"en": "Not yet", "es": "Aún no"},
+    "configx.never_checked": {"en": "Never", "es": "Nunca"},
+    "configx.source_badge": {"en": "Recharges", "es": "Recarga"},
+    "configx.usage_title": {"en": "Recent spending", "es": "Consumo reciente"},
+    "configx.usage_empty": {
+        "en": "No posts have used the Config X balance yet.",
+        "es": "Ninguna publicación ha usado el saldo de Config X todavía.",
+    },
+    "pub.x_use_funding": {
+        "en": "Use Config X balance ({name}) for this X post",
+        "es": "Usar saldo de Config X ({name}) para esta publicación en X",
+    },
+    "pub.x_use_funding_hint": {
+        "en": "The cost is deducted from the recharge account, not from each X account. Uncheck it to spend from the publishing account itself.",
+        "es": "El costo se descuenta de la cuenta de recarga, no de cada cuenta de X. Desmárcalo para gastar del saldo de la propia cuenta que publica.",
+    },
     "nav.membresias": {"en": "Pricing", "es": "Precio"},
     "nav.pagos": {"en": "Payments", "es": "Pagos"},
     "extractor.title": {"en": "Video extractor", "es": "Extractor de videos"},

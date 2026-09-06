@@ -36,7 +36,7 @@
                     </span>
                   </td>
                   <td data-label="{{ t('cond.col_api') }}">
-                    <span class="cap {% if row.api_kind == 'oauth' %}cap--yes{% elif row.api_kind == 'partner' %}cap--limited{% else %}cap--no{% endif %}">{{ row.api_label }}</span>
+                    <span class="cap {% if row.api_kind == 'oauth' %}cap--yes{% elif row.api_kind in ['partner', 'vmos', 'filehost', 'lbry', 'hive'] %}cap--limited{% else %}cap--no{% endif %}">{{ row.api_label }}</span>
                   </td>
                   <td data-label="{{ t('cond.col_cap') }}" class="cond-cell">{{ row.cap }}</td>
                   <td data-label="{{ t('cond.col_window') }}" class="cond-cell">{{ row.window }}</td>

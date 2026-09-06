@@ -309,6 +309,123 @@
   </div>
 </div>
 
+<div id="vmos-connect-modal" class="equipo-modal equipo-modal--stack" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-vmos-modal tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel" role="dialog" aria-modal="true" aria-labelledby="vmos-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <h2 id="vmos-modal-title" class="server-modal-title">{{ t('servers.vmos_title', platform='') }}</h2>
+      <button type="button" class="equipo-modal__close" data-close-vmos-modal aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <form class="server-modal__body api-form" id="vmos-connect-form">
+      <input type="hidden" name="id" value="" />
+      <input type="hidden" name="platform_id" id="vmos-platform-id" value="" />
+      <input type="hidden" name="link_name" id="vmos-link-name" value="" />
+      <p class="sub" id="vmos-form-hint">{{ t('servers.vmos_hint') }}</p>
+      <label class="field">
+        <span>{{ t('api.field.name') }}</span>
+        <input type="text" name="name" autocomplete="off" />
+      </label>
+      <label class="field">
+        <span>{{ t('servers.vmos_field_access_key') }}</span>
+        <input type="text" name="access_key" required autocomplete="off" />
+      </label>
+      <label class="field">
+        <span>{{ t('servers.vmos_field_secret') }}</span>
+        <input type="password" name="secret_key" required autocomplete="new-password" />
+      </label>
+      <label class="field">
+        <span>{{ t('servers.vmos_field_pad') }}</span>
+        <input type="text" name="pad_code" required autocomplete="off" />
+      </label>
+      <label class="field">
+        <span>{{ t('servers.vmos_field_template') }}</span>
+        <input type="text" name="template_id" autocomplete="off" />
+      </label>
+      <label class="field">
+        <span>{{ t('servers.vmos_field_remark') }}</span>
+        <input type="text" name="remark" autocomplete="off" />
+      </label>
+      <p class="sub js-vmos-form-msg" hidden></p>
+      <div class="api-form__actions">
+        <button type="submit" class="btn btn-accent">{{ t('servers.vmos_save') }}</button>
+        <button type="button" class="btn btn-ghost" id="vmos-test-btn">⚡ {{ t('servers.vmos_test') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="filehost-connect-modal" class="equipo-modal equipo-modal--stack" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-filehost-modal tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel" role="dialog" aria-modal="true" aria-labelledby="filehost-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <h2 id="filehost-modal-title" class="server-modal-title">{{ t('servers.filehost_title', platform='') }}</h2>
+      <button type="button" class="equipo-modal__close" data-close-filehost-modal aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <form class="server-modal__body api-form" id="filehost-connect-form">
+      <input type="hidden" name="id" value="" />
+      <input type="hidden" name="platform_id" id="filehost-platform-id" value="" />
+      <input type="hidden" name="link_name" id="filehost-link-name" value="" />
+      <p class="sub">{{ t('servers.filehost_hint') }}</p>
+      <label class="field">
+        <span>{{ t('api.field.name') }}</span>
+        <input type="text" name="name" autocomplete="off" />
+      </label>
+      <label class="field">
+        <span>{{ t('servers.filehost_field_key') }}</span>
+        <input type="password" name="api_key" required autocomplete="new-password" />
+      </label>
+      <label class="field" id="filehost-extra-wrap" hidden>
+        <span id="filehost-extra-label">{{ t('servers.filehost_field_email') }}</span>
+        <input type="text" name="extra" autocomplete="off" />
+      </label>
+      <p class="sub js-filehost-form-msg" hidden></p>
+      <div class="api-form__actions">
+        <button type="submit" class="btn btn-accent">{{ t('servers.filehost_save') }}</button>
+        <button type="button" class="btn btn-ghost" id="filehost-test-btn">⚡ {{ t('servers.filehost_test') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="chain-connect-modal" class="equipo-modal equipo-modal--stack" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-chain-modal tabindex="-1"></div>
+  <div class="equipo-modal__panel server-modal__panel" role="dialog" aria-modal="true" aria-labelledby="chain-modal-title">
+    <div class="equipo-modal__head">
+      <h2 id="chain-modal-title" class="server-modal-title">{{ t('servers.chain_title', platform='') }}</h2>
+      <button type="button" class="equipo-modal__close" data-close-chain-modal aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <form class="server-modal__body api-form" id="chain-connect-form">
+      <input type="hidden" name="id" value="" />
+      <input type="hidden" name="platform_id" id="chain-platform-id" value="" />
+      <input type="hidden" name="link_name" id="chain-link-name" value="" />
+      <p class="sub" id="chain-form-hint">{{ t('servers.chain_hint_odysee') }}</p>
+      <label class="field">
+        <span>{{ t('api.field.name') }}</span>
+        <input type="text" name="name" autocomplete="off" />
+      </label>
+      <label class="field">
+        <span id="chain-login-label">{{ t('servers.chain_field_email') }}</span>
+        <input type="text" name="login" id="chain-login-input" required autocomplete="off" />
+      </label>
+      <label class="field">
+        <span id="chain-secret-label">{{ t('servers.chain_field_password') }}</span>
+        <input type="password" name="secret" id="chain-secret-input" required autocomplete="off" />
+      </label>
+      <label class="field" id="chain-extra-wrap">
+        <span id="chain-extra-label">{{ t('servers.chain_field_channel') }}</span>
+        <input type="text" name="extra" id="chain-extra-input" autocomplete="off" />
+      </label>
+      <p class="sub js-chain-form-msg" hidden></p>
+      <div class="server-modal__actions">
+        <button type="submit" class="btn btn-accent">{{ t('servers.chain_save') }}</button>
+        <button type="button" class="btn btn-ghost" id="chain-test-btn">⚡ {{ t('servers.chain_test') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="groups-info-modal" class="equipo-modal" aria-hidden="true">
   <div class="equipo-modal__backdrop" data-close-groups-info-modal tabindex="-1"></div>
   <div class="equipo-modal__panel server-modal__panel" role="dialog" aria-modal="true" aria-labelledby="groups-info-modal-title">
@@ -457,6 +574,7 @@
   {% for platform in platforms %}
   {% set creds = platform_creds.get(platform.id, {}) %}
   <div data-platform-template="{{ platform.id }}">
+    {% if platform.fields %}
     <form class="api-form js-api-form" data-platform-id="{{ platform.id }}">
       <label class="field">
         <span>{{ t('api.field.name') }}</span>
@@ -492,6 +610,25 @@
       </div>
       <p class="sub js-api-form-msg" hidden></p>
     </form>
+    {% endif %}
+
+    {% if platform.id in vmos_platform_ids %}
+    <div class="server-modal__linked server-modal__linked--vmos">
+      {% include "_servers_vmos_connect.html" %}
+    </div>
+    {% endif %}
+
+    {% if platform.id in filehost_platform_ids %}
+    <div class="server-modal__linked server-modal__linked--filehost">
+      {% include "_servers_filehost_connect.html" %}
+    </div>
+    {% endif %}
+
+    {% if platform.id in chain_platform_ids %}
+    <div class="server-modal__linked server-modal__linked--chain">
+      {% include "_servers_chain_connect.html" %}
+    </div>
+    {% endif %}
 
     {% if platform.id == 'tiktok' %}
     <p class="sub servers-oauth-redirect">{{ t('servers.tiktok_redirect_hint') }} <code>{{ tiktok_redirect_uri }}</code></p>
@@ -789,6 +926,9 @@
       {% endfor %}
     </ul>
     {% endif %}
+    {% include "_servers_vmos_block.html" %}
+    {% include "_servers_filehost_block.html" %}
+    {% include "_servers_chain_block.html" %}
   </div>
   {% endfor %}
 </div>
@@ -937,6 +1077,25 @@
     var confirmMsg = {{ t('servers.disconnect_confirm') | tojson }};
     var errorMsg = {{ t('servers.disconnect_error') | tojson }};
     var networkMsg = {{ t('servers.network_error') | tojson }};
+    var vmosTitleTpl = {{ t('servers.vmos_title', platform='__NAME__') | tojson }};
+    var filehostTitleTpl = {{ t('servers.filehost_title', platform='__NAME__') | tojson }};
+    var filehostExtraFields = {{ filehost_extra_fields | tojson }};
+    var filehostExtraLabels = {
+      email: {{ t('servers.filehost_field_email') | tojson }},
+      login: {{ t('servers.filehost_field_login') | tojson }}
+    };
+    var chainTitleTpl = {{ t('servers.chain_title', platform='__NAME__') | tojson }};
+    var chainHints = {
+      odysee: {{ t('servers.chain_hint_odysee') | tojson }},
+      dtube: {{ t('servers.chain_hint_dtube') | tojson }}
+    };
+    var chainLabels = {
+      email: {{ t('servers.chain_field_email') | tojson }},
+      password: {{ t('servers.chain_field_password') | tojson }},
+      hive: {{ t('servers.chain_field_hive') | tojson }},
+      wif: {{ t('servers.chain_field_wif') | tojson }},
+      channel: {{ t('servers.chain_field_channel') | tojson }}
+    };
     var modal = document.getElementById("server-accounts-modal");
     var modalTitle = document.getElementById("server-modal-title");
     var modalBody = document.getElementById("server-modal-body");
@@ -949,6 +1108,17 @@
     var accountsInfoTrigger = document.getElementById("open-accounts-info-modal");
     var lastAccountsTrigger = null;
     var accountPickerReturnState = null;
+
+    function rememberAccountPickerRestore() {
+      var pickerState = accountPickerReturnState;
+      if (!pickerState || !pickerState.name) return;
+      try {
+        sessionStorage.setItem(
+          "tuyahoRestoreAccountPicker",
+          JSON.stringify({ key: pickerState.key || "", name: pickerState.name })
+        );
+      } catch (err) {}
+    }
 
     function releaseModalFocus(modalEl, returnFocusEl) {
       var active = document.activeElement;
@@ -1040,6 +1210,535 @@
               } else {
                 window.location.reload();
               }
+            })
+            .catch(function () {
+              alert(networkMsg);
+              btn.disabled = false;
+            });
+        });
+      });
+    }
+
+    function bindVmos(root) {
+      var vmosModal = document.getElementById("vmos-connect-modal");
+      var vmosForm = document.getElementById("vmos-connect-form");
+      var vmosTitle = document.getElementById("vmos-modal-title");
+      if (!vmosModal || !vmosForm) return;
+
+      function closeVmos() {
+        hideModal(vmosModal);
+      }
+
+      vmosModal.querySelectorAll("[data-close-vmos-modal]").forEach(function (el) {
+        if (el.dataset.bound) return;
+        el.dataset.bound = "1";
+        el.addEventListener("click", closeVmos);
+      });
+
+      if (!vmosForm.dataset.bound) {
+        vmosForm.dataset.bound = "1";
+        vmosForm.addEventListener("submit", function (e) {
+          e.preventDefault();
+          var fd = new FormData(vmosForm);
+          var payload = {
+            id: fd.get("id") || "",
+            platform_id: fd.get("platform_id") || "",
+            name: fd.get("name") || "",
+            access_key: fd.get("access_key") || "",
+            secret_key: fd.get("secret_key") || "",
+            pad_code: fd.get("pad_code") || "",
+            template_id: fd.get("template_id") || "",
+            remark: fd.get("remark") || "",
+            link_name: fd.get("link_name") || "",
+          };
+          var msgEl = vmosForm.querySelector(".js-vmos-form-msg");
+          var submit = vmosForm.querySelector('button[type="submit"]');
+          if (submit) submit.disabled = true;
+          fetch("/admin/api/vmos", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify(payload),
+          })
+            .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+            .then(function (x) {
+              if (submit) submit.disabled = false;
+              if (!x.res.ok || !x.body.ok) {
+                if (msgEl) {
+                  msgEl.hidden = false;
+                  msgEl.textContent = (x.body && x.body.error) || errorMsg;
+                  msgEl.className = "sub js-vmos-form-msg api-msg--fail";
+                }
+                return;
+              }
+              hideModal(vmosModal);
+              rememberAccountPickerRestore();
+              window.location.reload();
+            })
+            .catch(function () {
+              if (submit) submit.disabled = false;
+              if (msgEl) {
+                msgEl.hidden = false;
+                msgEl.textContent = networkMsg;
+                msgEl.className = "sub js-vmos-form-msg api-msg--fail";
+              }
+            });
+        });
+        var testBtn = document.getElementById("vmos-test-btn");
+        if (testBtn) {
+          testBtn.addEventListener("click", function () {
+            var fd = new FormData(vmosForm);
+            var payload = {
+              id: fd.get("id") || "",
+              access_key: fd.get("access_key") || "",
+              secret_key: fd.get("secret_key") || "",
+              pad_code: fd.get("pad_code") || "",
+            };
+            var msgEl = vmosForm.querySelector(".js-vmos-form-msg");
+            testBtn.disabled = true;
+            fetch("/admin/api/vmos/test", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json", Accept: "application/json" },
+              body: JSON.stringify(payload),
+            })
+              .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+              .then(function (x) {
+                testBtn.disabled = false;
+                if (msgEl) {
+                  msgEl.hidden = false;
+                  var ok = !!(x.body && x.body.ok);
+                  msgEl.textContent = (x.body && (x.body.message || x.body.error)) || errorMsg;
+                  msgEl.className = "sub js-vmos-form-msg " + (ok ? "api-msg--ok" : "api-msg--fail");
+                }
+              })
+              .catch(function () {
+                testBtn.disabled = false;
+                if (msgEl) {
+                  msgEl.hidden = false;
+                  msgEl.textContent = networkMsg;
+                  msgEl.className = "sub js-vmos-form-msg api-msg--fail";
+                }
+              });
+          });
+        }
+      }
+
+      root.querySelectorAll(".js-open-vmos").forEach(function (btn) {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", function () {
+          var pid = btn.getAttribute("data-platform-id") || "";
+          var pname = btn.getAttribute("data-platform-name") || pid;
+          vmosForm.reset();
+          vmosForm.querySelector('[name="id"]').value = "";
+          document.getElementById("vmos-platform-id").value = pid;
+          var linkName = (typeof editingGroupName === "string" && editingGroupName) || "";
+          if (!linkName) {
+            var credName = document.querySelector("#server-modal-body input[name='name']");
+            linkName = credName ? String(credName.value || "").trim() : "";
+          }
+          var linkInput = document.getElementById("vmos-link-name");
+          if (linkInput) linkInput.value = linkName;
+          var nameInput = vmosForm.querySelector('[name="name"]');
+          if (nameInput && linkName) nameInput.value = linkName;
+          if (vmosTitle) {
+            vmosTitle.textContent = String(vmosTitleTpl).replace("__NAME__", pname);
+          }
+          var msgEl = vmosForm.querySelector(".js-vmos-form-msg");
+          if (msgEl) {
+            msgEl.hidden = true;
+            msgEl.textContent = "";
+          }
+          showModal(vmosModal);
+        });
+      });
+
+      root.querySelectorAll(".js-vmos-disconnect").forEach(function (btn) {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", function () {
+          var id = btn.getAttribute("data-account-id");
+          if (!id) return;
+          if (!confirm(confirmMsg)) return;
+          btn.disabled = true;
+          fetch("/admin/api/vmos/" + encodeURIComponent(id), {
+            method: "DELETE",
+            credentials: "same-origin",
+            headers: { Accept: "application/json" },
+          })
+            .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+            .then(function (x) {
+              if (!x.res.ok || !x.body.ok) {
+                alert((x.body && x.body.error) || errorMsg);
+                btn.disabled = false;
+                return;
+              }
+              rememberAccountPickerRestore();
+              window.location.reload();
+            })
+            .catch(function () {
+              alert(networkMsg);
+              btn.disabled = false;
+            });
+        });
+      });
+    }
+
+    function bindFilehost(root) {
+      var hostModal = document.getElementById("filehost-connect-modal");
+      var hostForm = document.getElementById("filehost-connect-form");
+      var hostTitle = document.getElementById("filehost-modal-title");
+      if (!hostModal || !hostForm) return;
+
+      function closeFilehost() {
+        hideModal(hostModal);
+      }
+
+      function applyExtraField(pid) {
+        var kind = (filehostExtraFields && filehostExtraFields[pid]) || "";
+        var wrap = document.getElementById("filehost-extra-wrap");
+        var label = document.getElementById("filehost-extra-label");
+        var input = hostForm.querySelector('input[name="extra"]');
+        if (!wrap) return;
+        if (kind) {
+          wrap.hidden = false;
+          if (label) label.textContent = filehostExtraLabels[kind] || kind;
+          if (input) input.required = true;
+        } else {
+          wrap.hidden = true;
+          if (input) {
+            input.required = false;
+            input.value = "";
+          }
+        }
+      }
+
+      hostModal.querySelectorAll("[data-close-filehost-modal]").forEach(function (el) {
+        if (el.dataset.bound) return;
+        el.dataset.bound = "1";
+        el.addEventListener("click", closeFilehost);
+      });
+
+      if (!hostForm.dataset.bound) {
+        hostForm.dataset.bound = "1";
+        hostForm.addEventListener("submit", function (e) {
+          e.preventDefault();
+          var fd = new FormData(hostForm);
+          var payload = {
+            id: fd.get("id") || "",
+            platform_id: fd.get("platform_id") || "",
+            name: fd.get("name") || "",
+            api_key: fd.get("api_key") || "",
+            extra: fd.get("extra") || "",
+            link_name: fd.get("link_name") || "",
+          };
+          var msgEl = hostForm.querySelector(".js-filehost-form-msg");
+          var submit = hostForm.querySelector('button[type="submit"]');
+          if (submit) submit.disabled = true;
+          fetch("/admin/api/filehost", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify(payload),
+          })
+            .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+            .then(function (x) {
+              if (submit) submit.disabled = false;
+              if (!x.res.ok || !x.body.ok) {
+                if (msgEl) {
+                  msgEl.hidden = false;
+                  msgEl.textContent = (x.body && x.body.error) || errorMsg;
+                  msgEl.className = "sub js-filehost-form-msg api-msg--fail";
+                }
+                return;
+              }
+              hideModal(hostModal);
+              rememberAccountPickerRestore();
+              window.location.reload();
+            })
+            .catch(function () {
+              if (submit) submit.disabled = false;
+              if (msgEl) {
+                msgEl.hidden = false;
+                msgEl.textContent = networkMsg;
+                msgEl.className = "sub js-filehost-form-msg api-msg--fail";
+              }
+            });
+        });
+        var testBtn = document.getElementById("filehost-test-btn");
+        if (testBtn) {
+          testBtn.addEventListener("click", function () {
+            var fd = new FormData(hostForm);
+            var payload = {
+              id: fd.get("id") || "",
+              platform_id: fd.get("platform_id") || "",
+              api_key: fd.get("api_key") || "",
+              extra: fd.get("extra") || "",
+            };
+            var msgEl = hostForm.querySelector(".js-filehost-form-msg");
+            testBtn.disabled = true;
+            fetch("/admin/api/filehost/test", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json", Accept: "application/json" },
+              body: JSON.stringify(payload),
+            })
+              .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+              .then(function (x) {
+                testBtn.disabled = false;
+                if (msgEl) {
+                  msgEl.hidden = false;
+                  var ok = !!(x.body && x.body.ok);
+                  msgEl.textContent = (x.body && (x.body.message || x.body.error)) || errorMsg;
+                  msgEl.className = "sub js-filehost-form-msg " + (ok ? "api-msg--ok" : "api-msg--fail");
+                }
+              })
+              .catch(function () {
+                testBtn.disabled = false;
+                if (msgEl) {
+                  msgEl.hidden = false;
+                  msgEl.textContent = networkMsg;
+                  msgEl.className = "sub js-filehost-form-msg api-msg--fail";
+                }
+              });
+          });
+        }
+      }
+
+      root.querySelectorAll(".js-open-filehost").forEach(function (btn) {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", function () {
+          var pid = btn.getAttribute("data-platform-id") || "";
+          var pname = btn.getAttribute("data-platform-name") || pid;
+          hostForm.reset();
+          hostForm.querySelector('[name="id"]').value = "";
+          document.getElementById("filehost-platform-id").value = pid;
+          applyExtraField(pid);
+          var linkName = (typeof editingGroupName === "string" && editingGroupName) || "";
+          if (!linkName) {
+            var credName = document.querySelector("#server-modal-body input[name='name']");
+            linkName = credName ? String(credName.value || "").trim() : "";
+          }
+          var linkInput = document.getElementById("filehost-link-name");
+          if (linkInput) linkInput.value = linkName;
+          var nameInput = hostForm.querySelector('[name="name"]');
+          if (nameInput && linkName) nameInput.value = linkName;
+          if (hostTitle) {
+            hostTitle.textContent = String(filehostTitleTpl).replace("__NAME__", pname);
+          }
+          var msgEl = hostForm.querySelector(".js-filehost-form-msg");
+          if (msgEl) {
+            msgEl.hidden = true;
+            msgEl.textContent = "";
+          }
+          showModal(hostModal);
+        });
+      });
+
+      root.querySelectorAll(".js-filehost-disconnect").forEach(function (btn) {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", function () {
+          var id = btn.getAttribute("data-account-id");
+          if (!id) return;
+          if (!confirm(confirmMsg)) return;
+          btn.disabled = true;
+          fetch("/admin/api/filehost/" + encodeURIComponent(id), {
+            method: "DELETE",
+            credentials: "same-origin",
+            headers: { Accept: "application/json" },
+          })
+            .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+            .then(function (x) {
+              if (!x.res.ok || !x.body.ok) {
+                alert((x.body && x.body.error) || errorMsg);
+                btn.disabled = false;
+                return;
+              }
+              rememberAccountPickerRestore();
+              window.location.reload();
+            })
+            .catch(function () {
+              alert(networkMsg);
+              btn.disabled = false;
+            });
+        });
+      });
+    }
+
+    function bindChain(root) {
+      var chainModal = document.getElementById("chain-connect-modal");
+      var chainForm = document.getElementById("chain-connect-form");
+      var chainTitle = document.getElementById("chain-modal-title");
+      if (!chainModal || !chainForm) return;
+
+      function closeChain() {
+        hideModal(chainModal);
+      }
+
+      function applyChainFields(pid) {
+        var hint = document.getElementById("chain-form-hint");
+        var loginLabel = document.getElementById("chain-login-label");
+        var secretLabel = document.getElementById("chain-secret-label");
+        var extraWrap = document.getElementById("chain-extra-wrap");
+        var secretInput = document.getElementById("chain-secret-input");
+        if (hint) hint.textContent = (chainHints && chainHints[pid]) || "";
+        if (pid === "dtube") {
+          if (loginLabel) loginLabel.textContent = chainLabels.hive;
+          if (secretLabel) secretLabel.textContent = chainLabels.wif;
+          if (extraWrap) extraWrap.hidden = true;
+        } else {
+          if (loginLabel) loginLabel.textContent = chainLabels.email;
+          if (secretLabel) secretLabel.textContent = chainLabels.password;
+          if (extraWrap) extraWrap.hidden = false;
+        }
+        if (secretInput) secretInput.required = true;
+      }
+
+      chainModal.querySelectorAll("[data-close-chain-modal]").forEach(function (el) {
+        if (el.dataset.bound) return;
+        el.dataset.bound = "1";
+        el.addEventListener("click", closeChain);
+      });
+
+      if (!chainForm.dataset.bound) {
+        chainForm.dataset.bound = "1";
+        chainForm.addEventListener("submit", function (e) {
+          e.preventDefault();
+          var fd = new FormData(chainForm);
+          var payload = {
+            id: fd.get("id") || "",
+            platform_id: fd.get("platform_id") || "",
+            name: fd.get("name") || "",
+            login: fd.get("login") || "",
+            secret: fd.get("secret") || "",
+            extra: fd.get("extra") || "",
+            link_name: fd.get("link_name") || "",
+          };
+          var msgEl = chainForm.querySelector(".js-chain-form-msg");
+          var submit = chainForm.querySelector('button[type="submit"]');
+          if (submit) submit.disabled = true;
+          fetch("/admin/api/chain", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify(payload),
+          })
+            .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+            .then(function (x) {
+              if (submit) submit.disabled = false;
+              if (!x.res.ok || !x.body.ok) {
+                if (msgEl) {
+                  msgEl.hidden = false;
+                  msgEl.textContent = (x.body && (x.body.error || x.body.message)) || errorMsg;
+                  msgEl.className = "sub js-chain-form-msg api-msg--fail";
+                }
+                return;
+              }
+              hideModal(chainModal);
+              rememberAccountPickerRestore();
+              window.location.reload();
+            })
+            .catch(function () {
+              if (submit) submit.disabled = false;
+              if (msgEl) {
+                msgEl.hidden = false;
+                msgEl.textContent = networkMsg;
+                msgEl.className = "sub js-chain-form-msg api-msg--fail";
+              }
+            });
+        });
+        var testBtn = document.getElementById("chain-test-btn");
+        if (testBtn) {
+          testBtn.addEventListener("click", function () {
+            var fd = new FormData(chainForm);
+            var payload = {
+              id: fd.get("id") || "",
+              platform_id: fd.get("platform_id") || "",
+              login: fd.get("login") || "",
+              secret: fd.get("secret") || "",
+              extra: fd.get("extra") || "",
+            };
+            var msgEl = chainForm.querySelector(".js-chain-form-msg");
+            testBtn.disabled = true;
+            fetch("/admin/api/chain/test", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json", Accept: "application/json" },
+              body: JSON.stringify(payload),
+            })
+              .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+              .then(function (x) {
+                testBtn.disabled = false;
+                var ok = !!(x.body && x.body.ok);
+                if (msgEl) {
+                  msgEl.hidden = false;
+                  msgEl.textContent = (x.body && (x.body.message || x.body.error)) || networkMsg;
+                  msgEl.className = "sub js-chain-form-msg " + (ok ? "api-msg--ok" : "api-msg--fail");
+                }
+              })
+              .catch(function () {
+                testBtn.disabled = false;
+                if (msgEl) {
+                  msgEl.hidden = false;
+                  msgEl.textContent = networkMsg;
+                  msgEl.className = "sub js-chain-form-msg api-msg--fail";
+                }
+              });
+          });
+        }
+      }
+
+      root.querySelectorAll(".js-open-chain").forEach(function (btn) {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", function () {
+          var pid = btn.getAttribute("data-platform-id") || "";
+          var pname = btn.getAttribute("data-platform-name") || pid;
+          chainForm.reset();
+          chainForm.querySelector('[name="id"]').value = "";
+          document.getElementById("chain-platform-id").value = pid;
+          applyChainFields(pid);
+          var linkInput = document.getElementById("chain-link-name");
+          var nameInput = chainForm.querySelector('[name="name"]');
+          if (linkInput) linkInput.value = document.getElementById("account-link-name") ? document.getElementById("account-link-name").value : "";
+          if (nameInput && linkInput) nameInput.value = linkInput.value;
+          if (chainTitle) {
+            chainTitle.textContent = String(chainTitleTpl).replace("__NAME__", pname);
+          }
+          var msgEl = chainForm.querySelector(".js-chain-form-msg");
+          if (msgEl) {
+            msgEl.hidden = true;
+            msgEl.textContent = "";
+          }
+          showModal(chainModal);
+        });
+      });
+
+      root.querySelectorAll(".js-chain-disconnect").forEach(function (btn) {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", function () {
+          var id = btn.getAttribute("data-account-id");
+          if (!id) return;
+          if (!confirm(confirmMsg)) return;
+          btn.disabled = true;
+          fetch("/admin/api/chain/" + encodeURIComponent(id), {
+            method: "DELETE",
+            credentials: "same-origin",
+            headers: { Accept: "application/json" },
+          })
+            .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+            .then(function (x) {
+              if (!x.res.ok || !x.body.ok) {
+                alert((x.body && x.body.error) || errorMsg);
+                btn.disabled = false;
+                return;
+              }
+              rememberAccountPickerRestore();
+              window.location.reload();
             })
             .catch(function () {
               alert(networkMsg);
@@ -1221,6 +1920,9 @@
         });
       }
       bindDisconnectButtons(modalBody);
+      bindVmos(modalBody);
+      bindFilehost(modalBody);
+      bindChain(modalBody);
       bindApiForms(modalBody);
       if (fromAccountPicker) {
         modal.classList.add("equipo-modal--stack");
@@ -2648,6 +3350,16 @@
     }
 
     loadAccountGroups(1, "");
+    try {
+      var restoreRaw = sessionStorage.getItem("tuyahoRestoreAccountPicker");
+      if (restoreRaw) {
+        sessionStorage.removeItem("tuyahoRestoreAccountPicker");
+        var restore = JSON.parse(restoreRaw);
+        if (restore && restore.name) {
+          openAccountGroupModal({ key: restore.key || "", name: restore.name }, null);
+        }
+      }
+    } catch (err) {}
   })();
 </script>
 {% endblock %}

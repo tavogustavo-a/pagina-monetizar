@@ -65,6 +65,10 @@ import x_oauth  # noqa: E402
 import dailymotion_oauth  # noqa: E402
 import bilibili_oauth  # noqa: E402
 import snapchat_oauth  # noqa: E402
+import vmos  # noqa: E402
+import filehost  # noqa: E402
+import chain  # noqa: E402
+import x_funding  # noqa: E402
 import publish_schedule  # noqa: E402
 import proxy_util  # noqa: E402
 import membership  # noqa: E402
@@ -135,20 +139,33 @@ async def lifespan(app: FastAPI):
                 pass
             await asyncio.sleep(extractor.WORKER_TICK_SECONDS)
 
+    async def x_monetize_worker() -> None:
+        """A las 4 am (hora del panel) revisa qué cuentas X ya cumplen para monetizar."""
+        while True:
+            try:
+                await asyncio.to_thread(x_funding.run_daily_check_if_due)
+            except Exception:
+                pass
+            await asyncio.sleep(300)
+
     worker = None
     extractor_task = None
+    x_check_task = None
     _SCHEDULER_LOCK_FH = _try_hold_scheduler_lock()
     if _SCHEDULER_LOCK_FH is not None:
         worker = asyncio.create_task(scheduled_worker())
         extractor_task = asyncio.create_task(extractor_worker())
+        x_check_task = asyncio.create_task(x_monetize_worker())
     try:
         yield
     finally:
-        for task in (worker, extractor_task):
+        for task in (worker, extractor_task, x_check_task):
             if task is not None:
                 task.cancel()
         if worker is not None:
-            await asyncio.gather(worker, extractor_task, return_exceptions=True)
+            await asyncio.gather(
+                worker, extractor_task, x_check_task, return_exceptions=True
+            )
         if _SCHEDULER_LOCK_FH is not None:
             try:
                 _SCHEDULER_LOCK_FH.close()
@@ -289,6 +306,37 @@ class PlatformApiBody(BaseModel):
     client_secret: str = ""
     access_token: str = ""
     extra: str = ""
+
+
+class VmosAccountBody(BaseModel):
+    id: str = ""
+    platform_id: str = ""
+    name: str = ""
+    access_key: str = ""
+    secret_key: str = ""
+    pad_code: str = ""
+    template_id: str = ""
+    remark: str = ""
+    link_name: str = ""
+
+
+class FilehostAccountBody(BaseModel):
+    id: str = ""
+    platform_id: str = ""
+    name: str = ""
+    api_key: str = ""
+    extra: str = ""
+    link_name: str = ""
+
+
+class ChainAccountBody(BaseModel):
+    id: str = ""
+    platform_id: str = ""
+    name: str = ""
+    login: str = ""
+    secret: str = ""
+    extra: str = ""
+    link_name: str = ""
 
 
 class ServerGroupMemberBody(BaseModel):
@@ -1526,7 +1574,7 @@ def _viewer_visible_platform_ids(user: db.User) -> set[str] | None:
     if db.user_can_access_servers(user):
         return None
     if db.user_is_tiktok_mode(user):
-        return _tiktok_user_ready_platform_ids()
+        return _tiktok_user_ready_platform_ids(user)
     return {"tiktok"}
 
 
@@ -1829,7 +1877,7 @@ def admin_panel(request: Request):
     platform_choices = platforms.platform_list(lang)
     if is_tiktok_user:
         platform_choices = [
-            p for p in _tiktok_user_panel_platforms(lang) if p.get("configured")
+            p for p in _tiktok_user_panel_platforms(lang, u) if p.get("configured")
         ]
     elif not can_access_servers:
         platform_choices = [p for p in platform_choices if p["id"] == "tiktok"]
@@ -2216,7 +2264,7 @@ def admin_publicaciones(request: Request):
     )
     publish_unlocked = is_admin or is_tiktok_user or len(publish_account_choices) > 0
     if is_tiktok_user:
-        platform_choices = _tiktok_user_panel_platforms(lang)
+        platform_choices = _tiktok_user_panel_platforms(lang, u)
         show_publish_platform_picker = True
         auto_publish_platform_id = ""
     elif not is_publish_admin:
@@ -2277,6 +2325,9 @@ def admin_publicaciones(request: Request):
             "pub_account_i18n": pub_account_i18n,
             "max_upload_mb": MAX_UPLOAD_MB,
             "max_upload_bytes": MAX_UPLOAD_BYTES,
+            "x_funding_source": (
+                db.resolve_active_x_funding_source() if is_publish_admin else None
+            ),
         },
     )
 
@@ -2345,6 +2396,7 @@ async def admin_upload_video(request: Request):
     selected_platforms = [p for p in form.getlist("platforms") if p in platforms.PLATFORM_IDS]
     upload = form.get("file")
     video_temp_token = (form.get("video_temp_token") or "").strip().lower()
+    x_use_funding = (form.get("x_use_funding") or "").strip() in ("1", "on", "true")
 
     if not db.user_can_upload_videos(u):
         request.session["admin_error"] = _msg(request, "pub.flash.no_upload")
@@ -2361,7 +2413,7 @@ async def admin_upload_video(request: Request):
         return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
     if db.user_is_tiktok_mode(u):
         allowed_platforms = set(PANEL_API_PLATFORM_IDS)
-        ready = _tiktok_user_ready_platform_ids()
+        ready = _tiktok_user_ready_platform_ids(u)
         selected_platforms = [
             p for p in selected_platforms if p in allowed_platforms and p in ready
         ]
@@ -2529,6 +2581,7 @@ async def admin_upload_video(request: Request):
             scheduled_at_utc=scheduled_utc,
             lang=lang,
             account_link_id=account_link_id,
+            x_use_funding=x_use_funding,
         )
         when_local = publish_schedule.format_scheduled_local(
             scheduled_utc.isoformat(), lang
@@ -2547,6 +2600,7 @@ async def admin_upload_video(request: Request):
         content_type=content_type,
         lang=lang,
         account_link_id=account_link_id,
+        x_use_funding=x_use_funding,
     )
 
     past_schedule_immediate = schedule_enabled and scheduled_utc and not schedule_for_later
@@ -2622,6 +2676,7 @@ def admin_retry_pending_publish(request: Request, sched_id: str):
         lang=row.get("lang") or lang,
         account_link_id=(row.get("account_link_id") or "").strip(),
         retry_sched_id=sched_id,
+        x_use_funding=bool(row.get("x_use_funding") or 0),
     )
     if fail_n and ok_n:
         request.session["admin_ok"] = _msg(
@@ -2756,6 +2811,9 @@ def admin_servidores(request: Request):
     bilibili_linked = db.list_oauth_accounts_public("bilibili")
     snapchat_linked = db.list_oauth_accounts_public("snapchat")
     tiktok_linked = db.list_connected_tiktok_accounts()
+    vmos_grouped = db.list_vmos_accounts_grouped()
+    filehost_grouped = db.list_filehost_accounts_grouped()
+    chain_grouped = db.list_chain_accounts_grouped()
     import rumble_publish
 
     rumble_token_set = bool(rumble_publish.access_token())
@@ -2775,16 +2833,44 @@ def admin_servidores(request: Request):
             "dailymotion_linked": dailymotion_linked,
             "bilibili_linked": bilibili_linked,
             "snapchat_linked": snapchat_linked,
+            "vmos_by_platform": vmos_grouped,
+            "vmos_platform_ids": list(vmos.PLATFORM_IDS),
+            "vmos_short_labels": vmos.SHORT_LABEL,
+            "filehost_by_platform": filehost_grouped,
+            "filehost_platform_ids": list(filehost.PLATFORM_IDS),
+            "filehost_extra_fields": {
+                pid: filehost.extra_field(pid) for pid in filehost.PLATFORM_IDS
+            },
+            "chain_by_platform": chain_grouped,
+            "chain_platform_ids": list(chain.PLATFORM_IDS),
+            "chain_extra_fields": {
+                pid: chain.extra_field(pid) for pid in chain.PLATFORM_IDS
+            },
             "oauth_account_counts": {
-                "tiktok": len(tiktok_linked),
-                "youtube": len(youtube_linked),
-                "instagram": len(instagram_linked),
-                "facebook": len(facebook_linked),
-                "x": len(x_linked),
+                "tiktok": len(tiktok_linked) + len(vmos_grouped.get("tiktok") or []),
+                "youtube": len(youtube_linked) + len(vmos_grouped.get("youtube") or []),
+                "instagram": len(instagram_linked) + len(vmos_grouped.get("instagram") or []),
+                "facebook": len(facebook_linked) + len(vmos_grouped.get("facebook") or []),
+                "x": len(x_linked) + len(vmos_grouped.get("x") or []),
                 "dailymotion": len(dailymotion_linked),
                 "bilibili": len(bilibili_linked),
-                "snapchat": len(snapchat_linked),
+                "snapchat": len(snapchat_linked) + len(vmos_grouped.get("snapchat") or []),
                 "rumble": 1 if rumble_token_set else 0,
+                "threads": len(vmos_grouped.get("threads") or []),
+                "doodstream": len(filehost_grouped.get("doodstream") or []),
+                "streamwish": len(filehost_grouped.get("streamwish") or []),
+                "filemoon": len(filehost_grouped.get("filemoon") or []),
+                "mixdrop": len(filehost_grouped.get("mixdrop") or []),
+                "streamtape": len(filehost_grouped.get("streamtape") or []),
+                "voe": len(filehost_grouped.get("voe") or []),
+                "vidoza": len(filehost_grouped.get("vidoza") or []),
+                "lulustream": len(filehost_grouped.get("lulustream") or []),
+                "loadvid": len(filehost_grouped.get("loadvid") or []),
+                "vidsonic": len(filehost_grouped.get("vidsonic") or []),
+                "flyfile": len(filehost_grouped.get("flyfile") or []),
+                "venvo": len(filehost_grouped.get("venvo") or []),
+                "odysee": len(chain_grouped.get("odysee") or []),
+                "dtube": len(chain_grouped.get("dtube") or []),
             },
             "platform_creds": db.list_platform_credentials_public(),
             "group_account_choices": db.list_server_group_account_choices(lang),
@@ -3062,10 +3148,12 @@ def api_extractor_scan(request: Request, platform: str = "", account: str = ""):
     target_ids = [t for t in (choice.get("platform_ids") or []) if t != pid]
     summary = extractor.scan_summary(choice["id"], pid, target_ids)
     names = _extractor_platform_meta(lang)
+    sources = choice.get("platform_sources") or {}
     targets = []
     for item in summary["targets"]:
         tid = item["platform_id"]
         meta = names.get(tid, {})
+        via = str(sources.get(tid) or "")
         targets.append(
             {
                 "platform_id": tid,
@@ -3073,13 +3161,22 @@ def api_extractor_scan(request: Request, platform: str = "", account: str = ""):
                 "icon": meta.get("icon", ""),
                 "pending": item["pending"],
                 "cycle_cap": extractor.platform_cycle_cap(tid),
+                "via": via,
+                "via_vmos": via == "vmos",
+                "via_filehost": via == "filehost",
+                "via_chain": via == "chain",
             }
         )
+    source_via = str(sources.get(pid) or "")
     return {
         "ok": True,
         "total": summary["total"],
         "targets": targets,
         "account_name": choice.get("name") or "",
+        "source_via": source_via,
+        "source_via_vmos": source_via == "vmos",
+        "source_via_filehost": source_via == "filehost",
+        "source_via_chain": source_via == "chain",
         "conflict": db.extractor_job_conflict_exists(choice["id"], pid),
     }
 
@@ -3609,22 +3706,40 @@ _PANEL_OAUTH_REDIRECT_HINT_KEYS: dict[str, str] = {
 }
 
 
-def _tiktok_user_panel_platforms(lang: str) -> list[dict[str, Any]]:
+def _tiktok_user_panel_platforms(
+    lang: str, user: db.User | None = None
+) -> list[dict[str, Any]]:
     """Las 5 plataformas de Panel → Cuenta para usuarios modo TikTok."""
     by_id = {p["id"]: dict(p) for p in platforms.platform_list(lang)}
+    linked_ids: set[str] = set()
+    vmos_ids: set[str] = set()
+    if user is not None:
+        for acc in db.list_user_publish_accounts(user, lang=lang):
+            for pid in acc.get("platform_ids") or []:
+                pid_s = str(pid or "").strip()
+                if pid_s:
+                    linked_ids.add(pid_s)
+            for pid, kind in (acc.get("platform_sources") or {}).items():
+                if str(kind or "") == "vmos":
+                    vmos_ids.add(str(pid).strip())
     out: list[dict[str, Any]] = []
     for pid in TIKTOK_USER_PANEL_PLATFORM_ORDER:
         item = by_id.get(pid)
         if not item:
             continue
         mod = _PANEL_OAUTH_REDIRECT_MODS.get(pid)
-        item["configured"] = bool(mod and mod.oauth_configured())
+        item["configured"] = bool((mod and mod.oauth_configured()) or pid in linked_ids)
+        item["via_vmos"] = pid in vmos_ids
         out.append(item)
     return out
 
 
-def _tiktok_user_ready_platform_ids() -> set[str]:
-    return {p["id"] for p in _tiktok_user_panel_platforms("es") if p.get("configured")}
+def _tiktok_user_ready_platform_ids(user: db.User | None = None) -> set[str]:
+    return {
+        p["id"]
+        for p in _tiktok_user_panel_platforms("es", user)
+        if p.get("configured")
+    }
 
 
 def _require_platform_credentials_json(
@@ -4414,6 +4529,422 @@ def api_oauth_delete(request: Request, account_id: str):
     except ValueError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=404)
     return {"ok": True, "message": "Account disconnected."}
+
+
+@app.post("/admin/api/vmos")
+def api_vmos_save(request: Request, body: VmosAccountBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    try:
+        row = db.upsert_vmos_account(
+            account_id=body.id,
+            platform_id=body.platform_id,
+            name=body.name,
+            access_key=body.access_key,
+            secret_key=body.secret_key or None,
+            pad_code=body.pad_code,
+            template_id=body.template_id,
+            remark=body.remark,
+            link_name=body.link_name,
+        )
+    except ValueError as e:
+        code = str(e)
+        if code == "missing_fields":
+            return JSONResponse(
+                {"ok": False, "error": i18n.t("servers.vmos_missing", lang)},
+                status_code=400,
+            )
+        if code == "unknown_platform":
+            return JSONResponse({"ok": False, "error": "Unknown platform."}, status_code=404)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=404)
+    return {"ok": True, "account": row, "message": i18n.t("servers.vmos_saved", lang)}
+
+
+@app.post("/admin/api/vmos/test")
+def api_vmos_test(request: Request, body: VmosAccountBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    ak = (body.access_key or "").strip()
+    sk = (body.secret_key or "").strip()
+    pad = (body.pad_code or "").strip()
+    if body.id and (not sk or not ak):
+        raw = db.get_vmos_account_raw(body.id)
+        if raw:
+            ak = ak or str(raw.get("access_key") or "")
+            sk = sk or str(raw.get("secret_key") or "")
+            pad = pad or str(raw.get("pad_code") or "")
+    if not ak or not sk or not pad:
+        return JSONResponse(
+            {"ok": False, "error": i18n.t("servers.vmos_missing", lang)},
+            status_code=400,
+        )
+    try:
+        data = vmos.pad_info(ak, sk, pad, lang=lang)
+    except vmos.VmosError as e:
+        return JSONResponse({"ok": False, "error": str(e)[:300]}, status_code=400)
+    info = data.get("data") if isinstance(data.get("data"), dict) else {}
+    shown = str((info or {}).get("padCode") or pad).strip()
+    return {"ok": True, "message": i18n.t("servers.vmos_test_ok", lang, pad=shown)}
+
+
+@app.delete("/admin/api/vmos/{account_id}")
+def api_vmos_delete(request: Request, account_id: str):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    try:
+        db.delete_vmos_account(account_id)
+    except ValueError:
+        return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
+    return {"ok": True}
+
+
+@app.post("/admin/api/filehost")
+def api_filehost_save(request: Request, body: FilehostAccountBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    pid = (body.platform_id or "").strip()
+    key = (body.api_key or "").strip()
+    extra = (body.extra or "").strip()
+    if body.id and not key:
+        raw = db.get_filehost_account_raw(body.id)
+        if raw:
+            key = key or str(raw.get("api_key") or "")
+            extra = extra or str(raw.get("extra") or "")
+    ok, detail = filehost.probe_account(pid, key, extra)
+    if not ok:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": i18n.t("api.filehost.fail", lang, error=detail),
+            },
+            status_code=400,
+        )
+    try:
+        row = db.upsert_filehost_account(
+            account_id=body.id,
+            platform_id=pid,
+            name=body.name or detail,
+            api_key=body.api_key or None,
+            extra=extra,
+            link_name=body.link_name,
+        )
+    except ValueError as e:
+        code = str(e)
+        if code == "missing_fields":
+            return JSONResponse(
+                {"ok": False, "error": i18n.t("servers.filehost_missing", lang)},
+                status_code=400,
+            )
+        if code == "unknown_platform":
+            return JSONResponse({"ok": False, "error": "Unknown platform."}, status_code=404)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=404)
+    return {
+        "ok": True,
+        "account": row,
+        "message": i18n.t("servers.filehost_saved", lang, name=detail),
+    }
+
+
+@app.post("/admin/api/filehost/test")
+def api_filehost_test(request: Request, body: FilehostAccountBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    key = (body.api_key or "").strip()
+    extra = (body.extra or "").strip()
+    if body.id and not key:
+        raw = db.get_filehost_account_raw(body.id)
+        if raw:
+            key = key or str(raw.get("api_key") or "")
+            extra = extra or str(raw.get("extra") or "")
+    ok, detail = filehost.probe_account(body.platform_id, key, extra)
+    if not ok:
+        return JSONResponse(
+            {"ok": False, "error": i18n.t("api.filehost.fail", lang, error=detail)},
+            status_code=400,
+        )
+    return {"ok": True, "message": i18n.t("api.filehost.ok", lang, name=detail)}
+
+
+@app.delete("/admin/api/filehost/{account_id}")
+def api_filehost_delete(request: Request, account_id: str):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    try:
+        db.delete_filehost_account(account_id)
+    except ValueError:
+        return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
+    return {"ok": True}
+
+
+@app.post("/admin/api/chain")
+def api_chain_save(request: Request, body: ChainAccountBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    pid = (body.platform_id or "").strip()
+    login = (body.login or "").strip()
+    secret = (body.secret or "").strip()
+    extra = (body.extra or "").strip()
+    if body.id:
+        raw = db.get_chain_account_raw(body.id)
+        if raw:
+            login = login or str(raw.get("login") or "")
+            secret = secret or str(raw.get("secret") or "")
+            extra = extra or str(raw.get("extra") or "")
+    ok, detail = chain.probe_account(pid, login, secret, extra)
+    if not ok:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": i18n.t("api.chain.fail", lang, error=detail),
+            },
+            status_code=400,
+        )
+    try:
+        row = db.upsert_chain_account(
+            account_id=body.id,
+            platform_id=pid,
+            name=body.name or detail,
+            login=login,
+            secret=body.secret or None,
+            extra=extra,
+            link_name=body.link_name,
+        )
+    except ValueError as e:
+        code = str(e)
+        if code == "missing_fields":
+            return JSONResponse(
+                {"ok": False, "error": i18n.t("servers.chain_missing", lang)},
+                status_code=400,
+            )
+        if code == "unknown_platform":
+            return JSONResponse({"ok": False, "error": "Unknown platform."}, status_code=404)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=404)
+    return {
+        "ok": True,
+        "account": row,
+        "message": i18n.t("servers.chain_saved", lang, name=detail),
+    }
+
+
+@app.post("/admin/api/chain/test")
+def api_chain_test(request: Request, body: ChainAccountBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    login = (body.login or "").strip()
+    secret = (body.secret or "").strip()
+    extra = (body.extra or "").strip()
+    if body.id and (not login or not secret):
+        raw = db.get_chain_account_raw(body.id)
+        if raw:
+            login = login or str(raw.get("login") or "")
+            secret = secret or str(raw.get("secret") or "")
+            extra = extra or str(raw.get("extra") or "")
+    ok, detail = chain.probe_account(body.platform_id, login, secret, extra)
+    if not ok:
+        return JSONResponse(
+            {"ok": False, "error": i18n.t("api.chain.fail", lang, error=detail)},
+            status_code=400,
+        )
+    return {"ok": True, "message": i18n.t("api.chain.ok", lang, name=detail)}
+
+
+@app.delete("/admin/api/chain/{account_id}")
+def api_chain_delete(request: Request, account_id: str):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    try:
+        db.delete_chain_account(account_id)
+    except ValueError:
+        return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
+    return {"ok": True}
+
+
+def _parse_money_cents(raw: str) -> int:
+    """Convierte '10', '10.5' o '10,50' (USD) a centavos. Lanza ValueError si no es válido."""
+    text = (raw or "").strip().replace("$", "").replace(",", ".")
+    if not text:
+        raise ValueError("bad_amount")
+    value = float(text)
+    cents = round(value * 100)
+    if cents < 0:
+        raise ValueError("bad_amount")
+    return cents
+
+
+def _fmt_money(cents: int) -> str:
+    return f"${cents / 100:,.2f}"
+
+
+@app.get("/admin/config-x", name="admin_config_x")
+def admin_config_x(request: Request):
+    try:
+        admin = require_server_admin(request)
+    except PermissionError:
+        return _admin_privileges_redirect_login()
+    lang = i18n.resolve_lang(request)
+    sources = db.list_x_funding_sources()
+    source_oauth_ids = {s["oauth_account_id"] for s in sources}
+    x_accounts = db.list_oauth_accounts_public("x")
+    checks = db.list_x_monetize_checks()
+    rows = []
+    for acc in x_accounts:
+        oid = str(acc.get("id") or "")
+        chk = checks.get(oid) or {}
+        rows.append(
+            {
+                "id": oid,
+                "name": acc.get("name")
+                or (f"@{acc.get('username')}" if acc.get("username") else oid[:8]),
+                "username": acc.get("username") or "",
+                "is_source": oid in source_oauth_ids,
+                "followers": chk.get("followers"),
+                "posts_count": chk.get("posts_count"),
+                "meets": chk.get("meets"),
+                "detail": chk.get("detail") or "",
+                "checked_at": chk.get("checked_at") or "",
+            }
+        )
+    return _render(
+        request,
+        "admin_config_x.html",
+        {
+            "user": admin,
+            "nav_active": "config_x",
+            "sources": sources,
+            "x_accounts": rows,
+            "usage": db.list_x_funding_usage(limit=30),
+            "min_followers": x_funding.min_followers(),
+            "last_check": (db.get_app_setting(x_funding.LAST_CHECK_KEY) or ""),
+            "fmt_money": _fmt_money,
+        },
+    )
+
+
+class XFundingSourceBody(BaseModel):
+    oauth_account_id: str = ""
+    cost_per_post: str = ""
+    active: bool = True
+
+
+class XFundingRechargeBody(BaseModel):
+    source_id: str = ""
+    amount: str = ""
+
+
+class XFundingSettingsBody(BaseModel):
+    min_followers: int = 0
+
+
+@app.post("/admin/api/xconfig/source")
+def api_xconfig_source_save(request: Request, body: XFundingSourceBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    try:
+        cost = _parse_money_cents(body.cost_per_post) if body.cost_per_post.strip() else 0
+    except ValueError:
+        return JSONResponse(
+            {"ok": False, "error": i18n.t("configx.err.bad_amount", lang)}, status_code=400
+        )
+    try:
+        src = db.upsert_x_funding_source(
+            oauth_account_id=body.oauth_account_id,
+            cost_per_post_cents=cost,
+            active=bool(body.active),
+        )
+    except ValueError:
+        return JSONResponse(
+            {"ok": False, "error": i18n.t("configx.err.account_not_found", lang)},
+            status_code=400,
+        )
+    return {"ok": True, "source": src, "message": i18n.t("configx.saved", lang)}
+
+
+@app.post("/admin/api/xconfig/recharge")
+def api_xconfig_recharge(request: Request, body: XFundingRechargeBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    try:
+        amount = _parse_money_cents(body.amount)
+        if amount <= 0:
+            raise ValueError("bad_amount")
+    except ValueError:
+        return JSONResponse(
+            {"ok": False, "error": i18n.t("configx.err.bad_amount", lang)}, status_code=400
+        )
+    try:
+        src = db.add_x_funding_recharge(body.source_id, amount)
+    except ValueError:
+        return JSONResponse(
+            {"ok": False, "error": i18n.t("configx.err.account_not_found", lang)},
+            status_code=404,
+        )
+    return {
+        "ok": True,
+        "source": src,
+        "message": i18n.t(
+            "configx.recharged", lang, amount=_fmt_money(amount), name=src["name"]
+        ),
+    }
+
+
+@app.delete("/admin/api/xconfig/source/{source_id}")
+def api_xconfig_source_delete(request: Request, source_id: str):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    try:
+        db.delete_x_funding_source(source_id)
+    except ValueError:
+        return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
+    return {"ok": True}
+
+
+@app.post("/admin/api/xconfig/settings")
+def api_xconfig_settings(request: Request, body: XFundingSettingsBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    if body.min_followers <= 0:
+        return JSONResponse(
+            {"ok": False, "error": i18n.t("configx.err.bad_amount", lang)}, status_code=400
+        )
+    x_funding.set_min_followers(body.min_followers)
+    return {"ok": True, "message": i18n.t("configx.saved", lang)}
+
+
+@app.post("/admin/api/xconfig/check")
+def api_xconfig_check(request: Request):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    results = x_funding.run_check_now()
+    meets = sum(1 for r in results if r.get("meets"))
+    return {
+        "ok": True,
+        "results": results,
+        "message": i18n.t("configx.check_done", lang, n=len(results), meets=meets),
+    }
 
 
 @app.post("/admin/api/platforms/{platform_id}/credentials")

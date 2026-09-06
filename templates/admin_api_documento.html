@@ -36,7 +36,7 @@
                     </span>
                   </td>
                   <td data-label="{{ t('apidoc.col_api') }}">
-                    <span class="cap {% if row.api_kind == 'oauth' %}cap--yes{% elif row.api_kind == 'partner' %}cap--limited{% else %}cap--no{% endif %}">{{ row.api_label }}</span>
+                    <span class="cap {% if row.api_kind == 'oauth' %}cap--yes{% elif row.api_kind in ['partner', 'vmos', 'filehost', 'lbry', 'hive'] %}cap--limited{% else %}cap--no{% endif %}">{{ row.api_label }}</span>
                   </td>
                   <td data-label="{{ t('apidoc.col_video') }}">
                     <span class="cap cap--{{ row.video }}">{{ t('cap.' ~ row.video) }}</span>
@@ -45,7 +45,7 @@
                     <span class="cap cap--{{ row.photo }}">{{ t('cap.' ~ row.photo) }}</span>
                   </td>
                   <td data-label="{{ t('apidoc.col_token') }}">
-                    <span class="cap {% if row.token == 'auto' %}cap--yes{% else %}cap--limited{% endif %}">{{ row.token_label }}</span>
+                    <span class="cap {% if row.token == 'auto' %}cap--yes{% elif row.token == 'none' %}cap--no{% else %}cap--limited{% endif %}">{{ row.token_label }}</span>
                   </td>
                   <td data-label="{{ t('apidoc.col_setup') }}" class="apidoc-cell--stack">
                     <ol class="apidoc-steps">

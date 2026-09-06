@@ -1,0 +1,20 @@
+{% if platform.id in chain_platform_ids %}
+<ul class="tiktok-config-list">
+  {% for c in chain_by_platform.get(platform.id, []) %}
+  <li class="tiktok-config-card tiktok-config-card--linked">
+    <div class="tiktok-config-card__main">
+      <div class="tiktok-config-card__head">
+        <strong class="tiktok-config-card__title">{{ c.name }}</strong>
+        <span class="badge badge-active">{% if platform.id == 'odysee' %}{{ t('servers.chain_badge_odysee') }}{% else %}{{ t('servers.chain_badge_dtube') }}{% endif %}</span>
+      </div>
+      <p class="tiktok-config-card__meta sub">{{ c.login }}{% if c.extra_mask %} · {{ c.extra_mask }}{% endif %}</p>
+    </div>
+    <div class="tiktok-config-card__actions">
+      <button type="button" class="btn btn-ghost btn-sm btn-equipo-warn js-chain-disconnect" data-account-id="{{ c.id }}">
+        {{ t('servers.disconnect') }}
+      </button>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}

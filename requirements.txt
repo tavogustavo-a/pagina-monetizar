@@ -7,5 +7,5 @@ itsdangerous==2.2.0
 bcrypt==4.2.1
 psycopg[binary]==3.2.10
 PySocks==1.7.1
-faster-whisper==1.1.1
+beem==0.24.26
 

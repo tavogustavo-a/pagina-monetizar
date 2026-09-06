@@ -1,0 +1,11 @@
+{% if platform.id in vmos_platform_ids %}
+<button
+  type="button"
+  class="btn btn-vmos js-open-vmos"
+  data-platform-id="{{ platform.id }}"
+  data-platform-name="{{ platform.name }}"
+>
+  <span class="btn-vmos__icon" aria-hidden="true">☁</span>
+  {{ t('servers.connect_with_vmos', short=vmos_short_labels.get(platform.id, platform.name)) }}
+</button>
+{% endif %}

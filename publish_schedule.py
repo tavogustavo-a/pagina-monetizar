@@ -86,6 +86,7 @@ def persist_awaiting_retry(
     lang: str,
     account_link_id: str,
     error_message: str = "",
+    x_use_funding: bool = False,
 ) -> str | None:
     """Deja el video en cola hasta que un admin republica o cancela."""
     remaining = remaining_platform_ids(failures)
@@ -106,6 +107,7 @@ def persist_awaiting_retry(
         lang=lang,
         account_link_id=account_link_id,
         status="awaiting_retry",
+        x_use_funding=x_use_funding,
     )
 
 
@@ -120,6 +122,7 @@ def execute_video_publish(
     lang: str,
     account_link_id: str = "",
     retry_sched_id: str = "",
+    x_use_funding: bool = False,
 ) -> tuple[int, int, list[dict]]:
     """Publica un video en las plataformas indicadas. Devuelve ok, fail y fallos para email."""
     path = upload_dir / video.file_name
@@ -143,6 +146,14 @@ def execute_video_publish(
         status = "ok" if ok else "fail"
         if ok:
             ok_n += 1
+            if pid == "x" and x_use_funding:
+                try:
+                    db.record_x_funding_usage(
+                        account_link_id=account_link_id,
+                        video_title=video.title,
+                    )
+                except Exception:
+                    pass
         else:
             fail_n += 1
             failures_for_email.append(
@@ -173,6 +184,7 @@ def execute_video_publish(
             content_type=content_type,
             lang=lang,
             account_link_id=account_link_id,
+            x_use_funding=x_use_funding,
         )
         notify.send_publish_failure_alert(
             video_title=video.title,
@@ -217,6 +229,7 @@ def process_due_scheduled_publications(*, upload_dir: Path) -> int:
                 lang=row.get("lang") or "es",
                 account_link_id=(row.get("account_link_id") or "").strip(),
                 retry_sched_id=sched_id,
+                x_use_funding=bool(row.get("x_use_funding") or 0),
             )
             processed += 1
         except (OSError, Exception) as e:

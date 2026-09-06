@@ -62,6 +62,12 @@
       ><span class="nav-ic">🧲</span><span class="nav-label">{{ t('nav.extractor') }}</span></a
     >
     <a
+      href="/admin/config-x"
+      class="nav-link {% if nav_active == 'config_x' %}nav-link--active{% endif %}"
+      title="{{ t('nav.config_x') }}"
+      ><span class="nav-ic">✖️</span><span class="nav-label">{{ t('nav.config_x') }}</span></a
+    >
+    <a
       href="/admin/proxys"
       class="nav-link {% if nav_active == 'proxys' %}nav-link--active{% endif %}"
       title="{{ t('nav.proxys') }}"

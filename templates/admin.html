@@ -247,7 +247,12 @@
             "choices": {{ tiktok_stat_choices | tojson }},
             "pickLabel": {{ t('admin.stats_account_pick') | tojson }},
             "kindGroup": {{ t('admin.stats_kind_group') | tojson }},
-            "kindAccount": {{ t('admin.stats_kind_account') | tojson }}
+            "kindAccount": {{ t('admin.stats_kind_account') | tojson }},
+            "viaVmos": {{ t('servers.vmos_badge') | tojson }},
+            "viaFilehost": {{ t('servers.filehost_badge') | tojson }},
+            "viaChain": {{ t('servers.chain_badge') | tojson }},
+            "viaApi": {{ t('admin.via_api') | tojson }},
+            "viaMixed": {{ t('admin.via_mixed') | tojson }}
           }{% endif %}{% endif %}{% if video_options and selected_tiktoker and show_account_filter %}{% if show_stats_filters %},{% endif %}
           "video": {
             "selectedId": {{ selected_video | tojson }},
@@ -329,7 +334,7 @@
 {% endif %}
 
 <script src="/static/js/ajax-search.js?v=1"></script>
-<script src="/static/stats-pickers.js?v=12"></script>
+<script src="/static/stats-pickers.js?v=15"></script>
 <script>
   (function () {
     function readStatsPickersConfig() {

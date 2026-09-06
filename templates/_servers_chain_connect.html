@@ -1,0 +1,11 @@
+{% if platform.id in chain_platform_ids %}
+<button
+  type="button"
+  class="btn btn-chain js-open-chain"
+  data-platform-id="{{ platform.id }}"
+  data-platform-name="{{ platform.name }}"
+>
+  <span class="btn-chain__icon" aria-hidden="true">{% if platform.id == 'odysee' %}🟠{% else %}⛓️{% endif %}</span>
+  {{ t('servers.connect_with_chain', name=platform.name) }}
+</button>
+{% endif %}

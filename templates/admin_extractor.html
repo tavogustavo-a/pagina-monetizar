@@ -419,6 +419,10 @@
     accountFirst: {{ t('extractor.account_first') | tojson }},
     kindPlatform: {{ t('extractor.kind_platform') | tojson }},
     kindAccount: {{ t('extractor.kind_account') | tojson }},
+    viaVmos: {{ t('servers.vmos_badge') | tojson }},
+    viaFilehost: {{ t('servers.filehost_badge') | tojson }},
+    viaChain: {{ t('servers.chain_badge') | tojson }},
+    viaApi: {{ t('admin.via_api') | tojson }},
     scanBtn: {{ t('extractor.scan_btn') | tojson }},
     scanning: {{ t('extractor.scanning') | tojson }},
     scanTotal: {{ t('extractor.scan_total') | tojson }},
@@ -561,12 +565,17 @@
         listEl.innerHTML = items
           .map(function (c) {
             var isSel = String(c.id) === String(selectedId);
+            var extra = "";
+            if (typeof opts.viaFor === "function") {
+              extra = opts.viaFor(c) || "";
+            }
             return (
               '<li role="option" tabindex="0" class="stats-picker-modal__option' +
               (isSel ? " is-selected" : "") +
               '" data-picker-id="' + esc(c.id) + '" aria-selected="' + (isSel ? "true" : "false") + '">' +
               '<span class="stats-picker-modal__option-main">' +
               '<span class="stats-picker-modal__kind">' + esc(opts.kindLabel || "") + "</span>" +
+              extra +
               '<span class="stats-picker-modal__name">' +
               (c.icon ? esc(c.icon) + "\u00a0" : "") + esc(c.name || "") +
               "</span></span></li>"
@@ -717,6 +726,23 @@
       loadingId: "extractor-account-loading",
       kindLabel: i18n.kindAccount,
       choices: [],
+      viaFor: function (c) {
+        var pid = selectedPlatform ? selectedPlatform.id : "";
+        var kind = ((c && c.platform_sources) || {})[pid] || "";
+        if (kind === "vmos") {
+          return '<span class="stats-picker-modal__via stats-picker-modal__via--vmos">' + esc(i18n.viaVmos) + "</span>";
+        }
+        if (kind === "filehost") {
+          return '<span class="stats-picker-modal__via stats-picker-modal__via--filehost">' + esc(i18n.viaFilehost) + "</span>";
+        }
+        if (kind === "chain") {
+          return '<span class="stats-picker-modal__via stats-picker-modal__via--chain">' + esc(i18n.viaChain) + "</span>";
+        }
+        if (kind) {
+          return '<span class="stats-picker-modal__via stats-picker-modal__via--api">' + esc(i18n.viaApi) + "</span>";
+        }
+        return "";
+      },
       fetchChoices: function () {
         var params = new URLSearchParams();
         params.set("platform", selectedPlatform ? selectedPlatform.id : "all");
@@ -820,6 +846,11 @@
                 '<input type="checkbox" class="extractor-target__check" value="' + esc(t.platform_id) + '" checked />' +
                 '<span class="extractor-target__icon" aria-hidden="true">' + esc(t.icon) + "</span>" +
                 '<span class="extractor-target__name">' + esc(t.name) + "</span>" +
+                '<span class="extractor-target__via' +
+                (t.via_vmos ? " is-vmos" : t.via_filehost ? " is-filehost" : t.via_chain ? " is-chain" : "") +
+                '">' +
+                esc(t.via_vmos ? i18n.viaVmos : t.via_filehost ? i18n.viaFilehost : t.via_chain ? i18n.viaChain : i18n.viaApi) +
+                "</span>" +
                 '<span class="extractor-target__meta">' +
                 fmt(i18n.scanPending, { count: t.pending }) +
                 " · " + fmt(i18n.scanCap, { count: t.cycle_cap }) +

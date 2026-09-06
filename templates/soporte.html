@@ -10,6 +10,10 @@
         <section class="section dashboard-section support-chat-section">
           <header class="admin-head admin-head--title support-head">
             <h1>{{ t('support.title') }}</h1>
+            <div class="public-chat__actions">
+              <button type="button" class="btn btn-ghost btn-sm" id="chat-refresh">{{ t('support.chat_refresh') }}</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="chat-live">{{ t('support.chat_off') }}</button>
+            </div>
           </header>
           <p class="sub support-chat-section__intro">{{ t('support.intro') }}</p>
 
@@ -47,7 +51,34 @@
     var adminLabel = {{ t('support.admin_label') | tojson }};
     var userLabel = {{ user.username | tojson }};
     var lastCount = -1;
+    var refreshBtn = document.getElementById("chat-refresh");
+    var liveBtn = document.getElementById("chat-live");
+    var offLabel = {{ t('support.chat_off') | tojson }};
+    var onLabel = {{ t('support.chat_on') | tojson }};
     var poll = null;
+    var liveKey = "tuyahoChatLive";
+    var liveOn = true;
+    try {
+      if (window.localStorage && localStorage.getItem(liveKey) === "0") liveOn = false;
+    } catch (e) {}
+
+    function syncLiveBtn() {
+      if (!liveBtn) return;
+      liveBtn.textContent = liveOn ? offLabel : onLabel;
+      liveBtn.setAttribute("aria-pressed", liveOn ? "true" : "false");
+    }
+
+    function stopPoll() {
+      if (poll) {
+        clearInterval(poll);
+        poll = null;
+      }
+    }
+
+    function startPoll() {
+      stopPoll();
+      if (liveOn) poll = setInterval(load, 5000);
+    }
 
     function renderMessages(messages) {
       if (messages.length === lastCount) return;
@@ -101,8 +132,25 @@
       }
     });
 
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", function () {
+        lastCount = -1;
+        load();
+      });
+    }
+    if (liveBtn) {
+      liveBtn.addEventListener("click", function () {
+        liveOn = !liveOn;
+        try { localStorage.setItem(liveKey, liveOn ? "1" : "0"); } catch (e) {}
+        syncLiveBtn();
+        if (liveOn) startPoll();
+        else stopPoll();
+      });
+    }
+
+    syncLiveBtn();
     load();
-    setInterval(load, 5000);
+    startPoll();
   })();
 </script>
 {% endblock %}

@@ -259,6 +259,133 @@ def _ensure_oauth_accounts_table() -> None:
     _ensure_column("oauth_accounts", "account_name", "TEXT NOT NULL DEFAULT ''")
 
 
+def _ensure_vmos_accounts_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS vmos_accounts (
+                id TEXT PRIMARY KEY,
+                platform_id TEXT NOT NULL,
+                name TEXT NOT NULL DEFAULT '',
+                access_key TEXT NOT NULL DEFAULT '',
+                secret_key TEXT NOT NULL DEFAULT '',
+                pad_code TEXT NOT NULL DEFAULT '',
+                template_id TEXT NOT NULL DEFAULT '',
+                remark TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_vmos_accounts_platform ON vmos_accounts(platform_id)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _ensure_chain_accounts_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS chain_accounts (
+                id TEXT PRIMARY KEY,
+                platform_id TEXT NOT NULL,
+                name TEXT NOT NULL DEFAULT '',
+                login TEXT NOT NULL DEFAULT '',
+                secret TEXT NOT NULL DEFAULT '',
+                extra TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chain_accounts_platform ON chain_accounts(platform_id)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _ensure_x_funding_tables() -> None:
+    """Config X: una cuenta X recarga (paga la API) y las demás gastan de ese saldo."""
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS x_funding_sources (
+                id TEXT PRIMARY KEY,
+                oauth_account_id TEXT NOT NULL UNIQUE,
+                cost_per_post_cents INTEGER NOT NULL DEFAULT 0,
+                recharged_cents INTEGER NOT NULL DEFAULT 0,
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS x_funding_usage (
+                id TEXT PRIMARY KEY,
+                source_id TEXT NOT NULL,
+                oauth_account_id TEXT NOT NULL DEFAULT '',
+                video_title TEXT NOT NULL DEFAULT '',
+                cost_cents INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_x_funding_usage_source ON x_funding_usage(source_id)"
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS x_monetize_checks (
+                oauth_account_id TEXT PRIMARY KEY,
+                username TEXT NOT NULL DEFAULT '',
+                followers INTEGER NOT NULL DEFAULT 0,
+                posts_count INTEGER NOT NULL DEFAULT 0,
+                meets INTEGER NOT NULL DEFAULT 0,
+                detail TEXT NOT NULL DEFAULT '',
+                checked_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    _ensure_column("scheduled_publications", "x_use_funding", "INTEGER NOT NULL DEFAULT 0")
+
+
+def _ensure_filehost_accounts_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS filehost_accounts (
+                id TEXT PRIMARY KEY,
+                platform_id TEXT NOT NULL,
+                name TEXT NOT NULL DEFAULT '',
+                api_key TEXT NOT NULL DEFAULT '',
+                extra TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_filehost_accounts_platform ON filehost_accounts(platform_id)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _ensure_users_linked_tiktok_config_column() -> None:
     conn = _connect()
     try:
@@ -657,6 +784,9 @@ def init_db() -> None:
     _ensure_stats_query_log_table()
     _ensure_tiktok_oauth_columns()
     _ensure_oauth_accounts_table()
+    _ensure_vmos_accounts_table()
+    _ensure_filehost_accounts_table()
+    _ensure_chain_accounts_table()
     _ensure_scheduled_publications_table()
     _ensure_platform_credentials_name_column()
     _ensure_platform_credentials_owner_column()
@@ -669,6 +799,7 @@ def init_db() -> None:
     _ensure_publication_log_account_link_column()
     _ensure_publication_log_batch_id_column()
     _ensure_scheduled_publications_account_link_column()
+    _ensure_x_funding_tables()
     _ensure_extractor_tables()
     _ensure_invite_codes_table()
     _migrate_invited_users_guest_plan()
@@ -935,6 +1066,46 @@ def _account_link_platform_ids(conn: sqlite3.Connection, link_name: str) -> list
     return [str(r["platform_id"]) for r in rows]
 
 
+def _account_link_platform_sources(
+    conn: sqlite3.Connection, link_name: str
+) -> dict[str, str]:
+    """Cómo está unida cada red a esa cuenta: vmos, oauth, tiktok, platform."""
+    rows = conn.execute(
+        """
+        SELECT platform_id, source_kind, updated_at
+        FROM server_accounts
+        WHERE lower(trim(name)) = lower(trim(?))
+          AND active = 1
+          AND trim(platform_id) != ''
+        ORDER BY updated_at DESC
+        """,
+        (link_name,),
+    ).fetchall()
+    out: dict[str, str] = {}
+    for r in rows:
+        pid = str(r["platform_id"] or "").strip()
+        if not pid or pid in out:
+            continue
+        out[pid] = str(r["source_kind"] or "manual") or "manual"
+    return out
+
+
+def _merge_platform_sources(maps: list[dict[str, str]]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for item in maps:
+        for pid, kind in (item or {}).items():
+            pid_s = str(pid or "").strip()
+            kind_s = str(kind or "").strip() or "manual"
+            if not pid_s:
+                continue
+            prev = out.get(pid_s)
+            if not prev:
+                out[pid_s] = kind_s
+            elif prev != kind_s:
+                out[pid_s] = "mixed"
+    return out
+
+
 def list_user_account_link_ids(user_id: str) -> list[str]:
     seed_admin_if_missing()
     conn = _connect()
@@ -1035,6 +1206,7 @@ def list_team_server_account_choices(
                     "id": link_id,
                     "name": link_name,
                     "platform_ids": platform_ids,
+                    "platform_sources": _account_link_platform_sources(conn, link_name),
                     "platform": ", ".join(platform_labels),
                     "_search": f"{link_name} {' '.join(platform_labels)} {link_id}".lower(),
                 }
@@ -1071,6 +1243,9 @@ def list_team_server_account_choices(
                             "id": str(row["id"]),
                             "name": link_name,
                             "platform_ids": platform_ids,
+                            "platform_sources": _account_link_platform_sources(
+                                conn, link_name
+                            ),
                             "platform": ", ".join(platform_labels),
                             "_search": search_blob,
                         }
@@ -1171,6 +1346,7 @@ def list_stats_filter_choices(viewer: User, *, lang: str = "es") -> list[dict[st
                         "name": link_name,
                         "kind": "link",
                         "platform_ids": list(platform_ids),
+                        "platform_sources": _account_link_platform_sources(conn, link_name),
                         "platform": ", ".join(platform_labels),
                         "link_ids": [link_id],
                     }
@@ -1192,6 +1368,7 @@ def list_stats_filter_choices(viewer: User, *, lang: str = "es") -> list[dict[st
                     "name": acc.get("name") or link_id,
                     "kind": "link",
                     "platform_ids": list(acc.get("platform_ids") or []),
+                    "platform_sources": dict(acc.get("platform_sources") or {}),
                     "platform": acc.get("platform") or "",
                     "link_ids": [link_id],
                 }
@@ -1229,6 +1406,7 @@ def list_stats_filter_choices(viewer: User, *, lang: str = "es") -> list[dict[st
                         "name": link_name,
                         "kind": "link",
                         "platform_ids": list(platform_ids),
+                        "platform_sources": _account_link_platform_sources(conn, link_name),
                         "platform": ", ".join(platform_labels),
                         "link_ids": [link_id],
                     }
@@ -1269,6 +1447,7 @@ def list_stats_filter_choices(viewer: User, *, lang: str = "es") -> list[dict[st
                         "name": link_name,
                         "kind": "link",
                         "platform_ids": list(platform_ids),
+                        "platform_sources": _account_link_platform_sources(conn, link_name),
                         "platform": ", ".join(platform_labels),
                         "link_ids": [link_id],
                     }
@@ -1293,12 +1472,20 @@ def list_stats_filter_choices(viewer: User, *, lang: str = "es") -> list[dict[st
                 )
                 if not link_ids and not platform_ids:
                     continue
+                source_maps = []
+                for member in members:
+                    member_name = str(member.get("name") or "").strip()
+                    if member_name:
+                        source_maps.append(
+                            _account_link_platform_sources(conn, member_name)
+                        )
                 choices.append(
                     {
                         "id": f"{STATS_GROUP_PREFIX}{group['id']}",
                         "name": group.get("name") or group["id"],
                         "kind": "group",
                         "platform_ids": platform_ids,
+                        "platform_sources": _merge_platform_sources(source_maps),
                         "link_ids": link_ids,
                     }
                 )
@@ -2652,6 +2839,81 @@ def _delete_oauth_account_on_conn(conn: sqlite3.Connection, account_id: str) -> 
     conn.execute("DELETE FROM oauth_accounts WHERE id = ?", (oid,))
 
 
+def _delete_vmos_account_on_conn(conn: sqlite3.Connection, account_id: str) -> None:
+    oid = (account_id or "").strip()
+    if not oid:
+        return
+    member_cols = {
+        r[1] for r in conn.execute("PRAGMA table_info(server_group_members)").fetchall()
+    }
+    if "server_account_id" in member_cols:
+        conn.execute(
+            """
+            DELETE FROM server_group_members
+            WHERE server_account_id IN (
+                SELECT id FROM server_accounts
+                WHERE source_kind = 'vmos' AND source_ref = ?
+            )
+            """,
+            (oid,),
+        )
+    conn.execute(
+        "DELETE FROM server_accounts WHERE source_kind = 'vmos' AND source_ref = ?",
+        (oid,),
+    )
+    conn.execute("DELETE FROM vmos_accounts WHERE id = ?", (oid,))
+
+
+def _delete_filehost_account_on_conn(conn: sqlite3.Connection, account_id: str) -> None:
+    oid = (account_id or "").strip()
+    if not oid:
+        return
+    member_cols = {
+        r[1] for r in conn.execute("PRAGMA table_info(server_group_members)").fetchall()
+    }
+    if "server_account_id" in member_cols:
+        conn.execute(
+            """
+            DELETE FROM server_group_members
+            WHERE server_account_id IN (
+                SELECT id FROM server_accounts
+                WHERE source_kind = 'filehost' AND source_ref = ?
+            )
+            """,
+            (oid,),
+        )
+    conn.execute(
+        "DELETE FROM server_accounts WHERE source_kind = 'filehost' AND source_ref = ?",
+        (oid,),
+    )
+    conn.execute("DELETE FROM filehost_accounts WHERE id = ?", (oid,))
+
+
+def _delete_chain_account_on_conn(conn: sqlite3.Connection, account_id: str) -> None:
+    oid = (account_id or "").strip()
+    if not oid:
+        return
+    member_cols = {
+        r[1] for r in conn.execute("PRAGMA table_info(server_group_members)").fetchall()
+    }
+    if "server_account_id" in member_cols:
+        conn.execute(
+            """
+            DELETE FROM server_group_members
+            WHERE server_account_id IN (
+                SELECT id FROM server_accounts
+                WHERE source_kind = 'chain' AND source_ref = ?
+            )
+            """,
+            (oid,),
+        )
+    conn.execute(
+        "DELETE FROM server_accounts WHERE source_kind = 'chain' AND source_ref = ?",
+        (oid,),
+    )
+    conn.execute("DELETE FROM chain_accounts WHERE id = ?", (oid,))
+
+
 def _delete_server_account_on_conn(conn: sqlite3.Connection, account_id: str) -> None:
     aid = (account_id or "").strip()
     if not aid:
@@ -2681,6 +2943,30 @@ def _delete_server_account_on_conn(conn: sqlite3.Connection, account_id: str) ->
         return
     if kind == "oauth" and ref:
         _delete_oauth_account_on_conn(conn, ref)
+        leftover = conn.execute(
+            "SELECT 1 AS ok FROM server_accounts WHERE id = ?", (aid,)
+        ).fetchone()
+        if leftover:
+            conn.execute("DELETE FROM server_accounts WHERE id = ?", (aid,))
+        return
+    if kind == "vmos" and ref:
+        _delete_vmos_account_on_conn(conn, ref)
+        leftover = conn.execute(
+            "SELECT 1 AS ok FROM server_accounts WHERE id = ?", (aid,)
+        ).fetchone()
+        if leftover:
+            conn.execute("DELETE FROM server_accounts WHERE id = ?", (aid,))
+        return
+    if kind == "filehost" and ref:
+        _delete_filehost_account_on_conn(conn, ref)
+        leftover = conn.execute(
+            "SELECT 1 AS ok FROM server_accounts WHERE id = ?", (aid,)
+        ).fetchone()
+        if leftover:
+            conn.execute("DELETE FROM server_accounts WHERE id = ?", (aid,))
+        return
+    if kind == "chain" and ref:
+        _delete_chain_account_on_conn(conn, ref)
         leftover = conn.execute(
             "SELECT 1 AS ok FROM server_accounts WHERE id = ?", (aid,)
         ).fetchone()
@@ -4371,6 +4657,859 @@ def list_oauth_accounts_public(platform_id: str) -> list[dict[str, Any]]:
         conn.close()
 
 
+def _vmos_public_row(r: Any) -> dict[str, Any]:
+    secret = str(r["secret_key"] or "")
+    return {
+        "id": r["id"],
+        "platform_id": r["platform_id"],
+        "name": (r["name"] or "").strip() or (r["pad_code"] or "VMOS"),
+        "access_key": r["access_key"] or "",
+        "secret_key_set": bool(secret.strip()),
+        "secret_key_mask": _mask_secret(secret),
+        "pad_code": r["pad_code"] or "",
+        "template_id": r["template_id"] or "",
+        "remark": r["remark"] or "",
+        "updated_at": r["updated_at"],
+    }
+
+
+def list_vmos_accounts_public(platform_id: str = "") -> list[dict[str, Any]]:
+    seed_admin_if_missing()
+    pid = (platform_id or "").strip()
+    conn = _connect()
+    try:
+        if pid:
+            rows = conn.execute(
+                """
+                SELECT * FROM vmos_accounts
+                WHERE platform_id = ?
+                ORDER BY updated_at DESC
+                """,
+                (pid,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM vmos_accounts ORDER BY platform_id, updated_at DESC"
+            ).fetchall()
+        return [_vmos_public_row(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def list_vmos_accounts_grouped() -> dict[str, list[dict[str, Any]]]:
+    import vmos as vmos_mod
+
+    grouped: dict[str, list[dict[str, Any]]] = {pid: [] for pid in vmos_mod.PLATFORM_IDS}
+    for row in list_vmos_accounts_public():
+        pid = str(row.get("platform_id") or "")
+        grouped.setdefault(pid, []).append(row)
+    return grouped
+
+
+def get_vmos_account(account_id: str) -> dict[str, Any] | None:
+    oid = (account_id or "").strip()
+    if not oid:
+        return None
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT * FROM vmos_accounts WHERE id = ?", (oid,)).fetchone()
+        return _vmos_public_row(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_vmos_account_raw(account_id: str) -> dict[str, Any] | None:
+    oid = (account_id or "").strip()
+    if not oid:
+        return None
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT * FROM vmos_accounts WHERE id = ?", (oid,)).fetchone()
+        if not row:
+            return None
+        return {k: row[k] for k in row.keys()}
+    finally:
+        conn.close()
+
+
+def resolve_vmos_account_for_publish(
+    platform_id: str, account_link_id: str | None = None
+) -> dict[str, Any] | None:
+    """Credenciales VMOS solo si esa cuenta+red está unida por VMOS (no por OAuth)."""
+    import vmos as vmos_mod
+
+    pid = (platform_id or "").strip()
+    lid = (account_link_id or "").strip()
+    if pid not in vmos_mod.PLATFORM_IDS or not lid:
+        return None
+    linked = get_account_platform_row(lid, pid)
+    if not linked or str(linked.get("source_kind") or "") != "vmos":
+        return None
+    raw = get_vmos_account_raw(str(linked.get("source_ref") or ""))
+    if raw:
+        return raw
+    name = get_account_link_name(lid) or ""
+    if not name:
+        return None
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT * FROM vmos_accounts
+            WHERE platform_id = ?
+              AND lower(trim(name)) = lower(trim(?))
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (pid, name),
+        ).fetchone()
+        return {k: row[k] for k in row.keys()} if row else None
+    finally:
+        conn.close()
+
+
+def upsert_vmos_account(
+    *,
+    account_id: str = "",
+    platform_id: str,
+    name: str,
+    access_key: str,
+    secret_key: str | None,
+    pad_code: str,
+    template_id: str = "",
+    remark: str = "",
+    link_name: str = "",
+) -> dict[str, Any]:
+    import vmos as vmos_mod
+
+    seed_admin_if_missing()
+    pid = (platform_id or "").strip()
+    if pid not in vmos_mod.PLATFORM_IDS:
+        raise ValueError("unknown_platform")
+    now = datetime.now(timezone.utc).isoformat()
+    oid = (account_id or "").strip()
+    conn = _connect()
+    try:
+        existing = None
+        if oid:
+            existing = conn.execute(
+                "SELECT * FROM vmos_accounts WHERE id = ?", (oid,)
+            ).fetchone()
+            if not existing:
+                raise ValueError("not_found")
+        secret = (existing["secret_key"] if existing else "") or ""
+        if secret_key is not None and str(secret_key).strip():
+            secret = str(secret_key).strip()
+        if not oid:
+            oid = str(uuid.uuid4())
+        if not existing and (
+            not secret.strip() or not (access_key or "").strip() or not (pad_code or "").strip()
+        ):
+            raise ValueError("missing_fields")
+        label = (
+            (name or "").strip()
+            or (link_name or "").strip()
+            or (pad_code or "").strip()
+            or "VMOS"
+        )
+        account_label = (link_name or "").strip() or label
+        created = existing["created_at"] if existing else now
+        conn.execute(
+            """
+            INSERT INTO vmos_accounts (
+                id, platform_id, name, access_key, secret_key, pad_code,
+                template_id, remark, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                platform_id = excluded.platform_id,
+                name = excluded.name,
+                access_key = excluded.access_key,
+                secret_key = excluded.secret_key,
+                pad_code = excluded.pad_code,
+                template_id = excluded.template_id,
+                remark = excluded.remark,
+                updated_at = excluded.updated_at
+            """,
+            (
+                oid,
+                pid,
+                label,
+                (access_key or "").strip(),
+                secret,
+                (pad_code or "").strip(),
+                (template_id or "").strip(),
+                (remark or "").strip(),
+                created,
+                now,
+            ),
+        )
+        try:
+            _upsert_linked_server_account(
+                conn,
+                source_kind="vmos",
+                source_ref=oid,
+                name=account_label,
+                platform_id=pid,
+                active=True,
+            )
+        except ValueError as e:
+            if str(e) != "name_taken":
+                raise
+        conn.commit()
+    finally:
+        conn.close()
+    row = get_vmos_account(oid)
+    if not row:
+        raise ValueError("not_found")
+    return row
+
+
+def delete_vmos_account(account_id: str) -> None:
+    oid = (account_id or "").strip()
+    if not oid:
+        raise ValueError("not_found")
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT 1 AS ok FROM vmos_accounts WHERE id = ?", (oid,)).fetchone()
+        if not row:
+            raise ValueError("not_found")
+        _delete_vmos_account_on_conn(conn, oid)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _filehost_public_row(r: Any) -> dict[str, Any]:
+    key = str(r["api_key"] or "")
+    extra = str(r["extra"] or "")
+    return {
+        "id": r["id"],
+        "platform_id": r["platform_id"],
+        "name": (r["name"] or "").strip() or "PPV",
+        "api_key_set": bool(key.strip()),
+        "api_key_mask": _mask_secret(key),
+        "extra": extra,
+        "extra_mask": _mask_secret(extra) if extra else "",
+        "updated_at": r["updated_at"],
+    }
+
+
+def list_filehost_accounts_public(platform_id: str = "") -> list[dict[str, Any]]:
+    seed_admin_if_missing()
+    pid = (platform_id or "").strip()
+    conn = _connect()
+    try:
+        if pid:
+            rows = conn.execute(
+                """
+                SELECT * FROM filehost_accounts
+                WHERE platform_id = ?
+                ORDER BY updated_at DESC
+                """,
+                (pid,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM filehost_accounts ORDER BY platform_id, updated_at DESC"
+            ).fetchall()
+        return [_filehost_public_row(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def list_filehost_accounts_grouped() -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in list_filehost_accounts_public():
+        pid = str(row.get("platform_id") or "")
+        grouped.setdefault(pid, []).append(row)
+    return grouped
+
+
+def get_filehost_account(account_id: str) -> dict[str, Any] | None:
+    raw = get_filehost_account_raw(account_id)
+    return _filehost_public_row(raw) if raw else None
+
+
+def get_filehost_account_raw(account_id: str) -> dict[str, Any] | None:
+    seed_admin_if_missing()
+    oid = (account_id or "").strip()
+    if not oid:
+        return None
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT * FROM filehost_accounts WHERE id = ?", (oid,)
+        ).fetchone()
+        return {k: row[k] for k in row.keys()} if row else None
+    finally:
+        conn.close()
+
+
+def resolve_filehost_account_for_publish(
+    platform_id: str, account_link_id: str | None = None
+) -> dict[str, Any] | None:
+    import filehost as filehost_mod
+
+    pid = (platform_id or "").strip()
+    lid = (account_link_id or "").strip()
+    if pid not in filehost_mod.PLATFORM_IDS or not lid:
+        return None
+    linked = get_account_platform_row(lid, pid)
+    if not linked or str(linked.get("source_kind") or "") != "filehost":
+        return None
+    return get_filehost_account_raw(str(linked.get("source_ref") or ""))
+
+
+def upsert_filehost_account(
+    *,
+    account_id: str = "",
+    platform_id: str,
+    name: str,
+    api_key: str | None,
+    extra: str | None = None,
+    link_name: str = "",
+) -> dict[str, Any]:
+    import filehost as filehost_mod
+
+    seed_admin_if_missing()
+    pid = (platform_id or "").strip()
+    if pid not in filehost_mod.PLATFORM_IDS:
+        raise ValueError("unknown_platform")
+    now = datetime.now(timezone.utc).isoformat()
+    oid = (account_id or "").strip()
+    conn = _connect()
+    try:
+        existing = None
+        if oid:
+            existing = conn.execute(
+                "SELECT * FROM filehost_accounts WHERE id = ?", (oid,)
+            ).fetchone()
+            if not existing:
+                raise ValueError("not_found")
+        key = (existing["api_key"] if existing else "") or ""
+        extra_val = (existing["extra"] if existing else "") or ""
+        if api_key is not None and str(api_key).strip():
+            key = str(api_key).strip()
+        if extra is not None:
+            extra_val = str(extra).strip()
+        if not oid:
+            oid = str(uuid.uuid4())
+        need_extra = filehost_mod.extra_field(pid)
+        if not existing and not key.strip():
+            raise ValueError("missing_fields")
+        if not existing and need_extra and not extra_val.strip():
+            raise ValueError("missing_fields")
+        label = (name or "").strip() or (link_name or "").strip() or pid
+        account_label = (link_name or "").strip() or label
+        created = existing["created_at"] if existing else now
+        conn.execute(
+            """
+            INSERT INTO filehost_accounts (
+                id, platform_id, name, api_key, extra, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                platform_id = excluded.platform_id,
+                name = excluded.name,
+                api_key = excluded.api_key,
+                extra = excluded.extra,
+                updated_at = excluded.updated_at
+            """,
+            (oid, pid, label, key, extra_val, created, now),
+        )
+        try:
+            _upsert_linked_server_account(
+                conn,
+                source_kind="filehost",
+                source_ref=oid,
+                name=account_label,
+                platform_id=pid,
+                active=True,
+            )
+        except ValueError as e:
+            if str(e) != "name_taken":
+                raise
+        conn.commit()
+    finally:
+        conn.close()
+    row = get_filehost_account(oid)
+    if not row:
+        raise ValueError("not_found")
+    return row
+
+
+def delete_filehost_account(account_id: str) -> None:
+    oid = (account_id or "").strip()
+    if not oid:
+        raise ValueError("not_found")
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT 1 AS ok FROM filehost_accounts WHERE id = ?", (oid,)
+        ).fetchone()
+        if not row:
+            raise ValueError("not_found")
+        _delete_filehost_account_on_conn(conn, oid)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _chain_public_row(r: Any) -> dict[str, Any]:
+    login = str(r["login"] or "")
+    extra = str(r["extra"] or "")
+    return {
+        "id": r["id"],
+        "platform_id": r["platform_id"],
+        "name": (r["name"] or "").strip() or login or "chain",
+        "login": login,
+        "login_mask": _mask_secret(login) if login else "",
+        "secret_set": bool(str(r["secret"] or "").strip()),
+        "extra": extra,
+        "extra_mask": _mask_secret(extra) if extra else "",
+        "updated_at": r["updated_at"],
+    }
+
+
+def list_chain_accounts_public(platform_id: str = "") -> list[dict[str, Any]]:
+    seed_admin_if_missing()
+    pid = (platform_id or "").strip()
+    conn = _connect()
+    try:
+        if pid:
+            rows = conn.execute(
+                """
+                SELECT * FROM chain_accounts
+                WHERE platform_id = ?
+                ORDER BY updated_at DESC
+                """,
+                (pid,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM chain_accounts ORDER BY platform_id, updated_at DESC"
+            ).fetchall()
+        return [_chain_public_row(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def list_chain_accounts_grouped() -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in list_chain_accounts_public():
+        pid = str(row.get("platform_id") or "")
+        grouped.setdefault(pid, []).append(row)
+    return grouped
+
+
+def get_chain_account(account_id: str) -> dict[str, Any] | None:
+    raw = get_chain_account_raw(account_id)
+    return _chain_public_row(raw) if raw else None
+
+
+def get_chain_account_raw(account_id: str) -> dict[str, Any] | None:
+    seed_admin_if_missing()
+    oid = (account_id or "").strip()
+    if not oid:
+        return None
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT * FROM chain_accounts WHERE id = ?", (oid,)
+        ).fetchone()
+        return {k: row[k] for k in row.keys()} if row else None
+    finally:
+        conn.close()
+
+
+def resolve_chain_account_for_publish(
+    platform_id: str, account_link_id: str | None = None
+) -> dict[str, Any] | None:
+    import chain as chain_mod
+
+    pid = (platform_id or "").strip()
+    lid = (account_link_id or "").strip()
+    if pid not in chain_mod.PLATFORM_IDS or not lid:
+        return None
+    linked = get_account_platform_row(lid, pid)
+    if not linked or str(linked.get("source_kind") or "") != "chain":
+        return None
+    return get_chain_account_raw(str(linked.get("source_ref") or ""))
+
+
+def upsert_chain_account(
+    *,
+    account_id: str = "",
+    platform_id: str,
+    name: str,
+    login: str | None,
+    secret: str | None,
+    extra: str | None = None,
+    link_name: str = "",
+) -> dict[str, Any]:
+    import chain as chain_mod
+
+    seed_admin_if_missing()
+    pid = (platform_id or "").strip()
+    if pid not in chain_mod.PLATFORM_IDS:
+        raise ValueError("unknown_platform")
+    now = datetime.now(timezone.utc).isoformat()
+    oid = (account_id or "").strip()
+    conn = _connect()
+    try:
+        existing = None
+        if oid:
+            existing = conn.execute(
+                "SELECT * FROM chain_accounts WHERE id = ?", (oid,)
+            ).fetchone()
+            if not existing:
+                raise ValueError("not_found")
+        login_val = (existing["login"] if existing else "") or ""
+        secret_val = (existing["secret"] if existing else "") or ""
+        extra_val = (existing["extra"] if existing else "") or ""
+        if login is not None and str(login).strip():
+            login_val = str(login).strip()
+        if extra is not None:
+            extra_val = str(extra).strip()
+        incoming_secret = str(secret).strip() if secret is not None else ""
+        if not oid:
+            oid = str(uuid.uuid4())
+        if not existing and not login_val:
+            raise ValueError("missing_fields")
+        if not existing and not incoming_secret and not secret_val:
+            raise ValueError("missing_fields")
+        secret_val = chain_mod.persist_secret(pid, login_val, incoming_secret, secret_val)
+        if not secret_val:
+            raise ValueError("missing_fields")
+        label = (name or "").strip() or (link_name or "").strip() or login_val or pid
+        account_label = (link_name or "").strip() or label
+        created = existing["created_at"] if existing else now
+        conn.execute(
+            """
+            INSERT INTO chain_accounts (
+                id, platform_id, name, login, secret, extra, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                platform_id = excluded.platform_id,
+                name = excluded.name,
+                login = excluded.login,
+                secret = excluded.secret,
+                extra = excluded.extra,
+                updated_at = excluded.updated_at
+            """,
+            (oid, pid, label, login_val, secret_val, extra_val, created, now),
+        )
+        try:
+            _upsert_linked_server_account(
+                conn,
+                source_kind="chain",
+                source_ref=oid,
+                name=account_label,
+                platform_id=pid,
+                active=True,
+            )
+        except ValueError as e:
+            if str(e) != "name_taken":
+                raise
+        conn.commit()
+    finally:
+        conn.close()
+    row = get_chain_account(oid)
+    if not row:
+        raise ValueError("not_found")
+    return row
+
+
+def delete_chain_account(account_id: str) -> None:
+    oid = (account_id or "").strip()
+    if not oid:
+        raise ValueError("not_found")
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT 1 AS ok FROM chain_accounts WHERE id = ?", (oid,)
+        ).fetchone()
+        if not row:
+            raise ValueError("not_found")
+        _delete_chain_account_on_conn(conn, oid)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _x_funding_source_row(conn: sqlite3.Connection, r: Any) -> dict[str, Any]:
+    spent_row = conn.execute(
+        "SELECT COALESCE(SUM(cost_cents), 0) AS spent FROM x_funding_usage WHERE source_id = ?",
+        (r["id"],),
+    ).fetchone()
+    spent = int(spent_row["spent"] or 0)
+    acc = conn.execute(
+        "SELECT username, display_name, account_name, active FROM oauth_accounts WHERE id = ?",
+        (r["oauth_account_id"],),
+    ).fetchone()
+    uname = str(acc["username"] or "").strip() if acc else ""
+    label = ""
+    if acc:
+        label = (
+            str(acc["account_name"] or "").strip()
+            or str(acc["display_name"] or "").strip()
+            or (f"@{uname}" if uname else "")
+        )
+    recharged = int(r["recharged_cents"] or 0)
+    return {
+        "id": r["id"],
+        "oauth_account_id": r["oauth_account_id"],
+        "name": label or "X",
+        "username": uname,
+        "connected": bool(acc),
+        "cost_per_post_cents": int(r["cost_per_post_cents"] or 0),
+        "recharged_cents": recharged,
+        "spent_cents": spent,
+        "available_cents": recharged - spent,
+        "active": bool(r["active"]),
+        "updated_at": r["updated_at"],
+    }
+
+
+def list_x_funding_sources() -> list[dict[str, Any]]:
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM x_funding_sources ORDER BY active DESC, updated_at DESC"
+        ).fetchall()
+        return [_x_funding_source_row(conn, r) for r in rows]
+    finally:
+        conn.close()
+
+
+def upsert_x_funding_source(
+    *,
+    oauth_account_id: str,
+    cost_per_post_cents: int,
+    active: bool = True,
+) -> dict[str, Any]:
+    seed_admin_if_missing()
+    oid = (oauth_account_id or "").strip()
+    if not oid:
+        raise ValueError("missing_fields")
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        acc = conn.execute(
+            "SELECT id, platform_id FROM oauth_accounts WHERE id = ?", (oid,)
+        ).fetchone()
+        if not acc or str(acc["platform_id"] or "") != "x":
+            raise ValueError("not_found")
+        existing = conn.execute(
+            "SELECT * FROM x_funding_sources WHERE oauth_account_id = ?", (oid,)
+        ).fetchone()
+        sid = existing["id"] if existing else str(uuid.uuid4())
+        created = existing["created_at"] if existing else now
+        recharged = int(existing["recharged_cents"] or 0) if existing else 0
+        conn.execute(
+            """
+            INSERT INTO x_funding_sources (
+                id, oauth_account_id, cost_per_post_cents, recharged_cents,
+                active, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                cost_per_post_cents = excluded.cost_per_post_cents,
+                active = excluded.active,
+                updated_at = excluded.updated_at
+            """,
+            (sid, oid, max(0, int(cost_per_post_cents)), recharged, 1 if active else 0, created, now),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM x_funding_sources WHERE id = ?", (sid,)
+        ).fetchone()
+        return _x_funding_source_row(conn, row)
+    finally:
+        conn.close()
+
+
+def delete_x_funding_source(source_id: str) -> None:
+    sid = (source_id or "").strip()
+    if not sid:
+        raise ValueError("not_found")
+    conn = _connect()
+    try:
+        cur = conn.execute("DELETE FROM x_funding_sources WHERE id = ?", (sid,))
+        if cur.rowcount == 0:
+            raise ValueError("not_found")
+        conn.execute("DELETE FROM x_funding_usage WHERE source_id = ?", (sid,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_x_funding_recharge(source_id: str, amount_cents: int) -> dict[str, Any]:
+    sid = (source_id or "").strip()
+    amount = int(amount_cents)
+    if not sid:
+        raise ValueError("not_found")
+    if amount <= 0:
+        raise ValueError("bad_amount")
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            """
+            UPDATE x_funding_sources
+            SET recharged_cents = recharged_cents + ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (amount, now, sid),
+        )
+        if cur.rowcount == 0:
+            raise ValueError("not_found")
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM x_funding_sources WHERE id = ?", (sid,)
+        ).fetchone()
+        return _x_funding_source_row(conn, row)
+    finally:
+        conn.close()
+
+
+def resolve_active_x_funding_source() -> dict[str, Any] | None:
+    """La fuente activa con saldo disponible (para el checkbox al publicar)."""
+    for src in list_x_funding_sources():
+        if not src["active"] or not src["connected"]:
+            continue
+        if src["available_cents"] >= max(1, src["cost_per_post_cents"]):
+            return src
+        if src["cost_per_post_cents"] == 0:
+            return src
+    return None
+
+
+def record_x_funding_usage(
+    *,
+    account_link_id: str | None = None,
+    video_title: str = "",
+) -> bool:
+    """Descuenta un post del saldo de la fuente activa. Devuelve False si no hay fuente."""
+    src = resolve_active_x_funding_source()
+    if not src:
+        return False
+    oid = resolve_oauth_account_id("x", account_link_id=account_link_id) or ""
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            INSERT INTO x_funding_usage (
+                id, source_id, oauth_account_id, video_title, cost_cents, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(uuid.uuid4()),
+                src["id"],
+                oid,
+                (video_title or "").strip()[:200],
+                int(src["cost_per_post_cents"] or 0),
+                now,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return True
+
+
+def list_x_funding_usage(limit: int = 30) -> list[dict[str, Any]]:
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT u.*, o.username AS username, o.account_name AS account_name
+            FROM x_funding_usage u
+            LEFT JOIN oauth_accounts o ON o.id = u.oauth_account_id
+            ORDER BY u.created_at DESC
+            LIMIT ?
+            """,
+            (max(1, min(int(limit), 200)),),
+        ).fetchall()
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            uname = str(r["username"] or "").strip()
+            out.append(
+                {
+                    "id": r["id"],
+                    "account": str(r["account_name"] or "").strip()
+                    or (f"@{uname}" if uname else ""),
+                    "video_title": r["video_title"],
+                    "cost_cents": int(r["cost_cents"] or 0),
+                    "created_at": r["created_at"],
+                }
+            )
+        return out
+    finally:
+        conn.close()
+
+
+def save_x_monetize_check(
+    *,
+    oauth_account_id: str,
+    username: str,
+    followers: int,
+    posts_count: int,
+    meets: bool,
+    detail: str,
+) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            INSERT INTO x_monetize_checks (
+                oauth_account_id, username, followers, posts_count, meets, detail, checked_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(oauth_account_id) DO UPDATE SET
+                username = excluded.username,
+                followers = excluded.followers,
+                posts_count = excluded.posts_count,
+                meets = excluded.meets,
+                detail = excluded.detail,
+                checked_at = excluded.checked_at
+            """,
+            (
+                (oauth_account_id or "").strip(),
+                (username or "").strip(),
+                int(followers),
+                int(posts_count),
+                1 if meets else 0,
+                (detail or "").strip()[:300],
+                now,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def list_x_monetize_checks() -> dict[str, dict[str, Any]]:
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        rows = conn.execute("SELECT * FROM x_monetize_checks").fetchall()
+        return {
+            str(r["oauth_account_id"]): {
+                "username": r["username"],
+                "followers": int(r["followers"] or 0),
+                "posts_count": int(r["posts_count"] or 0),
+                "meets": bool(r["meets"]),
+                "detail": r["detail"],
+                "checked_at": r["checked_at"],
+            }
+            for r in rows
+        }
+    finally:
+        conn.close()
+
+
 def list_oauth_accounts_for_user(user: User, platform_id: str) -> list[dict[str, Any]]:
     if user_can_access_servers(user):
         return list_oauth_accounts_public(platform_id)
@@ -4996,6 +6135,7 @@ def get_account_platform_row(account_link_id: str, platform_id: str) -> dict[str
             SELECT * FROM server_accounts
             WHERE lower(trim(name)) = lower(trim(?))
               AND platform_id = ?
+              AND active = 1
             ORDER BY updated_at DESC
             LIMIT 1
             """,
@@ -5393,8 +6533,15 @@ def sync_server_accounts_from_links() -> None:
             )
 
         live_platform: set[str] = set()
+        import filehost as filehost_mod
+        import chain as chain_mod
+
         for pid in PLATFORM_IDS:
             if pid in oauth_platforms:
+                continue
+            if pid in filehost_mod.PLATFORM_IDS:
+                continue
+            if pid in chain_mod.PLATFORM_IDS:
                 continue
             row = conn.execute(
                 "SELECT * FROM platform_credentials WHERE platform_id = ?",
@@ -5415,6 +6562,64 @@ def sync_server_accounts_from_links() -> None:
                 active=True,
             )
 
+        live_vmos: set[str] = set()
+        vmos_rows = conn.execute(
+            "SELECT id, platform_id, name, pad_code FROM vmos_accounts"
+        ).fetchall()
+        for row in vmos_rows:
+            vid = str(row["id"])
+            live_vmos.add(vid)
+            pad = str(row["pad_code"] or "").strip()
+            label = (str(row["name"] or "").strip() or pad or "VMOS")
+            _upsert_linked_server_account(
+                conn,
+                source_kind="vmos",
+                source_ref=vid,
+                name=label,
+                platform_id=str(row["platform_id"] or ""),
+                active=True,
+            )
+
+        live_filehost: set[str] = set()
+        try:
+            fh_rows = conn.execute(
+                "SELECT id, platform_id, name FROM filehost_accounts"
+            ).fetchall()
+        except sqlite3.OperationalError:
+            fh_rows = []
+        for row in fh_rows:
+            fid = str(row["id"])
+            live_filehost.add(fid)
+            label = str(row["name"] or "").strip() or "PPV"
+            _upsert_linked_server_account(
+                conn,
+                source_kind="filehost",
+                source_ref=fid,
+                name=label,
+                platform_id=str(row["platform_id"] or ""),
+                active=True,
+            )
+
+        live_chain: set[str] = set()
+        try:
+            chain_rows = conn.execute(
+                "SELECT id, platform_id, name, login FROM chain_accounts"
+            ).fetchall()
+        except sqlite3.OperationalError:
+            chain_rows = []
+        for row in chain_rows:
+            cid = str(row["id"])
+            live_chain.add(cid)
+            label = str(row["name"] or "").strip() or str(row["login"] or "").strip() or "chain"
+            _upsert_linked_server_account(
+                conn,
+                source_kind="chain",
+                source_ref=cid,
+                name=label,
+                platform_id=str(row["platform_id"] or ""),
+                active=True,
+            )
+
         for row in conn.execute(
             "SELECT id, source_kind, source_ref FROM server_accounts WHERE source_kind != 'manual'"
         ).fetchall():
@@ -5424,6 +6629,9 @@ def sync_server_accounts_from_links() -> None:
                 (kind == "tiktok" and ref not in live_tiktok)
                 or (kind == "oauth" and ref not in live_oauth)
                 or (kind == "platform" and ref not in live_platform)
+                or (kind == "vmos" and ref not in live_vmos)
+                or (kind == "filehost" and ref not in live_filehost)
+                or (kind == "chain" and ref not in live_chain)
             )
             if stale:
                 conn.execute("DELETE FROM server_accounts WHERE id = ?", (row["id"],))
@@ -6150,6 +7358,7 @@ def create_scheduled_publication(
     lang: str = "es",
     account_link_id: str = "",
     status: str = "pending",
+    x_use_funding: bool = False,
 ) -> str:
     import json
 
@@ -6166,8 +7375,9 @@ def create_scheduled_publication(
             """
             INSERT INTO scheduled_publications (
                 id, user_id, video_id, platforms_json, tiktok_config_id,
-                content_type, scheduled_at, lang, status, created_at, account_link_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                content_type, scheduled_at, lang, status, created_at, account_link_id,
+                x_use_funding
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 sid,
@@ -6181,6 +7391,7 @@ def create_scheduled_publication(
                 st,
                 now,
                 (account_link_id or "").strip(),
+                1 if x_use_funding else 0,
             ),
         )
         conn.commit()

@@ -1,0 +1,439 @@
+"""DTube: subida IPFS al cluster y post real en Hive (posting WIF)."""
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import subprocess
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
+from pathlib import Path
+from typing import Any
+
+UA = "Tuyaho/1.0 (DTube Hive publish)"
+HIVE_NODES = (
+    "https://api.hive.blog",
+    "https://api.openhive.network",
+    "https://hive-api.arcange.eu",
+)
+CLUSTER = "https://cluster.d.tube"
+CLUSTER_FALLBACK = "https://uploader.oneloved.tube"
+VIDEO_EXT = {".mp4", ".mov", ".avi", ".wmv", ".flv", ".mkv", ".webm", ".m4v"}
+PHOTO_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+# JPEG 1×1 mínimo por si no hay miniatura (DTube pide snaphash).
+TINY_JPEG = bytes(
+    [
+        0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01,
+        0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43,
+        0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08, 0x07, 0x07, 0x07, 0x09,
+        0x09, 0x08, 0x0A, 0x0C, 0x14, 0x0D, 0x0C, 0x0B, 0x0B, 0x0C, 0x19, 0x12,
+        0x13, 0x0F, 0x14, 0x1D, 0x1A, 0x1F, 0x1E, 0x1D, 0x1A, 0x1C, 0x1C, 0x20,
+        0x24, 0x2E, 0x27, 0x20, 0x22, 0x2C, 0x23, 0x1C, 0x1C, 0x28, 0x37, 0x29,
+        0x2C, 0x30, 0x31, 0x34, 0x34, 0x34, 0x1F, 0x27, 0x39, 0x3D, 0x38, 0x32,
+        0x3C, 0x2E, 0x33, 0x34, 0x32, 0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0x01,
+        0x00, 0x01, 0x01, 0x01, 0x11, 0x00, 0xFF, 0xC4, 0x00, 0x14, 0x00, 0x01,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x03, 0xFF, 0xC4, 0x00, 0x14, 0x10, 0x01, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00,
+        0x7F, 0xFF, 0xD9,
+    ]
+)
+
+
+class DTubeError(ValueError):
+    pass
+
+
+def _parse(raw: str) -> dict[str, Any]:
+    try:
+        data = json.loads(raw) if raw else {}
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def hive_username(login: str) -> str:
+    return (login or "").strip().lstrip("@").lower()
+
+
+def _b58decode(value: str) -> bytes:
+    n = 0
+    for ch in value:
+        n = n * 58 + B58.index(ch)
+    h = n.to_bytes((n.bit_length() + 7) // 8 or 1, "big")
+    pad = 0
+    for ch in value:
+        if ch != "1":
+            break
+        pad += 1
+    return b"\x00" * pad + h
+
+
+def wif_checksum_ok(wif: str) -> bool:
+    raw = (wif or "").strip()
+    if len(raw) < 51:
+        return False
+    try:
+        decoded = _b58decode(raw)
+    except (ValueError, KeyError, IndexError):
+        return False
+    if len(decoded) not in (37, 38):
+        return False
+    payload, check = decoded[:-4], decoded[-4:]
+    digest = hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4]
+    return check == digest
+
+
+def _hive_rpc(method: str, params: Any) -> Any:
+    payload = json.dumps(
+        {"jsonrpc": "2.0", "method": method, "params": params, "id": 1}
+    ).encode("utf-8")
+    last = "hive rpc failed"
+    for node in HIVE_NODES:
+        req = urllib.request.Request(
+            node,
+            data=payload,
+            method="POST",
+            headers={
+                "User-Agent": UA,
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                data = _parse(resp.read().decode("utf-8", errors="replace"))
+        except urllib.error.HTTPError as e:
+            last = e.read().decode("utf-8", errors="replace")[:180] if e.fp else str(e)
+            continue
+        except Exception as e:
+            last = str(e)[:180]
+            continue
+        if data.get("error"):
+            err = data["error"]
+            last = str(err.get("message") if isinstance(err, dict) else err)[:180]
+            continue
+        return data.get("result")
+    raise DTubeError(last)
+
+
+def get_hive_account(username: str) -> dict[str, Any]:
+    name = hive_username(username)
+    if not name:
+        raise DTubeError("missing_username")
+    rows = _hive_rpc("condenser_api.get_accounts", [[name]])
+    if not isinstance(rows, list) or not rows:
+        raise DTubeError("hive account not found")
+    acc = rows[0] if isinstance(rows[0], dict) else {}
+    if str(acc.get("name") or "").lower() != name:
+        raise DTubeError("hive account not found")
+    return acc
+
+
+def probe_account(login: str, secret: str, extra: str = "") -> tuple[bool, str]:
+    name = hive_username(login)
+    wif = (secret or "").strip()
+    if not name or not wif:
+        return False, "missing_fields"
+    if not wif_checksum_ok(wif):
+        return False, "invalid posting WIF"
+    try:
+        acc = get_hive_account(name)
+    except DTubeError as e:
+        return False, str(e)
+    except Exception as e:
+        return False, str(e)[:280]
+    return True, str(acc.get("name") or name)
+
+
+def _multipart(fields: dict[str, str], files: list[tuple[str, str, str, bytes]]) -> tuple[bytes, str]:
+    boundary = f"----Tuyaho{uuid.uuid4().hex}"
+    chunks: list[bytes] = []
+    for key, val in fields.items():
+        chunks.append(f"--{boundary}\r\n".encode())
+        chunks.append(f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode())
+        chunks.append(str(val).encode("utf-8"))
+        chunks.append(b"\r\n")
+    for field, filename, ctype, raw in files:
+        chunks.append(f"--{boundary}\r\n".encode())
+        chunks.append(
+            f'Content-Disposition: form-data; name="{field}"; filename="{filename}"\r\n'.encode()
+        )
+        chunks.append(f"Content-Type: {ctype}\r\n\r\n".encode())
+        chunks.append(raw)
+        chunks.append(b"\r\n")
+    chunks.append(f"--{boundary}--\r\n".encode())
+    return b"".join(chunks), f"multipart/form-data; boundary={boundary}"
+
+
+def _post_cluster(url: str, files: list[tuple[str, str, str, bytes]], timeout: int = 300) -> dict[str, Any]:
+    body, ctype = _multipart({}, files)
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={"User-Agent": UA, "Accept": "application/json", "Content-Type": ctype},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return _parse(resp.read().decode("utf-8", errors="replace"))
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode("utf-8", errors="replace") if e.fp else ""
+        data = _parse(raw)
+        if data:
+            return data
+        raise DTubeError(raw[:280] or f"HTTP {e.code}")
+
+
+def _progress(base: str, token: str) -> dict[str, Any]:
+    url = f"{base}/getProgressByToken/{urllib.parse.quote(token)}"
+    req = urllib.request.Request(url, method="GET", headers={"User-Agent": UA, "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return _parse(resp.read().decode("utf-8", errors="replace"))
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode("utf-8", errors="replace") if e.fp else ""
+        return _parse(raw)
+
+
+def _first_hash(data: dict[str, Any]) -> str:
+    for key in ("hash", "ipfsHash", "videohash", "cid", "sourceHash"):
+        val = data.get(key)
+        if isinstance(val, str) and len(val) >= 20:
+            return val.strip()
+    ipfs = data.get("ipfs")
+    if isinstance(ipfs, dict):
+        return _first_hash(ipfs)
+    result = data.get("result")
+    if isinstance(result, dict):
+        return _first_hash(result)
+    video = data.get("video")
+    if isinstance(video, dict):
+        return _first_hash(video)
+    return ""
+
+
+def _upload_and_wait(kind: str, filename: str, ctype: str, raw: bytes) -> dict[str, Any]:
+    path = "uploadVideo" if kind == "video" else "uploadImage"
+    last_err = "cluster upload failed"
+    for base in (CLUSTER, CLUSTER_FALLBACK):
+        try:
+            data = _post_cluster(f"{base}/{path}", [("files", filename, ctype, raw)])
+        except DTubeError as e:
+            last_err = str(e)
+            continue
+        except Exception as e:
+            last_err = str(e)[:180]
+            continue
+        token = str(data.get("token") or data.get("id") or "").strip()
+        digest = _first_hash(data)
+        if digest and not token:
+            return data if data.get("video") or data.get("ipfs") else {"hash": digest, **data}
+        if token:
+            deadline = time.time() + 420
+            while time.time() < deadline:
+                prog = _progress(base, token)
+                merged = {**data, **prog}
+                if _first_hash(merged) and str(prog.get("status") or "").lower() in {
+                    "",
+                    "done",
+                    "finished",
+                    "complete",
+                    "ok",
+                    "100",
+                }:
+                    return merged
+                if _first_hash(merged) and int(float(prog.get("progress") or prog.get("percent") or 0) or 0) >= 100:
+                    return merged
+                err = prog.get("error") or prog.get("message")
+                if err and str(prog.get("status") or "").lower() in {"error", "failed"}:
+                    last_err = str(err)[:180]
+                    break
+                if _first_hash(merged) and not prog:
+                    return merged
+                time.sleep(2)
+            if _first_hash({**data, **locals().get("prog", {})}):
+                return {**data, **prog}
+        if digest:
+            return {"hash": digest, **data}
+        last_err = str(data.get("error") or data.get("message") or last_err)
+    raise DTubeError(last_err)
+
+
+def _snap_bytes(video_path: Path) -> bytes:
+    try:
+        tmp = video_path.with_suffix(".dtube-snap.jpg")
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-ss",
+                "1",
+                "-i",
+                str(video_path),
+                "-frames:v",
+                "1",
+                "-q:v",
+                "4",
+                str(tmp),
+            ],
+            check=True,
+            capture_output=True,
+            timeout=40,
+        )
+        if tmp.is_file() and tmp.stat().st_size > 0:
+            raw = tmp.read_bytes()
+            tmp.unlink(missing_ok=True)
+            return raw
+    except Exception:
+        pass
+    return TINY_JPEG
+
+
+def _hashes_from_upload(data: dict[str, Any]) -> dict[str, str]:
+    video = data.get("video") if isinstance(data.get("video"), dict) else {}
+    content = video.get("content") if isinstance(video.get("content"), dict) else {}
+    info = video.get("info") if isinstance(video.get("info"), dict) else {}
+    ipfs = data.get("ipfs") if isinstance(data.get("ipfs"), dict) else {}
+    source = (
+        str(content.get("videohash") or info.get("sourceHash") or ipfs.get("source") or _first_hash(data) or "").strip()
+    )
+    out = {
+        "videohash": source,
+        "video240hash": str(content.get("video240hash") or ipfs.get("240") or "").strip(),
+        "video480hash": str(content.get("video480hash") or ipfs.get("480") or "").strip(),
+        "video720hash": str(content.get("video720hash") or ipfs.get("720") or "").strip(),
+        "video1080hash": str(content.get("video1080hash") or ipfs.get("1080") or "").strip(),
+        "snaphash": str(info.get("snaphash") or ipfs.get("snap") or data.get("snaphash") or "").strip(),
+        "spritehash": str(info.get("spritehash") or "").strip(),
+    }
+    return out
+
+
+def build_json_metadata(
+    *,
+    title: str,
+    description: str,
+    hashes: dict[str, str],
+    duration: int = 0,
+    filesize: int = 0,
+) -> dict[str, Any]:
+    content = {
+        "videohash": hashes.get("videohash") or "",
+        "description": description or "",
+        "tags": ["dtube"],
+    }
+    for key in ("video240hash", "video480hash", "video720hash", "video1080hash"):
+        if hashes.get(key):
+            content[key] = hashes[key]
+    info = {
+        "title": title,
+        "snaphash": hashes.get("snaphash") or "",
+        "filesize": filesize,
+        "duration": duration,
+        "type": 0,
+    }
+    if hashes.get("spritehash"):
+        info["spritehash"] = hashes["spritehash"]
+    return {
+        "video": {"info": info, "content": content},
+        "tags": ["dtube"],
+        "app": "dtube/0.9",
+    }
+
+
+def _broadcast(username: str, wif: str, title: str, body: str, permlink: str, metadata: dict[str, Any]) -> str:
+    try:
+        from beem import Hive
+    except ImportError as e:
+        raise DTubeError("Hive signing library (beem) is not installed") from e
+    hive = Hive(node=list(HIVE_NODES), keys=[wif], num_retries=3)
+    try:
+        hive.post(
+            title,
+            body,
+            author=username,
+            permlink=permlink,
+            tags=["dtube"],
+            json_metadata=metadata,
+            beneficiaries=[{"account": "dtube", "weight": 1000}],
+        )
+    except Exception:
+        hive.post(
+            title,
+            body,
+            author=username,
+            permlink=permlink,
+            tags=["dtube"],
+            json_metadata=metadata,
+        )
+    return f"https://d.tube/#!/v/{username}/{permlink}"
+
+
+def publish_video(
+    *,
+    file_path: Path,
+    content_type: str,
+    title: str,
+    description: str,
+    lang: str,
+    account: dict[str, Any],
+) -> tuple[bool, str]:
+    from i18n import t
+
+    path = Path(file_path)
+    if content_type == "photo" or path.suffix.lower() in PHOTO_EXT:
+        return False, t("pub.dtube.no_photo", lang)
+    if not path.is_file() or path.stat().st_size <= 0:
+        return False, t("pub.dtube.file_missing", lang)
+    if path.suffix.lower() not in VIDEO_EXT:
+        return False, t("pub.dtube.bad_video", lang)
+    user = hive_username(str(account.get("login") or ""))
+    wif = str(account.get("secret") or "").strip()
+    if not user or not wif:
+        return False, t("pub.dtube.no_account", lang)
+    if not wif_checksum_ok(wif):
+        return False, t("pub.dtube.bad_wif", lang)
+    try:
+        get_hive_account(user)
+        video_raw = path.read_bytes()
+        video_data = _upload_and_wait("video", path.name, "video/mp4", video_raw)
+        hashes = _hashes_from_upload(video_data)
+        if not hashes.get("videohash"):
+            raise DTubeError("IPFS cluster did not return a video hash")
+        snap = _snap_bytes(path)
+        try:
+            snap_data = _upload_and_wait("files", "snap.jpg", "image/jpeg", snap)
+            snap_hash = _first_hash(snap_data)
+            if snap_hash:
+                hashes["snaphash"] = snap_hash
+        except DTubeError:
+            pass
+        if not hashes.get("snaphash"):
+            raise DTubeError("IPFS cluster did not return a thumbnail hash")
+        slug = re.sub(r"[^a-z0-9]+", "", (title or "video").lower())[:8] or "video"
+        permlink = f"{slug}{uuid.uuid4().hex[:8]}"
+        meta = build_json_metadata(
+            title=title or path.stem,
+            description=description or "",
+            hashes=hashes,
+            filesize=path.stat().st_size,
+        )
+        watch = _broadcast(
+            user,
+            wif,
+            title or path.stem,
+            f"[DTube](https://d.tube/#!/v/{user}/{permlink})",
+            permlink,
+            meta,
+        )
+        return True, t("pub.dtube.ok", lang, url=watch)
+    except DTubeError as e:
+        return False, t("pub.dtube.upload_fail", lang, error=str(e)[:180])
+    except Exception as e:
+        return False, t("pub.dtube.upload_fail", lang, error=str(e)[:180])

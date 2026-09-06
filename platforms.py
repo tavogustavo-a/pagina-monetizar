@@ -52,6 +52,17 @@ PLATFORMS: list[dict[str, Any]] = [
         "fields": ("client_id", "client_secret"),
     },
     {
+        "id": "threads",
+        "icon": "🧵",
+        "has_api": True,
+        "api_kind": "vmos",
+        "token_renewal": "manual",
+        "video": "limited",
+        "photo": "yes",
+        "comment": "no",
+        "fields": (),
+    },
+    {
         "id": "x",
         "icon": "✖️",
         "has_api": True,
@@ -106,6 +117,160 @@ PLATFORMS: list[dict[str, Any]] = [
         "comment": "no",
         "fields": ("client_id", "client_secret"),
     },
+    {
+        "id": "odysee",
+        "icon": "🟠",
+        "has_api": True,
+        "api_kind": "lbry",
+        "token_renewal": "manual",
+        "video": "yes",
+        "photo": "no",
+        "comment": "no",
+        "fields": (),
+    },
+    {
+        "id": "dtube",
+        "icon": "⛓️",
+        "has_api": True,
+        "api_kind": "hive",
+        "token_renewal": "manual",
+        "video": "yes",
+        "photo": "no",
+        "comment": "no",
+        "fields": (),
+    },
+    {
+        "id": "doodstream",
+        "icon": "🎬",
+        "has_api": True,
+        "api_kind": "filehost",
+        "token_renewal": "manual",
+        "video": "yes",
+        "photo": "no",
+        "comment": "no",
+        "fields": (),
+    },
+    {
+        "id": "streamwish",
+        "icon": "▶️",
+        "has_api": True,
+        "api_kind": "filehost",
+        "token_renewal": "manual",
+        "video": "yes",
+        "photo": "no",
+        "comment": "no",
+        "fields": (),
+    },
+    {
+        "id": "filemoon",
+        "icon": "🌙",
+        "has_api": True,
+        "api_kind": "filehost",
+        "token_renewal": "manual",
+        "video": "yes",
+        "photo": "no",
+        "comment": "no",
+        "fields": (),
+    },
+    {
+        "id": "mixdrop",
+        "icon": "💧",
+        "has_api": True,
+        "api_kind": "filehost",
+        "token_renewal": "manual",
+        "video": "yes",
+        "photo": "no",
+        "comment": "no",
+        "fields": (),
+    },
+    {
+        "id": "streamtape",
+        "icon": "📼",
+        "has_api": True,
+        "api_kind": "filehost",
+        "token_renewal": "manual",
+        "video": "yes",
+        "photo": "no",
+        "comment": "no",
+        "fields": (),
+    },
+    {
+        "id": "voe",
+        "icon": "🔷",
+        "has_api": True,
+        "api_kind": "filehost",
+        "token_renewal": "manual",
+        "video": "yes",
+        "photo": "no",
+        "comment": "no",
+        "fields": (),
+    },
+    {
+        "id": "vidoza",
+        "icon": "🎞️",
+        "has_api": True,
+        "api_kind": "filehost",
+        "token_renewal": "manual",
+        "video": "yes",
+        "photo": "no",
+        "comment": "no",
+        "fields": (),
+    },
+    {
+        "id": "lulustream",
+        "icon": "🟣",
+        "has_api": True,
+        "api_kind": "filehost",
+        "token_renewal": "manual",
+        "video": "yes",
+        "photo": "no",
+        "comment": "no",
+        "fields": (),
+    },
+    {
+        "id": "loadvid",
+        "icon": "📥",
+        "has_api": True,
+        "api_kind": "filehost",
+        "token_renewal": "manual",
+        "video": "yes",
+        "photo": "no",
+        "comment": "no",
+        "fields": (),
+    },
+    {
+        "id": "vidsonic",
+        "icon": "🔊",
+        "has_api": True,
+        "api_kind": "filehost",
+        "token_renewal": "manual",
+        "video": "yes",
+        "photo": "no",
+        "comment": "no",
+        "fields": (),
+    },
+    {
+        "id": "flyfile",
+        "icon": "✈️",
+        "has_api": True,
+        "api_kind": "filehost",
+        "token_renewal": "manual",
+        "video": "yes",
+        "photo": "no",
+        "comment": "no",
+        "fields": (),
+    },
+    {
+        "id": "venvo",
+        "icon": "🟣",
+        "has_api": True,
+        "api_kind": "filehost",
+        "token_renewal": "manual",
+        "video": "yes",
+        "photo": "no",
+        "comment": "no",
+        "fields": (),
+    },
 ]
 
 PLATFORM_IDS = {str(p["id"]) for p in PLATFORMS}
@@ -126,11 +291,24 @@ PLATFORM_STATS: dict[str, dict[str, bool]] = {
     "youtube": dict(_LOCAL_STATS),
     "instagram": dict(_LOCAL_STATS),
     "facebook": dict(_LOCAL_STATS),
+    "threads": dict(_LOCAL_STATS),
     "x": {**_LOCAL_STATS, "shares": True},
     "dailymotion": dict(_LOCAL_STATS),
     "bilibili": dict(_LOCAL_STATS),
     "rumble": {**_LOCAL_STATS, "comments": False},
     "snapchat": {**_LOCAL_STATS, "likes": False, "comments": False},
+    "doodstream": {**_LOCAL_STATS, "comments": False, "likes": False, "shares": False},
+    "streamwish": {**_LOCAL_STATS, "comments": False, "likes": False, "shares": False},
+    "filemoon": {**_LOCAL_STATS, "comments": False, "likes": False, "shares": False},
+    "mixdrop": {**_LOCAL_STATS, "comments": False, "likes": False, "shares": False},
+    "streamtape": {**_LOCAL_STATS, "comments": False, "likes": False, "shares": False},
+    "voe": {**_LOCAL_STATS, "comments": False, "likes": False, "shares": False},
+    "vidoza": {**_LOCAL_STATS, "comments": False, "likes": False, "shares": False},
+    "lulustream": {**_LOCAL_STATS, "comments": False, "likes": False, "shares": False},
+    "loadvid": {**_LOCAL_STATS, "comments": False, "likes": False, "shares": False},
+    "vidsonic": {**_LOCAL_STATS, "comments": False, "likes": False, "shares": False},
+    "flyfile": {**_LOCAL_STATS, "comments": False, "likes": False, "shares": False},
+    "venvo": {**_LOCAL_STATS, "comments": False, "likes": False, "shares": False},
 }
 
 
@@ -221,11 +399,58 @@ def platform_list(lang: str) -> list[dict[str, Any]]:
     return out
 
 
+def _vmos_platform_ids() -> frozenset[str]:
+    import vmos
+
+    return vmos.PLATFORM_IDS
+
+
+def _vmos_apidoc_row(lang: str) -> dict[str, Any]:
+    from i18n import MESSAGES, t
+
+    steps: list[str] = []
+    n = 1
+    while f"apidoc.vmos.step{n}" in MESSAGES:
+        steps.append(t(f"apidoc.vmos.step{n}", lang))
+        n += 1
+    return {
+        "id": "vmos",
+        "icon": "☁",
+        "name": t("apidoc.vmos.name", lang),
+        "api_kind": "vmos",
+        "api_label": t("apidoc.api.vmos", lang),
+        "video": "yes",
+        "photo": "yes",
+        "token": "none",
+        "token_label": t("apidoc.token.none", lang),
+        "setup_steps": steps,
+        "extra": t("apidoc.vmos.extra", lang),
+    }
+
+
+def _vmos_conditions_row(lang: str) -> dict[str, Any]:
+    from i18n import t
+
+    return {
+        "id": "vmos",
+        "icon": "☁",
+        "name": t("apidoc.vmos.name", lang),
+        "api_kind": "vmos",
+        "api_label": t("apidoc.api.vmos", lang),
+        "cap": t("cond.vmos.cap", lang),
+        "window": t("cond.vmos.window", lang),
+        "rate": t("cond.vmos.rate", lang),
+        "safe": t("cond.vmos.safe", lang),
+        "detail": t("cond.vmos.detail", lang),
+    }
+
+
 def api_document_rows(lang: str) -> list[dict[str, Any]]:
     """Filas de la página API Documento (pasos, media y renovación de token)."""
     from i18n import MESSAGES, t
 
-    rows: list[dict[str, Any]] = []
+    vmos_ids = _vmos_platform_ids()
+    rows: list[dict[str, Any]] = [_vmos_apidoc_row(lang)]
     for p in PLATFORMS:
         pid = str(p["id"])
         steps: list[str] = []
@@ -236,6 +461,23 @@ def api_document_rows(lang: str) -> list[dict[str, Any]]:
         extra_key = f"apidoc.{pid}.extra"
         extra = t(extra_key, lang) if extra_key in MESSAGES else ""
         kind = str(p.get("api_kind") or ("oauth" if p.get("has_api") else "none"))
+        if kind == "filehost":
+            if not steps:
+                n = 1
+                while f"apidoc.filehost.step{n}" in MESSAGES:
+                    steps.append(
+                        t(f"apidoc.filehost.step{n}", lang, name=t(f"platform.{pid}", lang))
+                    )
+                    n += 1
+            extra = extra or t("apidoc.filehost.extra", lang)
+            import filehost as filehost_mod
+
+            if pid in filehost_mod.TRIAL_PAYOUT_IDS:
+                trial = t("apidoc.filehost.trial", lang)
+                extra = f"{extra} {trial}".strip()
+        if pid in vmos_ids:
+            alt = t("apidoc.vmos_alt", lang)
+            extra = f"{extra} {alt}".strip() if extra else alt
         token = str(p.get("token_renewal") or "manual")
         rows.append(
             {
@@ -259,10 +501,29 @@ def server_conditions_rows(lang: str) -> list[dict[str, Any]]:
     """Límites reales de cada API: cuota, ventana de tiempo y uso seguro."""
     from i18n import t
 
-    rows: list[dict[str, Any]] = []
+    vmos_ids = _vmos_platform_ids()
+    rows: list[dict[str, Any]] = [_vmos_conditions_row(lang)]
     for p in PLATFORMS:
         pid = str(p["id"])
         kind = str(p.get("api_kind") or ("oauth" if p.get("has_api") else "none"))
+        if kind == "filehost":
+            cap = t("cond.filehost.cap", lang)
+            window = t("cond.filehost.window", lang)
+            rate = t("cond.filehost.rate", lang)
+            safe = t("cond.filehost.safe", lang)
+            detail = t("cond.filehost.detail", lang, name=t(f"platform.{pid}", lang))
+            import filehost as filehost_mod
+
+            if pid in filehost_mod.TRIAL_PAYOUT_IDS:
+                detail = f"{detail} {t('cond.filehost.trial', lang)}".strip()
+        else:
+            cap = t(f"cond.{pid}.cap", lang)
+            window = t(f"cond.{pid}.window", lang)
+            rate = t(f"cond.{pid}.rate", lang)
+            safe = t(f"cond.{pid}.safe", lang)
+            detail = t(f"cond.{pid}.detail", lang)
+        if pid in vmos_ids:
+            detail = f"{detail} {t('cond.vmos_alt', lang)}".strip()
         rows.append(
             {
                 "id": pid,
@@ -270,11 +531,11 @@ def server_conditions_rows(lang: str) -> list[dict[str, Any]]:
                 "name": t(f"platform.{pid}", lang),
                 "api_kind": kind,
                 "api_label": t(f"apidoc.api.{kind}", lang),
-                "cap": t(f"cond.{pid}.cap", lang),
-                "window": t(f"cond.{pid}.window", lang),
-                "rate": t(f"cond.{pid}.rate", lang),
-                "safe": t(f"cond.{pid}.safe", lang),
-                "detail": t(f"cond.{pid}.detail", lang),
+                "cap": cap,
+                "window": window,
+                "rate": rate,
+                "safe": safe,
+                "detail": detail,
             }
         )
     return rows

@@ -7,6 +7,9 @@ import db
 import platforms
 import tiktok_oauth
 import tiktok_publish
+import vmos
+import filehost
+import chain
 
 
 def _has_generic_creds(raw: dict) -> bool:
@@ -254,18 +257,25 @@ def publish_to_platform(
 ) -> tuple[bool, str]:
     import proxy_util
 
+    kwargs = dict(
+        platform_id=platform_id,
+        file_path=file_path,
+        content_type=content_type,
+        title=title,
+        description=description,
+        lang=lang,
+        tiktok_config_id=tiktok_config_id,
+        account_link_id=account_link_id,
+    )
+    pid = (platform_id or "").strip()
+    if pid in vmos.PLATFORM_IDS and db.resolve_vmos_account_for_publish(
+        pid, account_link_id
+    ):
+        return _publish_to_platform(**kwargs)
+
     proxy_url = db.get_active_proxy_url_for_account(account_link_id)
     with proxy_util.using_proxy(proxy_url):
-        return _publish_to_platform(
-            platform_id,
-            file_path=file_path,
-            content_type=content_type,
-            title=title,
-            description=description,
-            lang=lang,
-            tiktok_config_id=tiktok_config_id,
-            account_link_id=account_link_id,
-        )
+        return _publish_to_platform(**kwargs)
 
 
 def _publish_to_platform(
@@ -284,6 +294,19 @@ def _publish_to_platform(
         from i18n import t
 
         return False, t("api.unknown_platform", lang)
+
+    if pid in vmos.PLATFORM_IDS:
+        vmos_row = db.resolve_vmos_account_for_publish(pid, account_link_id)
+        if vmos_row:
+            import vmos_publish
+
+            return vmos_publish.publish(
+                file_path=file_path,
+                title=title,
+                description=description,
+                lang=lang,
+                account=vmos_row,
+            )
 
     if pid == "tiktok":
         return _publish_tiktok(
@@ -367,4 +390,38 @@ def _publish_to_platform(
             lang=lang,
             account_link_id=account_link_id,
         )
+    if pid in filehost.PLATFORM_IDS:
+        row = db.resolve_filehost_account_for_publish(pid, account_link_id)
+        if not row:
+            from i18n import t
+
+            return False, t("pub.filehost.no_key", lang)
+        return filehost.publish_video(
+            platform_id=pid,
+            file_path=file_path,
+            content_type=content_type,
+            title=title,
+            description=description,
+            lang=lang,
+            account=row,
+        )
+    if pid in chain.PLATFORM_IDS:
+        row = db.resolve_chain_account_for_publish(pid, account_link_id)
+        if not row:
+            from i18n import t
+
+            return False, t("pub.chain.no_account", lang)
+        return chain.publish_video(
+            platform_id=pid,
+            file_path=file_path,
+            content_type=content_type,
+            title=title,
+            description=description,
+            lang=lang,
+            account=row,
+        )
+    if pid == "threads":
+        from i18n import t
+
+        return False, t("pub.fail_vmos_pending", lang)
     return _publish_generic(pid, content_type=content_type, lang=lang)
