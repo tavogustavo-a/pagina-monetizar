@@ -12,7 +12,7 @@
   var lastCount = -1;
   var toastEl = null;
   var toastTimer = null;
-  var pollMs = 8000;
+  var pollMs = 20000;
 
   function supportHref() {
     return isAgent ? "/admin/chats-soporte" : "/admin/soporte";

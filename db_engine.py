@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import queue
 import re
 import sqlite3
 from collections.abc import Mapping, Sequence
@@ -208,12 +209,56 @@ class PgConnection:
         self._raw.commit()
 
     def close(self) -> None:
-        self._raw.close()
+        _pg_pool_release(self._raw)
+
+
+# Pool de conexiones PostgreSQL: abrir una conexión por consulta hacía
+# lentísimas las páginas del panel (decenas de conexiones por página).
+# close() devuelve la conexión al pool; connect() la reutiliza.
+_PG_POOL: queue.Queue = queue.Queue(maxsize=10)
+
+
+def _pg_pool_release(raw: Any) -> None:
+    try:
+        raw.rollback()  # descarta lo no confirmado, como haría close()
+    except Exception:
+        try:
+            raw.close()
+        except Exception:
+            pass
+        return
+    try:
+        _PG_POOL.put_nowait(raw)
+    except queue.Full:
+        try:
+            raw.close()
+        except Exception:
+            pass
+
+
+def _pg_pool_acquire() -> Any | None:
+    while True:
+        try:
+            raw = _PG_POOL.get_nowait()
+        except queue.Empty:
+            return None
+        try:
+            raw.execute("SELECT 1")
+            raw.rollback()
+            return raw
+        except Exception:
+            try:
+                raw.close()
+            except Exception:
+                pass
 
 
 def _connect_postgres() -> PgConnection:
     import psycopg
 
+    raw = _pg_pool_acquire()
+    if raw is not None:
+        return PgConnection(raw)
     url = database_url()
     if not url:
         raise RuntimeError("DB_ENGINE=postgresql requiere DATABASE_URL en el .env")
