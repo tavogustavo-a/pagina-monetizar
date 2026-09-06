@@ -170,7 +170,17 @@ app.add_middleware(
 
 @app.middleware("http")
 async def _security_headers_middleware(request: Request, call_next):
+    import time as _time
+
+    t0 = _time.perf_counter()
     response = await call_next(request)
+    elapsed = _time.perf_counter() - t0
+    response.headers["X-Response-Time"] = f"{elapsed:.3f}s"
+    if elapsed >= 1.0:
+        print(
+            f"SLOW {elapsed:.2f}s {request.method} {request.url.path}",
+            flush=True,
+        )
     security_headers.apply_security_headers(request, response)
     return response
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
