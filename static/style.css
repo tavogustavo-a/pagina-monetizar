@@ -73,6 +73,18 @@ a {
   display: none !important;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .sidebar {
   display: flex;
   width: 200px;
@@ -2714,12 +2726,30 @@ input:focus {
   gap: 0.45rem;
 }
 
+.servers-modal-account {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  margin: 0 0 0.85rem;
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.servers-modal-account strong {
+  font-size: 1.05rem;
+  font-weight: 650;
+  color: #fff;
+}
+
 .servers-accounts-row__name {
-  flex-shrink: 0;
-  min-width: 1.25rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  line-height: 1;
+  flex: 1 1 auto;
+  flex-shrink: 1;
+  min-width: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .servers-accounts-row__main .servers-group-chips,
@@ -5975,6 +6005,36 @@ form.server-modal__body.api-form .panel-api-test-msg {
 .server-modal-title .server-modal__info-btn {
   width: 1.65rem;
   height: 1.65rem;
+}
+
+.account-servers-picker-name {
+  font-weight: 700;
+  color: #fff;
+}
+
+.account-servers-picker-rename-field {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.account-servers-picker-rename-field input {
+  width: min(14rem, 46vw);
+  margin: 0;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.account-servers-picker-rename-field input:focus {
+  outline: none;
+  border-color: rgba(37, 244, 238, 0.55);
+  box-shadow: 0 0 0 2px rgba(37, 244, 238, 0.22);
 }
 
 .equipo-modal__subtitle {

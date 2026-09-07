@@ -475,6 +475,30 @@
       <div>
         <h2 id="account-servers-picker-title" class="server-modal-title">
           <span id="account-servers-picker-title-text">{{ t('servers.accounts_edit_servers_title') }}</span>
+          <span id="account-servers-picker-name" class="account-servers-picker-name"></span>
+          <label class="account-servers-picker-rename-field" hidden>
+            <span class="visually-hidden">{{ t('servers.accounts_col_name') }}</span>
+            <input
+              type="text"
+              id="account-servers-picker-name-input"
+              maxlength="80"
+              autocomplete="off"
+              aria-label="{{ t('servers.accounts_col_name') }}"
+            />
+          </label>
+          <button
+            type="button"
+            class="servers-info-btn server-modal__info-btn js-rename-account-name"
+            id="account-servers-picker-rename"
+            hidden
+            aria-label="{{ t('servers.accounts_rename') }}"
+            title="{{ t('servers.accounts_rename') }}"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 7.125 16.862 4.487" />
+            </svg>
+          </button>
           <button
             type="button"
             class="servers-info-btn server-modal__info-btn js-open-account-picker-info"
@@ -658,10 +682,10 @@
     </div>
     <ul class="tiktok-config-list">
       {% for c in linked_accounts %}
-      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}">
+      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title">{{ c.name }}</strong>
+            <strong class="tiktok-config-card__title">{% if c.account_name %}{{ c.account_name }}{% else %}{{ c.name }}{% endif %}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
           {% if c.internal_username %}
@@ -692,10 +716,10 @@
     </div>
     <ul class="tiktok-config-list">
       {% for c in youtube_linked %}
-      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}">
+      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title">{{ c.name }}</strong>
+            <strong class="tiktok-config-card__title">{% if c.account_name %}{{ c.account_name }}{% else %}{{ c.name }}{% endif %}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
           {% if c.internal_username %}
@@ -724,10 +748,10 @@
     </div>
     <ul class="tiktok-config-list">
       {% for c in instagram_linked %}
-      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}">
+      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title">{{ c.name }}</strong>
+            <strong class="tiktok-config-card__title">{% if c.account_name %}{{ c.account_name }}{% else %}{{ c.name }}{% endif %}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
           {% if c.internal_username %}
@@ -756,10 +780,10 @@
     </div>
     <ul class="tiktok-config-list">
       {% for c in facebook_linked %}
-      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}">
+      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title">{{ c.name }}</strong>
+            <strong class="tiktok-config-card__title">{% if c.account_name %}{{ c.account_name }}{% else %}{{ c.name }}{% endif %}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
           {% if c.internal_username %}
@@ -788,10 +812,10 @@
     </div>
     <ul class="tiktok-config-list">
       {% for c in x_linked %}
-      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}">
+      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title">{{ c.name }}</strong>
+            <strong class="tiktok-config-card__title">{% if c.account_name %}{{ c.account_name }}{% else %}{{ c.name }}{% endif %}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
           {% if c.internal_username %}
@@ -820,10 +844,10 @@
     </div>
     <ul class="tiktok-config-list">
       {% for c in bilibili_linked %}
-      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}">
+      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title">{{ c.name }}</strong>
+            <strong class="tiktok-config-card__title">{% if c.account_name %}{{ c.account_name }}{% else %}{{ c.name }}{% endif %}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
           {% if c.internal_username %}
@@ -867,10 +891,10 @@
     </div>
     <ul class="tiktok-config-list">
       {% for c in snapchat_linked %}
-      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}">
+      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title">{{ c.name }}</strong>
+            <strong class="tiktok-config-card__title">{% if c.account_name %}{{ c.account_name }}{% else %}{{ c.name }}{% endif %}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
           {% if c.internal_username %}
@@ -900,10 +924,10 @@
     </div>
     <ul class="tiktok-config-list">
       {% for c in dailymotion_linked %}
-      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}">
+      <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title">{{ c.name }}</strong>
+            <strong class="tiktok-config-card__title">{% if c.account_name %}{{ c.account_name }}{% else %}{{ c.name }}{% endif %}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
           {% if c.internal_username %}
@@ -1014,7 +1038,8 @@
       pageInfoCompact: {{ t('team.page_info_compact') | tojson }},
       loading: {{ t('team.loading') | tojson }},
       noResults: {{ t('team.no_results') | tojson }},
-      searchPlaceholder: {{ t('servers.accounts_search') | tojson }}
+      searchPlaceholder: {{ t('servers.accounts_search') | tojson }},
+      rename: {{ t('servers.accounts_rename') | tojson }}
     };
     var savedClickConnectMsg = {{ t('servers.oauth_saved_click_connect') | tojson }};
     var secretShowLabel = {{ t('login.show_password') | tojson }};
@@ -1071,6 +1096,7 @@
     ];
     var titlePrefix = {{ t('servers.modal_accounts_prefix', platform='__NAME__') | tojson }};
     var titleCredentials = {{ t('servers.modal_api_credentials') | tojson }};
+    var accountTitleLabel = {{ t('servers.modal_account_name') | tojson }};
     var confirmMsg = {{ t('servers.disconnect_confirm') | tojson }};
     var errorMsg = {{ t('servers.disconnect_error') | tojson }};
     var networkMsg = {{ t('servers.network_error') | tojson }};
@@ -1112,7 +1138,11 @@
       try {
         sessionStorage.setItem(
           "tuyahoRestoreAccountPicker",
-          JSON.stringify({ key: pickerState.key || "", name: pickerState.name })
+          JSON.stringify({
+            key: pickerState.key || "",
+            name: pickerState.name,
+            link_id: pickerState.linkId || "",
+          })
         );
       } catch (err) {}
     }
@@ -1958,9 +1988,13 @@
       bindSecretToggles(root);
     }
 
-    function setModalTitle(platformId, platformName) {
+    function setModalTitle(platformId, platformName, accountName) {
       if (!modalTitle) return;
       var prefix = titlePrefix.replace("__NAME__", platformName);
+      if (accountName) {
+        modalTitle.textContent = accountTitleLabel + " " + accountName + " · " + platformName;
+        return;
+      }
       modalTitle.textContent = prefix + " " + titleCredentials;
     }
 
@@ -2073,7 +2107,7 @@
       }
       blurModalFocus(modal);
       lastAccountsTrigger = trigger || null;
-      setModalTitle(platformId, platformName);
+      setModalTitle(platformId, platformName, isCreate ? "" : accountName);
       modalBody.innerHTML = tpl.innerHTML;
       if (isCreate) {
         resetApiFormForCreate(modalBody);
@@ -2083,6 +2117,13 @@
       }
       var nameWrap = modalBody.querySelector(".js-account-name-field");
       if (nameWrap) nameWrap.hidden = !isCreate;
+      var wantName = (accountName || "").trim().toLowerCase();
+      if (wantName && !isCreate) {
+        modalBody.querySelectorAll(".tiktok-config-card[data-config-id]").forEach(function (card) {
+          var bound = String(card.getAttribute("data-account-name") || "").trim().toLowerCase();
+          if (bound && bound !== wantName) card.hidden = true;
+        });
+      }
       // Al conectar OAuth desde una cuenta concreta, une la conexión a esa cuenta.
       if (accountName && !isCreate) {
         modalBody.querySelectorAll('a[href*="/oauth/"][href*="/connect"]').forEach(function (a) {
@@ -2117,12 +2158,11 @@
       if (!returnState || !accountPickerModal) return;
       editingGroupKey = returnState.key || "";
       editingGroupName = returnState.name || "";
+      editingGroupLinkId = returnState.linkId || "";
       lastAccountTrigger = returnState.trigger || null;
+      cancelAccountRename();
       syncAccountPickerStaticText();
-      if (accountPickerTitleText) {
-        accountPickerTitleText.textContent =
-          accountI18n.editServersTitle + (returnState.name ? " " + returnState.name : "");
-      }
+      setAccountPickerTitle(returnState.name || "");
       var refreshList = function () {
         renderAccountPickerList(returnState.key, returnState.name);
         showModal(accountPickerModal);
@@ -2942,6 +2982,12 @@
     var accountPickerModal = document.getElementById("account-servers-picker-modal");
     var accountPickerList = document.getElementById("account-servers-picker-list");
     var accountPickerTitleText = document.getElementById("account-servers-picker-title-text");
+    var accountPickerNameText = document.getElementById("account-servers-picker-name");
+    var accountPickerNameInput = document.getElementById("account-servers-picker-name-input");
+    var accountPickerRenameField = accountPickerNameInput
+      ? accountPickerNameInput.closest(".account-servers-picker-rename-field")
+      : null;
+    var accountPickerRenameBtn = document.getElementById("account-servers-picker-rename");
     var accountList = document.getElementById("servers-accounts-list");
     var accountScroll = document.getElementById("servers-accounts-scroll");
     var accountEmpty = document.getElementById("servers-accounts-empty");
@@ -3002,6 +3048,8 @@
         '<div class="servers-list__actions servers-accounts-row__actions">' +
         '<button type="button" class="btn btn-ghost btn-sm js-account-edit" data-link-key="' +
         attrEsc(group.key) +
+        '" data-link-id="' +
+        attrEsc(linkId) +
         '" data-link-name="' +
         attrEsc(group.name) +
         '">' +
@@ -3155,18 +3203,117 @@
 
     var editingGroupKey = "";
     var editingGroupName = "";
+    var editingGroupLinkId = "";
+    var renamingAccount = false;
+    var renamingAccountBusy = false;
+
+    function cancelAccountRename() {
+      renamingAccount = false;
+      if (accountPickerRenameField) accountPickerRenameField.hidden = true;
+      if (accountPickerNameText) accountPickerNameText.hidden = false;
+      if (accountPickerNameInput) accountPickerNameInput.value = editingGroupName || "";
+    }
+
+    function setAccountPickerTitle(name) {
+      var label = String(name || "").trim();
+      if (accountPickerTitleText) {
+        accountPickerTitleText.textContent = accountI18n.editServersTitle;
+      }
+      if (accountPickerNameText) {
+        accountPickerNameText.textContent = label;
+        accountPickerNameText.hidden = !label || renamingAccount;
+      }
+      if (accountPickerNameInput) accountPickerNameInput.value = label;
+      if (accountPickerRenameBtn) {
+        accountPickerRenameBtn.hidden = !editingGroupLinkId;
+        accountPickerRenameBtn.setAttribute("aria-label", accountI18n.rename);
+        accountPickerRenameBtn.setAttribute("title", accountI18n.rename);
+      }
+    }
+
+    function startAccountRename() {
+      if (!editingGroupLinkId || renamingAccountBusy) return;
+      renamingAccount = true;
+      if (accountPickerNameText) accountPickerNameText.hidden = true;
+      if (accountPickerRenameField) accountPickerRenameField.hidden = false;
+      if (accountPickerNameInput) {
+        accountPickerNameInput.value = editingGroupName || "";
+        accountPickerNameInput.focus();
+        accountPickerNameInput.select();
+      }
+    }
+
+    function saveAccountRename() {
+      if (!editingGroupLinkId || renamingAccountBusy) return;
+      var nextName = accountPickerNameInput
+        ? String(accountPickerNameInput.value || "").trim()
+        : "";
+      if (!nextName) {
+        alert(accountI18n.nameRequired);
+        if (accountPickerNameInput) accountPickerNameInput.focus();
+        return;
+      }
+      if (nextName === editingGroupName) {
+        cancelAccountRename();
+        setAccountPickerTitle(editingGroupName);
+        return;
+      }
+      renamingAccountBusy = true;
+      if (accountPickerRenameBtn) accountPickerRenameBtn.disabled = true;
+      fetch("/admin/api/server-account-links/" + encodeURIComponent(editingGroupLinkId), {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ name: nextName }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          renamingAccountBusy = false;
+          if (accountPickerRenameBtn) accountPickerRenameBtn.disabled = false;
+          if (!j || !j.ok || !j.group) {
+            alert((j && j.error) || accountI18n.network);
+            if (accountPickerNameInput) accountPickerNameInput.focus();
+            return;
+          }
+          var group = j.group;
+          editingGroupKey = group.key || "";
+          editingGroupName = group.name || nextName;
+          editingGroupLinkId = group.link_id || editingGroupLinkId;
+          if (accountPickerReturnState) {
+            accountPickerReturnState.key = editingGroupKey;
+            accountPickerReturnState.name = editingGroupName;
+            accountPickerReturnState.linkId = editingGroupLinkId;
+          }
+          cancelAccountRename();
+          setAccountPickerTitle(editingGroupName);
+          if (j.choices) applyGroupChoices(j.choices);
+          Promise.resolve(reloadServerAccounts()).then(function () {
+            renderAccountPickerList(editingGroupKey, editingGroupName);
+          });
+          if (typeof window.__reloadServerGroups === "function") {
+            window.__reloadServerGroups();
+          }
+        })
+        .catch(function () {
+          renamingAccountBusy = false;
+          if (accountPickerRenameBtn) accountPickerRenameBtn.disabled = false;
+          alert(accountI18n.network);
+        });
+    }
 
     function closeAccountPickerModal() {
       if (!accountPickerModal) return;
       if (accountPickerInfoModal && accountPickerInfoModal.classList.contains("is-open")) {
         closeAccountPickerInfo();
       }
+      cancelAccountRename();
       accountPickerReturnState = null;
       hideModal(accountPickerModal, lastAccountTrigger);
       document.body.style.overflow = "";
       lastAccountTrigger = null;
       editingGroupKey = "";
       editingGroupName = "";
+      editingGroupLinkId = "";
     }
 
     function syncAccountPickerStaticText() {
@@ -3186,6 +3333,10 @@
         : null;
       if (accountPickerInfoText) {
         accountPickerInfoText.textContent = accountI18n.editServersHint;
+      }
+      if (accountPickerRenameBtn) {
+        accountPickerRenameBtn.setAttribute("aria-label", accountI18n.rename);
+        accountPickerRenameBtn.setAttribute("title", accountI18n.rename);
       }
     }
 
@@ -3250,10 +3401,10 @@
       lastAccountTrigger = trigger || null;
       editingGroupKey = group.key;
       editingGroupName = group.name || "";
+      editingGroupLinkId = group.link_id || "";
+      cancelAccountRename();
       syncAccountPickerStaticText();
-      if (accountPickerTitleText) {
-        accountPickerTitleText.textContent = accountI18n.editServersTitle + " " + group.name;
-      }
+      setAccountPickerTitle(group.name || "");
       renderAccountPickerList(group.key, group.name);
       showModal(accountPickerModal);
       document.body.style.overflow = "hidden";
@@ -3264,11 +3415,35 @@
         el.addEventListener("click", closeAccountPickerModal);
       });
       accountPickerModal.addEventListener("click", function (e) {
+        var renameBtn = e.target.closest(".js-rename-account-name");
+        if (renameBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (renamingAccount) {
+            saveAccountRename();
+          } else {
+            startAccountRename();
+          }
+          return;
+        }
         var infoBtn = e.target.closest(".js-open-account-picker-info");
         if (!infoBtn) return;
         e.preventDefault();
         e.stopPropagation();
         openAccountPickerInfo(infoBtn);
+      });
+    }
+
+    if (accountPickerNameInput) {
+      accountPickerNameInput.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          saveAccountRename();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          cancelAccountRename();
+          setAccountPickerTitle(editingGroupName);
+        }
       });
     }
 
@@ -3283,6 +3458,7 @@
         accountPickerReturnState = {
           key: editingGroupKey,
           name: editingGroupName,
+          linkId: editingGroupLinkId,
           trigger: lastAccountTrigger,
         };
         openModal(platformId, platformName, editBtn, {
@@ -3323,7 +3499,8 @@
         if (editBtn) {
           var linkKey = editBtn.getAttribute("data-link-key");
           var linkName = editBtn.getAttribute("data-link-name") || "";
-          openAccountGroupModal({ key: linkKey, name: linkName }, editBtn);
+          var linkId = editBtn.getAttribute("data-link-id") || "";
+          openAccountGroupModal({ key: linkKey, name: linkName, link_id: linkId }, editBtn);
           return;
         }
         var delBtn = e.target.closest(".js-account-delete");
@@ -3532,7 +3709,11 @@
         sessionStorage.removeItem("tuyahoRestoreAccountPicker");
         var restore = JSON.parse(restoreRaw);
         if (restore && restore.name) {
-          openAccountGroupModal({ key: restore.key || "", name: restore.name }, null);
+          openAccountGroupModal({
+            key: restore.key || "",
+            name: restore.name,
+            link_id: restore.link_id || restore.linkId || "",
+          }, null);
         }
       }
     } catch (err) {}

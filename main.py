@@ -5103,6 +5103,29 @@ def api_create_account_link(request: Request, body: AccountLinkBody):
     }
 
 
+@app.put("/admin/api/server-account-links/{link_id}")
+def api_rename_account_link(request: Request, link_id: str, body: AccountLinkBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    try:
+        group = db.rename_account_link(link_id, body.name, lang=lang)
+    except ValueError as e:
+        code = str(e)
+        status = 404 if code == "not_found" else 400
+        return JSONResponse(
+            {"ok": False, "error": _server_account_error_message(code, lang)},
+            status_code=status,
+        )
+    return {
+        "ok": True,
+        "group": group,
+        "message": i18n.t("servers.accounts_saved", lang),
+        "choices": db.list_server_group_account_choices(lang),
+    }
+
+
 @app.delete("/admin/api/server-account-links/{link_id}")
 def api_delete_account_link(request: Request, link_id: str):
     deny = _require_server_admin_json(request)

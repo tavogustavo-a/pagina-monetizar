@@ -282,9 +282,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "{platform} accounts ·",
         "es": "Cuentas de {platform} ·",
     },
-    "servers.modal_api_credentials": {
-        "en": "API credentials",
-        "es": "Credenciales de API",
+    "servers.modal_account_name": {
+        "en": "Account",
+        "es": "Cuenta",
     },
     "servers.modal_close": {"en": "Close", "es": "Cerrar"},
     "servers.platform_soon": {
@@ -524,6 +524,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Connect with Dailymotion",
         "es": "Conectar con Dailymotion",
     },
+    "servers.dailymotion_oauth_missing": {
+        "en": "Save the Dailymotion API Key and API Secret first, then connect an account.",
+        "es": "Guarda primero la API Key y el API Secret de Dailymotion, luego conecta una cuenta.",
+    },
     "servers.dailymotion_google_login_hint": {
         "en": "If you signed up with Google, that OAuth screen often has no Google button. First open dailymotion.com in this browser and sign in with Google. Then click Connect again — you should only need to authorize the app. Or use “Forgot password” on Dailymotion to set a password for that Gmail and use it on the form.",
         "es": "Si te registraste con Google, esa pantalla de Dailymotion casi nunca muestra el botón de Google. Abre dailymotion.com en este mismo navegador, entra con Google y luego pulsa otra vez Conectar: debería pedir solo autorizar la app. O usa «¿Olvidaste tu contraseña?» en Dailymotion para poner una clave a ese Gmail y entrar con correo y contraseña.",
@@ -762,6 +766,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "servers.accounts_edit_servers_title": {
         "en": "Edit servers for",
         "es": "Editar servidores de",
+    },
+    "servers.accounts_rename": {
+        "en": "Change account name",
+        "es": "Cambiar nombre de la cuenta",
     },
     "servers.accounts_edit_servers_info_title": {
         "en": "Edit servers",

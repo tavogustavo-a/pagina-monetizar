@@ -1661,6 +1661,106 @@ def create_account_link(name: str, *, lang: str = "es") -> dict[str, Any]:
     }
 
 
+def _rename_matching_text(
+    conn: sqlite3.Connection,
+    table: str,
+    column: str,
+    old_name: str,
+    new_name: str,
+    *,
+    now: str,
+) -> None:
+    if not _table_exists(conn, table) or not _has_column(conn, table, column):
+        return
+    assignments = [f"{column} = ?"]
+    params: list[Any] = [new_name]
+    if _has_column(conn, table, "updated_at"):
+        assignments.append("updated_at = ?")
+        params.append(now)
+    params.append(old_name)
+    conn.execute(
+        f"UPDATE {table} SET {', '.join(assignments)} "
+        f"WHERE lower(trim({column})) = lower(trim(?))",
+        params,
+    )
+
+
+def rename_account_link(link_id: str, name: str, *, lang: str = "es") -> dict[str, Any]:
+    seed_admin_if_missing()
+    lid = (link_id or "").strip()
+    label = _normalize_account_name(name)
+    if not lid:
+        raise ValueError("not_found")
+    if not label:
+        raise ValueError("name_required")
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT name FROM server_account_links WHERE id = ?", (lid,)
+        ).fetchone()
+        if not row:
+            raise ValueError("not_found")
+        old = str(row["name"] or "").strip()
+        if old != label:
+            if _account_link_name_taken(conn, label, exclude_id=lid):
+                raise ValueError("link_name_taken")
+            if _account_name_used_by_group(conn, label):
+                raise ValueError("group_name_conflict")
+            try:
+                conn.execute(
+                    """
+                    UPDATE server_account_links
+                    SET name = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (label, now, lid),
+                )
+                _rename_matching_text(conn, "server_accounts", "name", old, label, now=now)
+                _rename_matching_text(
+                    conn, "oauth_accounts", "account_name", old, label, now=now
+                )
+                _rename_matching_text(
+                    conn, "tiktok_api_configs", "name", old, label, now=now
+                )
+                _rename_matching_text(conn, "vmos_accounts", "name", old, label, now=now)
+                _rename_matching_text(
+                    conn, "filehost_accounts", "name", old, label, now=now
+                )
+                _rename_matching_text(conn, "chain_accounts", "name", old, label, now=now)
+                if _table_exists(conn, "account_platform_credentials"):
+                    conn.execute(
+                        """
+                        UPDATE account_platform_credentials
+                        SET account_name = ?, account_key = lower(trim(?)), updated_at = ?
+                        WHERE account_key = lower(trim(?))
+                        """,
+                        (label, label, now, old),
+                    )
+                if _table_exists(conn, "extractor_jobs") and _has_column(
+                    conn, "extractor_jobs", "account_name"
+                ):
+                    conn.execute(
+                        """
+                        UPDATE extractor_jobs
+                        SET account_name = ?, updated_at = ?
+                        WHERE account_link_id = ?
+                        """,
+                        (label, now, lid),
+                    )
+                conn.commit()
+            except sqlite3.IntegrityError as exc:
+                conn.rollback()
+                raise ValueError("link_name_taken") from exc
+    finally:
+        conn.close()
+    groups = get_server_account_groups(lang)
+    for group in groups:
+        if group.get("link_id") == lid:
+            return group
+    raise ValueError("not_found")
+
+
 def delete_account_link(link_id: str) -> None:
     seed_admin_if_missing()
     lid = (link_id or "").strip()
@@ -4348,6 +4448,7 @@ def list_connected_tiktok_accounts() -> list[dict[str, Any]]:
                 {
                     "id": r["id"],
                     "name": label,
+                    "account_name": str(r["name"] or "").strip(),
                     "tiktok_username": r["tiktok_username"],
                     "display_name": r["name"],
                     "open_id": r["open_id"],
@@ -4680,6 +4781,7 @@ def list_oauth_accounts_public(platform_id: str) -> list[dict[str, Any]]:
                     "id": r["id"],
                     "name": label,
                     "username": uname,
+                    "account_name": str(r["account_name"] or "").strip(),
                     "open_id": r["open_id"],
                     "internal_username": r["internal_username"],
                     "active": bool(r["active"]),
@@ -5604,6 +5706,7 @@ def list_oauth_accounts_for_user(user: User, platform_id: str) -> list[dict[str,
                     "id": r["id"],
                     "name": label,
                     "username": uname,
+                    "account_name": str(r["account_name"] or "").strip(),
                     "open_id": r["open_id"],
                     "internal_username": r["internal_username"],
                     "active": bool(r["active"]),
