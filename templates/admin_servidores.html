@@ -1209,40 +1209,52 @@
       });
     }
 
-    function bindVmos(root) {
-      var vmosModal = document.getElementById("vmos-connect-modal");
-      var vmosForm = document.getElementById("vmos-connect-form");
-      var vmosTitle = document.getElementById("vmos-modal-title");
-      if (!vmosModal || !vmosForm) return;
+    function fillAccountLinkName(form, linkSelector) {
+      var linkName = (typeof editingGroupName === "string" && editingGroupName) || "";
+      if (!linkName) {
+        var credName = document.querySelector("#server-modal-body input[name='name']");
+        linkName = credName ? String(credName.value || "").trim() : "";
+      }
+      var linkInput = form.querySelector(linkSelector);
+      if (linkInput) linkInput.value = linkName;
+      var nameInput = form.querySelector('[name="name"]');
+      if (nameInput && linkName) nameInput.value = linkName;
+      var nameWrap = form.querySelector(".js-account-name-field");
+      if (nameWrap) nameWrap.hidden = !!linkName;
+      return linkName;
+    }
 
-      function closeVmos() {
-        hideModal(vmosModal);
+    function bindVmos(root) {
+      function vmosPayload(form, withName) {
+        var fd = new FormData(form);
+        var payload = {
+          id: fd.get("id") || "",
+          platform_id: fd.get("platform_id") || "",
+          access_key: fd.get("access_key") || "",
+          secret_key: readSecretInput(form.querySelector('input[name="secret_key"]')),
+          pad_code: fd.get("pad_code") || "",
+        };
+        if (withName) {
+          payload.name = fd.get("name") || "";
+          payload.template_id = fd.get("template_id") || "";
+          payload.remark = fd.get("remark") || "";
+          payload.link_name = fd.get("link_name") || "";
+        }
+        return payload;
       }
 
-      vmosModal.querySelectorAll("[data-close-vmos-modal]").forEach(function (el) {
-        if (el.dataset.bound) return;
-        el.dataset.bound = "1";
-        el.addEventListener("click", closeVmos);
-      });
+      function bindInlineForm(form) {
+        if (!form || form.dataset.bound) return;
+        form.dataset.bound = "1";
+        fillAccountLinkName(form, ".js-vmos-link-name");
+        fillSecretInput(form.querySelector('input[name="secret_key"]'), "");
+        bindSecretToggles(form);
 
-      if (!vmosForm.dataset.bound) {
-        vmosForm.dataset.bound = "1";
-        vmosForm.addEventListener("submit", function (e) {
+        form.addEventListener("submit", function (e) {
           e.preventDefault();
-          var fd = new FormData(vmosForm);
-          var payload = {
-            id: fd.get("id") || "",
-            platform_id: fd.get("platform_id") || "",
-            name: fd.get("name") || "",
-            access_key: fd.get("access_key") || "",
-            secret_key: readSecretInput(vmosForm.querySelector('input[name="secret_key"]')),
-            pad_code: fd.get("pad_code") || "",
-            template_id: fd.get("template_id") || "",
-            remark: fd.get("remark") || "",
-            link_name: fd.get("link_name") || "",
-          };
-          var msgEl = vmosForm.querySelector(".js-vmos-form-msg");
-          var submit = vmosForm.querySelector('button[type="submit"]');
+          var payload = vmosPayload(form, true);
+          var msgEl = form.querySelector(".js-vmos-form-msg");
+          var submit = form.querySelector('button[type="submit"]');
           if (submit) submit.disabled = true;
           fetch("/admin/api/vmos", {
             method: "POST",
@@ -1261,7 +1273,6 @@
                 }
                 return;
               }
-              hideModal(vmosModal);
               rememberAccountPickerRestore();
               window.location.reload();
             })
@@ -1274,17 +1285,12 @@
               }
             });
         });
-        var testBtn = document.getElementById("vmos-test-btn");
+
+        var testBtn = form.querySelector(".js-vmos-test-btn");
         if (testBtn) {
           testBtn.addEventListener("click", function () {
-            var fd = new FormData(vmosForm);
-            var payload = {
-              id: fd.get("id") || "",
-              access_key: fd.get("access_key") || "",
-              secret_key: readSecretInput(vmosForm.querySelector('input[name="secret_key"]')),
-              pad_code: fd.get("pad_code") || "",
-            };
-            var msgEl = vmosForm.querySelector(".js-vmos-form-msg");
+            var payload = vmosPayload(form, false);
+            var msgEl = form.querySelector(".js-vmos-form-msg");
             testBtn.disabled = true;
             fetch("/admin/api/vmos/test", {
               method: "POST",
@@ -1314,39 +1320,7 @@
         }
       }
 
-      root.querySelectorAll(".js-open-vmos").forEach(function (btn) {
-        if (btn.dataset.bound) return;
-        btn.dataset.bound = "1";
-        btn.addEventListener("click", function () {
-          var pid = btn.getAttribute("data-platform-id") || "";
-          var pname = btn.getAttribute("data-platform-name") || pid;
-          vmosForm.reset();
-          vmosForm.querySelector('[name="id"]').value = "";
-          document.getElementById("vmos-platform-id").value = pid;
-          var linkName = (typeof editingGroupName === "string" && editingGroupName) || "";
-          if (!linkName) {
-            var credName = document.querySelector("#server-modal-body input[name='name']");
-            linkName = credName ? String(credName.value || "").trim() : "";
-          }
-          var linkInput = document.getElementById("vmos-link-name");
-          if (linkInput) linkInput.value = linkName;
-          var nameInput = vmosForm.querySelector('[name="name"]');
-          if (nameInput && linkName) nameInput.value = linkName;
-          var nameWrap = vmosForm.querySelector(".js-account-name-field");
-          if (nameWrap) nameWrap.hidden = !!linkName;
-          fillSecretInput(vmosForm.querySelector('input[name="secret_key"]'), "");
-          bindSecretToggles(vmosForm);
-          if (vmosTitle) {
-            vmosTitle.textContent = String(vmosTitleTpl).replace("__NAME__", pname);
-          }
-          var msgEl = vmosForm.querySelector(".js-vmos-form-msg");
-          if (msgEl) {
-            msgEl.hidden = true;
-            msgEl.textContent = "";
-          }
-          showModal(vmosModal);
-        });
-      });
+      root.querySelectorAll(".js-vmos-inline-form").forEach(bindInlineForm);
 
       root.querySelectorAll(".js-vmos-disconnect").forEach(function (btn) {
         if (btn.dataset.bound) return;
@@ -1380,55 +1354,33 @@
     }
 
     function bindFilehost(root) {
-      var hostModal = document.getElementById("filehost-connect-modal");
-      var hostForm = document.getElementById("filehost-connect-form");
-      var hostTitle = document.getElementById("filehost-modal-title");
-      if (!hostModal || !hostForm) return;
-
-      function closeFilehost() {
-        hideModal(hostModal);
-      }
-
-      function applyExtraField(pid) {
-        var kind = (filehostExtraFields && filehostExtraFields[pid]) || "";
-        var wrap = document.getElementById("filehost-extra-wrap");
-        var label = document.getElementById("filehost-extra-label");
-        var input = hostForm.querySelector('input[name="extra"]');
-        if (!wrap) return;
-        if (kind) {
-          wrap.hidden = false;
-          if (label) label.textContent = filehostExtraLabels[kind] || kind;
-          if (input) input.required = true;
-        } else {
-          wrap.hidden = true;
-          if (input) {
-            input.required = false;
-            input.value = "";
-          }
+      function filehostPayload(form, withName) {
+        var fd = new FormData(form);
+        var payload = {
+          id: fd.get("id") || "",
+          platform_id: fd.get("platform_id") || "",
+          api_key: readSecretInput(form.querySelector('input[name="api_key"]')),
+          extra: fd.get("extra") || "",
+        };
+        if (withName) {
+          payload.name = fd.get("name") || "";
+          payload.link_name = fd.get("link_name") || "";
         }
+        return payload;
       }
 
-      hostModal.querySelectorAll("[data-close-filehost-modal]").forEach(function (el) {
-        if (el.dataset.bound) return;
-        el.dataset.bound = "1";
-        el.addEventListener("click", closeFilehost);
-      });
+      function bindInlineForm(form) {
+        if (!form || form.dataset.bound) return;
+        form.dataset.bound = "1";
+        fillAccountLinkName(form, ".js-filehost-link-name");
+        fillSecretInput(form.querySelector('input[name="api_key"]'), "");
+        bindSecretToggles(form);
 
-      if (!hostForm.dataset.bound) {
-        hostForm.dataset.bound = "1";
-        hostForm.addEventListener("submit", function (e) {
+        form.addEventListener("submit", function (e) {
           e.preventDefault();
-          var fd = new FormData(hostForm);
-          var payload = {
-            id: fd.get("id") || "",
-            platform_id: fd.get("platform_id") || "",
-            name: fd.get("name") || "",
-            api_key: readSecretInput(hostForm.querySelector('input[name="api_key"]')),
-            extra: fd.get("extra") || "",
-            link_name: fd.get("link_name") || "",
-          };
-          var msgEl = hostForm.querySelector(".js-filehost-form-msg");
-          var submit = hostForm.querySelector('button[type="submit"]');
+          var payload = filehostPayload(form, true);
+          var msgEl = form.querySelector(".js-filehost-form-msg");
+          var submit = form.querySelector('button[type="submit"]');
           if (submit) submit.disabled = true;
           fetch("/admin/api/filehost", {
             method: "POST",
@@ -1447,7 +1399,6 @@
                 }
                 return;
               }
-              hideModal(hostModal);
               rememberAccountPickerRestore();
               window.location.reload();
             })
@@ -1460,17 +1411,12 @@
               }
             });
         });
-        var testBtn = document.getElementById("filehost-test-btn");
+
+        var testBtn = form.querySelector(".js-filehost-test-btn");
         if (testBtn) {
           testBtn.addEventListener("click", function () {
-            var fd = new FormData(hostForm);
-            var payload = {
-              id: fd.get("id") || "",
-              platform_id: fd.get("platform_id") || "",
-              api_key: readSecretInput(hostForm.querySelector('input[name="api_key"]')),
-              extra: fd.get("extra") || "",
-            };
-            var msgEl = hostForm.querySelector(".js-filehost-form-msg");
+            var payload = filehostPayload(form, false);
+            var msgEl = form.querySelector(".js-filehost-form-msg");
             testBtn.disabled = true;
             fetch("/admin/api/filehost/test", {
               method: "POST",
@@ -1500,40 +1446,7 @@
         }
       }
 
-      root.querySelectorAll(".js-open-filehost").forEach(function (btn) {
-        if (btn.dataset.bound) return;
-        btn.dataset.bound = "1";
-        btn.addEventListener("click", function () {
-          var pid = btn.getAttribute("data-platform-id") || "";
-          var pname = btn.getAttribute("data-platform-name") || pid;
-          hostForm.reset();
-          hostForm.querySelector('[name="id"]').value = "";
-          document.getElementById("filehost-platform-id").value = pid;
-          applyExtraField(pid);
-          var linkName = (typeof editingGroupName === "string" && editingGroupName) || "";
-          if (!linkName) {
-            var credName = document.querySelector("#server-modal-body input[name='name']");
-            linkName = credName ? String(credName.value || "").trim() : "";
-          }
-          var linkInput = document.getElementById("filehost-link-name");
-          if (linkInput) linkInput.value = linkName;
-          var nameInput = hostForm.querySelector('[name="name"]');
-          if (nameInput && linkName) nameInput.value = linkName;
-          var nameWrap = hostForm.querySelector(".js-account-name-field");
-          if (nameWrap) nameWrap.hidden = !!linkName;
-          fillSecretInput(hostForm.querySelector('input[name="api_key"]'), "");
-          bindSecretToggles(hostForm);
-          if (hostTitle) {
-            hostTitle.textContent = String(filehostTitleTpl).replace("__NAME__", pname);
-          }
-          var msgEl = hostForm.querySelector(".js-filehost-form-msg");
-          if (msgEl) {
-            msgEl.hidden = true;
-            msgEl.textContent = "";
-          }
-          showModal(hostModal);
-        });
-      });
+      root.querySelectorAll(".js-filehost-inline-form").forEach(bindInlineForm);
 
       root.querySelectorAll(".js-filehost-disconnect").forEach(function (btn) {
         if (btn.dataset.bound) return;
@@ -1567,56 +1480,34 @@
     }
 
     function bindChain(root) {
-      var chainModal = document.getElementById("chain-connect-modal");
-      var chainForm = document.getElementById("chain-connect-form");
-      var chainTitle = document.getElementById("chain-modal-title");
-      if (!chainModal || !chainForm) return;
-
-      function closeChain() {
-        hideModal(chainModal);
-      }
-
-      function applyChainFields(pid) {
-        var hint = document.getElementById("chain-form-hint");
-        var loginLabel = document.getElementById("chain-login-label");
-        var secretLabel = document.getElementById("chain-secret-label");
-        var extraWrap = document.getElementById("chain-extra-wrap");
-        var secretInput = document.getElementById("chain-secret-input");
-        if (hint) hint.textContent = (chainHints && chainHints[pid]) || "";
-        if (pid === "dtube") {
-          if (loginLabel) loginLabel.textContent = chainLabels.hive;
-          if (secretLabel) secretLabel.textContent = chainLabels.wif;
-          if (extraWrap) extraWrap.hidden = true;
-        } else {
-          if (loginLabel) loginLabel.textContent = chainLabels.email;
-          if (secretLabel) secretLabel.textContent = chainLabels.password;
-          if (extraWrap) extraWrap.hidden = false;
+      function chainPayload(form, withName) {
+        var fd = new FormData(form);
+        var payload = {
+          id: fd.get("id") || "",
+          platform_id: fd.get("platform_id") || "",
+          login: fd.get("login") || "",
+          secret: readSecretInput(form.querySelector('input[name="secret"]')),
+          extra: fd.get("extra") || "",
+        };
+        if (withName) {
+          payload.name = fd.get("name") || "";
+          payload.link_name = fd.get("link_name") || "";
         }
-        if (secretInput) secretInput.required = true;
+        return payload;
       }
 
-      chainModal.querySelectorAll("[data-close-chain-modal]").forEach(function (el) {
-        if (el.dataset.bound) return;
-        el.dataset.bound = "1";
-        el.addEventListener("click", closeChain);
-      });
+      function bindInlineForm(form) {
+        if (!form || form.dataset.bound) return;
+        form.dataset.bound = "1";
+        fillAccountLinkName(form, ".js-chain-link-name");
+        fillSecretInput(form.querySelector('input[name="secret"]'), "");
+        bindSecretToggles(form);
 
-      if (!chainForm.dataset.bound) {
-        chainForm.dataset.bound = "1";
-        chainForm.addEventListener("submit", function (e) {
+        form.addEventListener("submit", function (e) {
           e.preventDefault();
-          var fd = new FormData(chainForm);
-          var payload = {
-            id: fd.get("id") || "",
-            platform_id: fd.get("platform_id") || "",
-            name: fd.get("name") || "",
-            login: fd.get("login") || "",
-            secret: readSecretInput(chainForm.querySelector('input[name="secret"]')),
-            extra: fd.get("extra") || "",
-            link_name: fd.get("link_name") || "",
-          };
-          var msgEl = chainForm.querySelector(".js-chain-form-msg");
-          var submit = chainForm.querySelector('button[type="submit"]');
+          var payload = chainPayload(form, true);
+          var msgEl = form.querySelector(".js-chain-form-msg");
+          var submit = form.querySelector('button[type="submit"]');
           if (submit) submit.disabled = true;
           fetch("/admin/api/chain", {
             method: "POST",
@@ -1635,7 +1526,6 @@
                 }
                 return;
               }
-              hideModal(chainModal);
               rememberAccountPickerRestore();
               window.location.reload();
             })
@@ -1648,18 +1538,12 @@
               }
             });
         });
-        var testBtn = document.getElementById("chain-test-btn");
+
+        var testBtn = form.querySelector(".js-chain-test-btn");
         if (testBtn) {
           testBtn.addEventListener("click", function () {
-            var fd = new FormData(chainForm);
-            var payload = {
-              id: fd.get("id") || "",
-              platform_id: fd.get("platform_id") || "",
-              login: fd.get("login") || "",
-              secret: readSecretInput(chainForm.querySelector('input[name="secret"]')),
-              extra: fd.get("extra") || "",
-            };
-            var msgEl = chainForm.querySelector(".js-chain-form-msg");
+            var payload = chainPayload(form, false);
+            var msgEl = form.querySelector(".js-chain-form-msg");
             testBtn.disabled = true;
             fetch("/admin/api/chain/test", {
               method: "POST",
@@ -1689,40 +1573,7 @@
         }
       }
 
-      root.querySelectorAll(".js-open-chain").forEach(function (btn) {
-        if (btn.dataset.bound) return;
-        btn.dataset.bound = "1";
-        btn.addEventListener("click", function () {
-          var pid = btn.getAttribute("data-platform-id") || "";
-          var pname = btn.getAttribute("data-platform-name") || pid;
-          chainForm.reset();
-          chainForm.querySelector('[name="id"]').value = "";
-          document.getElementById("chain-platform-id").value = pid;
-          applyChainFields(pid);
-          var linkName = (typeof editingGroupName === "string" && editingGroupName) || "";
-          if (!linkName) {
-            var credName = document.querySelector("#server-modal-body input[name='name']");
-            linkName = credName ? String(credName.value || "").trim() : "";
-          }
-          var linkInput = document.getElementById("chain-link-name");
-          var nameInput = chainForm.querySelector('[name="name"]');
-          if (linkInput) linkInput.value = linkName;
-          if (nameInput && linkName) nameInput.value = linkName;
-          var nameWrap = chainForm.querySelector(".js-account-name-field");
-          if (nameWrap) nameWrap.hidden = !!linkName;
-          fillSecretInput(chainForm.querySelector('input[name="secret"]'), "");
-          bindSecretToggles(chainForm);
-          if (chainTitle) {
-            chainTitle.textContent = String(chainTitleTpl).replace("__NAME__", pname);
-          }
-          var msgEl = chainForm.querySelector(".js-chain-form-msg");
-          if (msgEl) {
-            msgEl.hidden = true;
-            msgEl.textContent = "";
-          }
-          showModal(chainModal);
-        });
-      });
+      root.querySelectorAll(".js-chain-inline-form").forEach(bindInlineForm);
 
       root.querySelectorAll(".js-chain-disconnect").forEach(function (btn) {
         if (btn.dataset.bound) return;

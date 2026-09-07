@@ -2192,6 +2192,16 @@ def api_publication_logs_count(request: Request, date_from: str = "", date_to: s
     return {"ok": True, "count": db.count_publication_logs_in_range(start, end)}
 
 
+@app.get("/admin/api/publicaciones/logs")
+def api_publication_logs(request: Request):
+    auth = _require_publicaciones_user_json(request)
+    if isinstance(auth, JSONResponse):
+        return auth
+    u = auth
+    lang = i18n.resolve_lang(request)
+    return {"ok": True, "logs": _publication_log_groups(lang, u)}
+
+
 @app.delete("/admin/api/publicaciones/logs")
 def api_publication_logs_purge(request: Request, body: LogPurgeBody):
     guard = _require_admin_json(request)
@@ -2902,6 +2912,9 @@ def admin_servidores(request: Request):
             "filehost_platform_ids": list(filehost.PLATFORM_IDS),
             "filehost_extra_fields": {
                 pid: filehost.extra_field(pid) for pid in filehost.PLATFORM_IDS
+            },
+            "filehost_settings_urls": {
+                pid: filehost.settings_url(pid) for pid in filehost.PLATFORM_IDS
             },
             "chain_by_platform": chain_grouped,
             "chain_platform_ids": list(chain.PLATFORM_IDS),

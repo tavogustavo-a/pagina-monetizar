@@ -41,6 +41,7 @@ HOSTS: dict[str, dict[str, Any]] = {
         "upload_server": "https://doodapi.co/api/upload/server",
         "form_key": "api_key",
         "watch": "https://dood.watch/d/{code}",
+        "settings": "https://doodstream.com/settings",
     },
     "streamwish": {
         "kind": "dood",
@@ -138,6 +139,11 @@ class FileHostError(ValueError):
 def extra_field(platform_id: str) -> str:
     spec = HOSTS.get((platform_id or "").strip()) or {}
     return str(spec.get("extra_field") or "")
+
+
+def settings_url(platform_id: str) -> str:
+    spec = HOSTS.get((platform_id or "").strip()) or {}
+    return str(spec.get("settings") or "").strip()
 
 
 def _parse(raw: str) -> dict[str, Any]:

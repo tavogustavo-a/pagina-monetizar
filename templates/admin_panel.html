@@ -654,6 +654,7 @@
 </script>
 {% endif %}
 
+{% if panel_account_platforms %}
 <div id="panel-api-modal" class="equipo-modal" aria-hidden="true">
   <div class="equipo-modal__backdrop" data-close-panel-api tabindex="-1"></div>
   <div class="equipo-modal__panel server-modal__panel" role="dialog" aria-modal="true" aria-labelledby="panel-api-modal-title">
@@ -693,6 +694,7 @@
     </form>
   </div>
 </div>
+{% endif %}
 
 <div id="panel-info-modal" class="equipo-modal" aria-hidden="true">
   <div class="equipo-modal__backdrop" data-close-panel-info tabindex="-1"></div>
@@ -2254,6 +2256,7 @@
   (function () {
     var apiModal = document.getElementById("panel-api-modal");
     var apiForm = document.getElementById("panel-api-form");
+    if (!apiModal || !apiForm) return;
     var apiTitle = document.getElementById("panel-api-modal-title");
     var apiPlatformId = document.getElementById("panel-api-platform-id");
     var apiName = document.getElementById("panel-api-name");
@@ -2568,6 +2571,7 @@
     });
   })();
 </script>
+{% if panel_account_platforms %}
 <script>
   (function () {
     var confirmMsg = {{ t('panel.revoke_confirm') | tojson }};
@@ -2605,4 +2609,5 @@
     });
   })();
 </script>
+{% endif %}
 {% endblock %}

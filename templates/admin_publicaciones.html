@@ -162,7 +162,6 @@
                   <span class="dropzone__thumb-fallback" id="video-preview-fallback" hidden aria-hidden="true">▶</span>
                 </div>
                 <p class="dropzone__filename sub" id="video-filename"></p>
-                <span class="pub-spinner dropzone__spinner" id="video-upload-spin" hidden></span>
                 <button
                   type="button"
                   class="dropzone__clear"
@@ -238,8 +237,7 @@
         </div>
         <p class="log-purge__msg" id="pub-log-msg" hidden></p>
         {% endif %}
-        {% if publication_logs | length > 0 %}
-        <div class="pub-log-wrap">
+        <div class="pub-log-wrap" id="pub-log-wrap"{% if publication_logs | length == 0 %} hidden{% endif %}>
           <table class="pub-log-table">
             <thead>
               <tr>
@@ -252,7 +250,7 @@
                 <th>{{ t('pub.log_col_message') }}</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody id="pub-log-tbody">
               {% for row in publication_logs %}
               {% set n = row.entries|length %}
               {% set first = row.entries[0] %}
@@ -333,7 +331,6 @@
           </table>
         </div>
         <script type="application/json" id="pub-log-groups-json">{{ publication_logs | tojson }}</script>
-        {% endif %}
       </section>
 
       <div id="pub-log-detail-modal" class="equipo-modal" aria-hidden="true">
@@ -357,12 +354,15 @@
           var titleEl = document.getElementById("pub-log-detail-title");
           var listEl = document.getElementById("pub-log-detail-list");
           var dataEl = document.getElementById("pub-log-groups-json");
+          var tbody = document.getElementById("pub-log-tbody");
+          var wrap = document.getElementById("pub-log-wrap");
           if (!modal || !listEl) return;
           var lastTrigger = null;
           var groups = [];
           if (dataEl) {
             try { groups = JSON.parse(dataEl.textContent || "[]"); } catch (e) { groups = []; }
           }
+          var showUser = {{ show_pub_log_user | tojson }};
           var titles = {
             platforms: {{ t('pub.log_modal_platforms') | tojson }},
             status: {{ t('pub.log_modal_status') | tojson }},
@@ -371,8 +371,12 @@
           var statusLabels = {
             ok: {{ t('pub.log_status_ok') | tojson }},
             fail: {{ t('pub.log_status_fail') | tojson }},
-            skipped: {{ t('pub.log_status_skipped') | tojson }}
+            skipped: {{ t('pub.log_status_skipped') | tojson }},
+            mixed: {{ t('pub.log_status_mixed') | tojson }}
           };
+          var viewLabel = {{ t('pub.log_view') | tojson }};
+          var platformsN = {{ t('pub.log_platforms_n') | tojson }};
+          var eyeSvg = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>';
 
           function findGroup(id) {
             for (var i = 0; i < groups.length; i++) {
@@ -384,7 +388,91 @@
           function statusClass(status) {
             if (status === "ok") return "pub-log-status--ok";
             if (status === "skipped") return "pub-log-status--skipped";
+            if (status === "mixed") return "pub-log-status--mixed";
             return "pub-log-status--fail";
+          }
+
+          function formatWhen(raw) {
+            return String(raw || "").slice(0, 19).replace("T", " ");
+          }
+
+          function viewButton(id, kind, title) {
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "pub-log-view js-pub-log-open";
+            btn.setAttribute("data-log-id", id);
+            btn.setAttribute("data-log-kind", kind);
+            btn.setAttribute("aria-label", viewLabel);
+            if (title) btn.setAttribute("title", title);
+            return btn;
+          }
+
+          function failMessage(row) {
+            var entries = row.entries || [];
+            for (var i = 0; i < entries.length; i++) {
+              if (entries[i].status === "fail") return entries[i].message || "";
+            }
+            return "";
+          }
+
+          function renderLogs(next) {
+            groups = next || [];
+            if (dataEl) dataEl.textContent = JSON.stringify(groups);
+            if (!tbody) return;
+            tbody.innerHTML = "";
+            if (wrap) wrap.hidden = groups.length === 0;
+            groups.forEach(function (row) {
+              var n = (row.entries || []).length;
+              var first = (row.entries || [])[0] || {};
+              var tr = document.createElement("tr");
+              tr.className = "pub-log-table__row pub-log-table__row--" + (row.status || "fail");
+              tr.setAttribute("data-log-row", row.id || "");
+              var tdDate = document.createElement("td");
+              tdDate.textContent = formatWhen(row.created_at);
+              tr.appendChild(tdDate);
+              if (showUser) {
+                var tdUser = document.createElement("td");
+                tdUser.className = "pub-log-user-cell";
+                tdUser.textContent = row.user_username || "—";
+                tr.appendChild(tdUser);
+              }
+              var tdPlat = document.createElement("td");
+              if (n === 1) {
+                tdPlat.textContent = first.platform_name || first.platform_id || "";
+              } else {
+                var platBtn = viewButton(row.id, "platforms", String(platformsN || "").replace("{n}", String(n)));
+                platBtn.innerHTML = eyeSvg + "<span>" + viewLabel + "</span>";
+                tdPlat.appendChild(platBtn);
+              }
+              tr.appendChild(tdPlat);
+              var tdStatus = document.createElement("td");
+              if (row.status === "mixed") {
+                var mixBtn = viewButton(row.id, "status", statusLabels.mixed);
+                var mixBadge = document.createElement("span");
+                mixBadge.className = "pub-log-status pub-log-status--mixed";
+                mixBadge.textContent = statusLabels.mixed;
+                mixBtn.appendChild(mixBadge);
+                mixBtn.insertAdjacentHTML("beforeend", eyeSvg);
+                tdStatus.appendChild(mixBtn);
+              } else {
+                var badge = document.createElement("span");
+                var st = row.status === "ok" ? "ok" : row.status === "skipped" ? "skipped" : "fail";
+                badge.className = "pub-log-status pub-log-status--" + st;
+                badge.textContent = statusLabels[st] || st;
+                tdStatus.appendChild(badge);
+              }
+              tr.appendChild(tdStatus);
+              var tdMsg = document.createElement("td");
+              if (row.fail_n === 1) {
+                tdMsg.textContent = failMessage(row);
+              } else if (row.fail_n > 1) {
+                var errBtn = viewButton(row.id, "errors", titles.errors);
+                errBtn.innerHTML = eyeSvg + "<span>" + viewLabel + "</span>";
+                tdMsg.appendChild(errBtn);
+              }
+              tr.appendChild(tdMsg);
+              tbody.appendChild(tr);
+            });
           }
 
           function addItem(name, status, message) {
@@ -451,15 +539,30 @@
             lastTrigger = null;
           }
 
-          document.querySelectorAll(".js-pub-log-open").forEach(function (btn) {
-            btn.addEventListener("click", function () { openLog(btn); });
-          });
+          if (wrap) {
+            wrap.addEventListener("click", function (e) {
+              var btn = e.target.closest(".js-pub-log-open");
+              if (btn) openLog(btn);
+            });
+          }
           modal.querySelectorAll("[data-close-pub-log]").forEach(function (el) {
             el.addEventListener("click", closeLog);
           });
           document.addEventListener("keydown", function (e) {
             if (e.key === "Escape" && modal.classList.contains("is-open")) closeLog();
           });
+
+          window.refreshPubLogs = function () {
+            return fetch("/admin/api/publicaciones/logs", {
+              credentials: "same-origin",
+              headers: { Accept: "application/json" },
+            })
+              .then(function (r) { return r.json(); })
+              .then(function (data) {
+                if (data && data.ok && Array.isArray(data.logs)) renderLogs(data.logs);
+              })
+              .catch(function () {});
+          };
         })();
       </script>
 
@@ -721,21 +824,17 @@
     var uploadPromise = null;
     var tempStorageKey = "pub_video_temp";
     var tempTokenInput = document.getElementById("video-temp-token");
-    var uploadSpin = document.getElementById("video-upload-spin");
     var jobsEl = document.getElementById("pub-bg-jobs");
     var publishUrl = form ? form.getAttribute("action") || "/admin/videos" : "/admin/videos";
+    var currentUploadJob = null;
     var uploadI18n = {
       uploading: {{ t('pub.captions_uploading') | tojson }},
       uploadFail: {{ t('pub.captions_upload_fail') | tojson }},
       fileTooLarge: {{ t('pub.flash.file_too_large', max_mb=max_upload_mb) | tojson }},
       maxUploadBytes: {{ max_upload_bytes | tojson }},
       publishingJob: {{ t('pub.publishing_job') | tojson }},
+      cancelJob: {{ t('pub.cancel_job') | tojson }},
     };
-
-    function setDropzoneBusy(on) {
-      zone.classList.toggle("dropzone--busy", !!on);
-      if (uploadSpin) uploadSpin.hidden = !on;
-    }
 
     function clearTempLocal() {
       tempToken = "";
@@ -745,8 +844,19 @@
       sessionStorage.removeItem(tempStorageKey);
     }
 
+    function hideJobsIfEmpty() {
+      if (jobsEl && !jobsEl.children.length) jobsEl.hidden = true;
+    }
+
+    function removePubJob(job) {
+      if (job && job.root && job.root.parentNode) {
+        job.root.parentNode.removeChild(job.root);
+      }
+      hideJobsIfEmpty();
+    }
+
     function addPubJob(title) {
-      if (!jobsEl) return { root: null, text: null };
+      if (!jobsEl) return { root: null, text: null, cancel: null };
       jobsEl.hidden = false;
       var li = document.createElement("li");
       li.className = "pub-bg-job";
@@ -754,17 +864,56 @@
       spin.className = "pub-spinner";
       spin.setAttribute("aria-hidden", "true");
       var text = document.createElement("span");
+      text.className = "pub-bg-job__text";
       text.textContent = String(uploadI18n.publishingJob || "").replace("{title}", title || "");
+      var cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "pub-bg-job__cancel";
+      cancel.setAttribute("aria-label", uploadI18n.cancelJob);
+      cancel.setAttribute("title", uploadI18n.cancelJob);
+      cancel.textContent = "×";
+      var job = { root: li, text: text, spin: spin, cancel: cancel, aborted: false };
+      cancel.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        cancelPubJob(job);
+      });
       li.appendChild(spin);
       li.appendChild(text);
+      li.appendChild(cancel);
       jobsEl.insertBefore(li, jobsEl.firstChild);
-      return { root: li, text: text, spin: spin };
+      return job;
+    }
+
+    function cancelPubJob(job) {
+      if (!job || job.aborted) return;
+      job.aborted = true;
+      if (job.abortController) {
+        try { job.abortController.abort(); } catch (e) {}
+      }
+      if (job.token) discardTemp(job.token, false);
+      else if (job === currentUploadJob && tempToken) discardTemp(tempToken, false);
+      if (job === currentUploadJob) {
+        currentUploadJob = null;
+        uploadGen += 1;
+        uploadPromise = null;
+        heldFile = null;
+        clearTempLocal();
+        clearFileInput();
+        revokePreviewUrl();
+        setThumbSrc("");
+        if (fname) fname.textContent = "";
+        setPreviewVisible(false);
+      }
+      removePubJob(job);
     }
 
     function finishPubJob(job, ok, message) {
       if (!job || !job.root) return;
+      if (job.aborted) return;
       job.root.classList.add(ok ? "is-ok" : "is-fail");
       if (job.spin && job.spin.parentNode) job.spin.parentNode.removeChild(job.spin);
+      job.spin = null;
       if (job.text && message) job.text.textContent = message;
     }
 
@@ -916,7 +1065,6 @@
       setThumbSrc("");
       if (fname) fname.textContent = "";
       setPreviewVisible(false);
-      setDropzoneBusy(false);
     }
 
     function setTempToken(token, url, name) {
@@ -949,9 +1097,18 @@
           alert(uploadI18n.fileTooLarge);
           return;
         }
-        showLocalPreview(file, uploadI18n.uploading);
-        setDropzoneBusy(true);
+        if (currentUploadJob) cancelPubJob(currentUploadJob);
+        clearFileInput();
+        revokePreviewUrl();
+        setThumbSrc("");
+        if (fname) fname.textContent = "";
+        setPreviewVisible(false);
         var gen = ++uploadGen;
+        var ac = new AbortController();
+        var job = addPubJob("");
+        if (job.text) job.text.textContent = uploadI18n.uploading;
+        job.abortController = ac;
+        currentUploadJob = job;
         var fd = new FormData();
         fd.append("file", file);
         uploadPromise = fetch("/admin/api/videos/temp", {
@@ -959,6 +1116,7 @@
           body: fd,
           credentials: "same-origin",
           headers: { Accept: "application/json" },
+          signal: ac.signal,
         })
           .then(function (r) {
             return r.json().then(function (data) {
@@ -966,26 +1124,26 @@
             });
           })
           .then(function (res) {
-            if (gen !== uploadGen) return;
+            if (gen !== uploadGen || job.aborted) return;
             if (!res.ok || !res.data || !res.data.ok) {
               throw new Error((res.data && res.data.error) || "upload");
             }
             var data = res.data;
             setTempToken(data.token, data.url, data.name || file.name);
-            if (fname) fname.textContent = data.name || file.name;
-            clearFileInput();
+            job.token = data.token;
           })
           .catch(function (err) {
-            if (gen !== uploadGen) return;
+            if (gen !== uploadGen || job.aborted) return;
+            if (err && err.name === "AbortError") return;
             resetSelectedMedia();
-            alert((err && err.message && err.message !== "upload")
+            finishPubJob(job, false, (err && err.message && err.message !== "upload")
               ? err.message
               : uploadI18n.uploadFail);
+            if (currentUploadJob === job) currentUploadJob = null;
             throw err;
           })
           .finally(function () {
             if (gen === uploadGen) {
-              setDropzoneBusy(false);
               uploadPromise = null;
             }
           });
@@ -1077,9 +1235,16 @@
           fd.append("file", fileToSend, fileToSend.name || "video.mp4");
         }
         var job = existingJob && existingJob.root ? existingJob : addPubJob(titleVal);
+        if (job.aborted) return;
+        if (currentUploadJob === job) currentUploadJob = null;
         if (job.text) {
           job.text.textContent = String(uploadI18n.publishingJob || "").replace("{title}", titleVal);
         }
+        if (job.spin && !job.spin.parentNode && job.root) {
+          job.root.insertBefore(job.spin, job.root.firstChild);
+        }
+        var publishAc = new AbortController();
+        job.abortController = publishAc;
         heldFile = null;
         clearTempLocal();
         clearFileInput();
@@ -1087,7 +1252,6 @@
         setThumbSrc("");
         if (fname) fname.textContent = "";
         setPreviewVisible(false);
-        setDropzoneBusy(false);
         if (titleEl) titleEl.value = "";
         if (descEl) descEl.value = "";
         inFlight += 1;
@@ -1097,6 +1261,7 @@
           body: fd,
           credentials: "same-origin",
           headers: { Accept: "application/json" },
+          signal: publishAc.signal,
         })
           .then(function (r) {
             if (r.status === 401) {
@@ -1110,13 +1275,16 @@
             });
           })
           .then(function (res) {
-            if (!res) return;
+            if (!res || job.aborted) return;
             var ok = !!(res.data && res.data.ok);
             var message = (res.data && res.data.message) || "";
             finishPubJob(job, ok, message);
+            if (window.refreshPubLogs) window.refreshPubLogs();
           })
-          .catch(function () {
+          .catch(function (err) {
+            if (job.aborted || (err && err.name === "AbortError")) return;
             finishPubJob(job, false, uploadI18n.uploadFail);
+            if (window.refreshPubLogs) window.refreshPubLogs();
           })
           .finally(function () {
             inFlight = Math.max(0, inFlight - 1);
@@ -1161,20 +1329,19 @@
           return;
         }
 
-        var waitJob = null;
+        var waitJob = currentUploadJob;
         function go() {
           if (!tempToken && !heldFile && !(input.files && input.files.length)) {
             alert(msgFile);
-            if (waitJob) finishPubJob(waitJob, false, msgFile);
+            if (waitJob && waitJob.text) waitJob.text.textContent = msgFile;
             return;
           }
           sendPublish(waitJob);
         }
         if (uploadPromise) {
-          waitJob = addPubJob((title.value || "").trim());
-          if (waitJob.text) waitJob.text.textContent = uploadI18n.uploading;
-          uploadPromise.then(go).catch(function () {
-            if (waitJob) finishPubJob(waitJob, false, uploadI18n.uploadFail);
+          if (waitJob && waitJob.text) waitJob.text.textContent = uploadI18n.uploading;
+          uploadPromise.then(go).catch(function (err) {
+            if (err && err.name === "AbortError") return;
           });
         } else {
           go();

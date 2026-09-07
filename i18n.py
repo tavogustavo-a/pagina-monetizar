@@ -345,8 +345,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Conectar {platform}",
     },
     "servers.filehost_hint": {
-        "en": "Paste the API key from the host dashboard (Settings / API). MixDrop also needs the account email; Streamtape needs the API login.",
-        "es": "Pega la API key del panel del host (Settings / API). MixDrop también pide el email de la cuenta; Streamtape el API login.",
+        "en": "Copy the API key from:",
+        "es": "Copia la API key aquí:",
     },
     "servers.filehost_field_key": {"en": "API key", "es": "API key"},
     "servers.filehost_field_email": {"en": "API email", "es": "Email de la API"},
@@ -1181,6 +1181,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "pub.browse_files": {"en": "Browse files", "es": "Explorar archivos"},
     "pub.remove_file": {"en": "Remove file", "es": "Quitar archivo"},
+    "pub.cancel_job": {"en": "Cancel this video", "es": "Cancelar este video"},
     "pub.captions_uploading": {
         "en": "Uploading temporary video…",
         "es": "Subiendo video temporal…",

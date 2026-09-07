@@ -105,8 +105,8 @@ def user_can_access_servers(user: User) -> bool:
 
 
 def user_can_manage_panel_accounts(user: User) -> bool:
-    """Cuentas OAuth en Panel: solo admin del sitio o usuario modo TikTok."""
-    return user_is_site_admin(user) or user_is_tiktok_mode(user)
+    """Cuentas OAuth en Panel → Cuenta: solo usuario modo TikTok, no el admin del sitio."""
+    return user_is_tiktok_mode(user)
 
 
 def user_can_manage_team(actor: User) -> bool:

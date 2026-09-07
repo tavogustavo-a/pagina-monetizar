@@ -1,11 +1,40 @@
 {% if platform.id in vmos_platform_ids %}
-<button
-  type="button"
-  class="btn btn-vmos js-open-vmos"
-  data-platform-id="{{ platform.id }}"
-  data-platform-name="{{ platform.name }}"
->
-  <span class="btn-vmos__icon" aria-hidden="true">☁</span>
-  {{ t('servers.connect_with_vmos', short=vmos_short_labels.get(platform.id, platform.name)) }}
-</button>
+<form class="api-form js-vmos-inline-form" data-platform-id="{{ platform.id }}">
+  <input type="hidden" name="id" value="" />
+  <input type="hidden" name="platform_id" value="{{ platform.id }}" />
+  <input type="hidden" name="link_name" class="js-vmos-link-name" value="" />
+  <p class="sub">{{ t('servers.vmos_hint') }}</p>
+  <label class="field js-account-name-field" hidden>
+    <span>{{ t('api.field.name') }}</span>
+    <input type="text" name="name" autocomplete="off" />
+  </label>
+  <label class="field">
+    <span>{{ t('servers.vmos_field_access_key') }}</span>
+    <input type="text" name="access_key" required autocomplete="off" />
+  </label>
+  <label class="field">
+    <span>{{ t('servers.vmos_field_secret') }}</span>
+    <div class="password-input-wrap">
+      <input type="password" name="secret_key" class="js-api-secret" autocomplete="new-password" />
+      {% include "_password_eye.html" %}
+    </div>
+  </label>
+  <label class="field">
+    <span>{{ t('servers.vmos_field_pad') }}</span>
+    <input type="text" name="pad_code" required autocomplete="off" />
+  </label>
+  <label class="field">
+    <span>{{ t('servers.vmos_field_template') }}</span>
+    <input type="text" name="template_id" autocomplete="off" />
+  </label>
+  <label class="field">
+    <span>{{ t('servers.vmos_field_remark') }}</span>
+    <input type="text" name="remark" autocomplete="off" />
+  </label>
+  <p class="sub js-vmos-form-msg" hidden></p>
+  <div class="api-form__actions">
+    <button type="submit" class="btn btn-accent">{{ t('servers.vmos_save') }}</button>
+    <button type="button" class="btn btn-ghost js-vmos-test-btn">⚡ {{ t('servers.vmos_test') }}</button>
+  </div>
+</form>
 {% endif %}

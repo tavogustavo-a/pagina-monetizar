@@ -1,11 +1,32 @@
 {% if platform.id in chain_platform_ids %}
-<button
-  type="button"
-  class="btn btn-chain js-open-chain"
-  data-platform-id="{{ platform.id }}"
-  data-platform-name="{{ platform.name }}"
->
-  <span class="btn-chain__icon" aria-hidden="true">{% if platform.id == 'odysee' %}🟠{% else %}⛓️{% endif %}</span>
-  {{ t('servers.connect_with_chain', name=platform.name) }}
-</button>
+<form class="api-form js-chain-inline-form" data-platform-id="{{ platform.id }}">
+  <input type="hidden" name="id" value="" />
+  <input type="hidden" name="platform_id" value="{{ platform.id }}" />
+  <input type="hidden" name="link_name" class="js-chain-link-name" value="" />
+  <p class="sub js-chain-form-hint">{% if platform.id == 'dtube' %}{{ t('servers.chain_hint_dtube') }}{% else %}{{ t('servers.chain_hint_odysee') }}{% endif %}</p>
+  <label class="field js-account-name-field" hidden>
+    <span>{{ t('api.field.name') }}</span>
+    <input type="text" name="name" autocomplete="off" />
+  </label>
+  <label class="field">
+    <span class="js-chain-login-label">{% if platform.id == 'dtube' %}{{ t('servers.chain_field_hive') }}{% else %}{{ t('servers.chain_field_email') }}{% endif %}</span>
+    <input type="text" name="login" required autocomplete="off" />
+  </label>
+  <label class="field">
+    <span class="js-chain-secret-label">{% if platform.id == 'dtube' %}{{ t('servers.chain_field_wif') }}{% else %}{{ t('servers.chain_field_password') }}{% endif %}</span>
+    <div class="password-input-wrap">
+      <input type="password" name="secret" class="js-api-secret" required autocomplete="off" />
+      {% include "_password_eye.html" %}
+    </div>
+  </label>
+  <label class="field js-chain-extra-wrap"{% if platform.id == 'dtube' %} hidden{% endif %}>
+    <span>{{ t('servers.chain_field_channel') }}</span>
+    <input type="text" name="extra" autocomplete="off" />
+  </label>
+  <p class="sub js-chain-form-msg" hidden></p>
+  <div class="api-form__actions">
+    <button type="submit" class="btn btn-accent">{{ t('servers.chain_save') }}</button>
+    <button type="button" class="btn btn-ghost js-chain-test-btn">⚡ {{ t('servers.chain_test') }}</button>
+  </div>
+</form>
 {% endif %}
