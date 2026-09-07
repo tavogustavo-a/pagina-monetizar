@@ -1185,6 +1185,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Uploading temporary video…",
         "es": "Subiendo video temporal…",
     },
+    "pub.publishing_job": {
+        "en": "Publishing “{title}”…",
+        "es": "Publicando «{title}»…",
+    },
     "pub.captions_upload_fail": {
         "en": "Could not upload the video. Try again.",
         "es": "No se pudo subir el video. Inténtalo de nuevo.",

@@ -162,6 +162,7 @@
                   <span class="dropzone__thumb-fallback" id="video-preview-fallback" hidden aria-hidden="true">▶</span>
                 </div>
                 <p class="dropzone__filename sub" id="video-filename"></p>
+                <span class="pub-spinner dropzone__spinner" id="video-upload-spin" hidden></span>
                 <button
                   type="button"
                   class="dropzone__clear"
@@ -214,6 +215,7 @@
       </section>
         {% endif %}
       </form>
+      <ul class="pub-bg-jobs" id="pub-bg-jobs" hidden aria-live="polite"></ul>
 
       <div class="servers-divider pub-divider" role="separator" aria-hidden="true">
         <span class="servers-divider__line"></span>
@@ -712,15 +714,59 @@
     var tempToken = "";
     var tempVideoUrl = "";
     var tempDisplayName = "";
+    var heldFile = null;
     var publishing = false;
+    var inFlight = 0;
+    var uploadGen = 0;
+    var uploadPromise = null;
     var tempStorageKey = "pub_video_temp";
     var tempTokenInput = document.getElementById("video-temp-token");
+    var uploadSpin = document.getElementById("video-upload-spin");
+    var jobsEl = document.getElementById("pub-bg-jobs");
+    var publishUrl = form ? form.getAttribute("action") || "/admin/videos" : "/admin/videos";
     var uploadI18n = {
       uploading: {{ t('pub.captions_uploading') | tojson }},
       uploadFail: {{ t('pub.captions_upload_fail') | tojson }},
       fileTooLarge: {{ t('pub.flash.file_too_large', max_mb=max_upload_mb) | tojson }},
       maxUploadBytes: {{ max_upload_bytes | tojson }},
+      publishingJob: {{ t('pub.publishing_job') | tojson }},
     };
+
+    function setDropzoneBusy(on) {
+      zone.classList.toggle("dropzone--busy", !!on);
+      if (uploadSpin) uploadSpin.hidden = !on;
+    }
+
+    function clearTempLocal() {
+      tempToken = "";
+      tempVideoUrl = "";
+      tempDisplayName = "";
+      if (tempTokenInput) tempTokenInput.value = "";
+      sessionStorage.removeItem(tempStorageKey);
+    }
+
+    function addPubJob(title) {
+      if (!jobsEl) return { root: null, text: null };
+      jobsEl.hidden = false;
+      var li = document.createElement("li");
+      li.className = "pub-bg-job";
+      var spin = document.createElement("span");
+      spin.className = "pub-spinner";
+      spin.setAttribute("aria-hidden", "true");
+      var text = document.createElement("span");
+      text.textContent = String(uploadI18n.publishingJob || "").replace("{title}", title || "");
+      li.appendChild(spin);
+      li.appendChild(text);
+      jobsEl.insertBefore(li, jobsEl.firstChild);
+      return { root: li, text: text, spin: spin };
+    }
+
+    function finishPubJob(job, ok, message) {
+      if (!job || !job.root) return;
+      job.root.classList.add(ok ? "is-ok" : "is-fail");
+      if (job.spin && job.spin.parentNode) job.spin.parentNode.removeChild(job.spin);
+      if (job.text && message) job.text.textContent = message;
+    }
 
     function discardTemp(token, keepalive) {
       if (!token) return;
@@ -863,12 +909,14 @@
 
     function resetSelectedMedia() {
       if (tempToken) discardTemp(tempToken, false);
+      heldFile = null;
       setTempToken("", "", "");
       clearFileInput();
       revokePreviewUrl();
       setThumbSrc("");
       if (fname) fname.textContent = "";
       setPreviewVisible(false);
+      setDropzoneBusy(false);
     }
 
     function setTempToken(token, url, name) {
@@ -895,15 +943,18 @@
 
     function handleSelectedFile(file) {
       if (!file) return;
+      heldFile = file;
       if (isVideoFile(file)) {
         if (file.size > uploadI18n.maxUploadBytes) {
           alert(uploadI18n.fileTooLarge);
           return;
         }
         showLocalPreview(file, uploadI18n.uploading);
+        setDropzoneBusy(true);
+        var gen = ++uploadGen;
         var fd = new FormData();
         fd.append("file", file);
-        fetch("/admin/api/videos/temp", {
+        uploadPromise = fetch("/admin/api/videos/temp", {
           method: "POST",
           body: fd,
           credentials: "same-origin",
@@ -915,19 +966,28 @@
             });
           })
           .then(function (res) {
+            if (gen !== uploadGen) return;
             if (!res.ok || !res.data || !res.data.ok) {
               throw new Error((res.data && res.data.error) || "upload");
             }
             var data = res.data;
-            clearFileInput();
             setTempToken(data.token, data.url, data.name || file.name);
             if (fname) fname.textContent = data.name || file.name;
+            clearFileInput();
           })
           .catch(function (err) {
+            if (gen !== uploadGen) return;
             resetSelectedMedia();
             alert((err && err.message && err.message !== "upload")
               ? err.message
               : uploadI18n.uploadFail);
+            throw err;
+          })
+          .finally(function () {
+            if (gen === uploadGen) {
+              setDropzoneBusy(false);
+              uploadPromise = null;
+            }
           });
         return;
       }
@@ -963,14 +1023,7 @@
     }
 
     window.addEventListener("pagehide", function () {
-      if (publishing) {
-        sessionStorage.removeItem(tempStorageKey);
-        return;
-      }
-      if (tempToken) {
-        discardTemp(tempToken, true);
-        sessionStorage.removeItem(tempStorageKey);
-      }
+      sessionStorage.removeItem(tempStorageKey);
     });
 
     if (browse) {
@@ -1002,46 +1055,130 @@
     });
 
     if (form) {
+      function sendPublish(existingJob) {
+        var titleEl = form.querySelector('input[name="title"]');
+        var descEl = form.querySelector('textarea[name="description"]');
+        var titleVal = titleEl ? (titleEl.value || "").trim() : "";
+        var token = tempToken;
+        var fileToSend = heldFile;
+        if (!token && input.files && input.files[0]) {
+          fileToSend = input.files[0];
+        }
+        if (!token && !fileToSend) {
+          alert(msgFile);
+          return;
+        }
+        var fd = new FormData(form);
+        try { fd.delete("file"); } catch (err) {}
+        if (token) {
+          fd.set("video_temp_token", token);
+        } else {
+          fd.set("video_temp_token", "");
+          fd.append("file", fileToSend, fileToSend.name || "video.mp4");
+        }
+        var job = existingJob && existingJob.root ? existingJob : addPubJob(titleVal);
+        if (job.text) {
+          job.text.textContent = String(uploadI18n.publishingJob || "").replace("{title}", titleVal);
+        }
+        heldFile = null;
+        clearTempLocal();
+        clearFileInput();
+        revokePreviewUrl();
+        setThumbSrc("");
+        if (fname) fname.textContent = "";
+        setPreviewVisible(false);
+        setDropzoneBusy(false);
+        if (titleEl) titleEl.value = "";
+        if (descEl) descEl.value = "";
+        inFlight += 1;
+        publishing = true;
+        fetch(publishUrl, {
+          method: "POST",
+          body: fd,
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        })
+          .then(function (r) {
+            if (r.status === 401) {
+              window.location.href = "/login?next=/admin/publicaciones";
+              return null;
+            }
+            return r.json().then(function (data) {
+              return { httpOk: r.ok, data: data };
+            }).catch(function () {
+              return { httpOk: r.ok, data: null };
+            });
+          })
+          .then(function (res) {
+            if (!res) return;
+            var ok = !!(res.data && res.data.ok);
+            var message = (res.data && res.data.message) || "";
+            finishPubJob(job, ok, message);
+          })
+          .catch(function () {
+            finishPubJob(job, false, uploadI18n.uploadFail);
+          })
+          .finally(function () {
+            inFlight = Math.max(0, inFlight - 1);
+            if (inFlight === 0) publishing = false;
+          });
+      }
+
       form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
         var desc = form.querySelector('textarea[name="description"]');
         var title = form.querySelector('input[name="title"]');
         var scheduledAt = document.getElementById("scheduled-at");
-        var hasFile = (input.files && input.files.length > 0) || !!tempToken;
+        var hasFile = !!heldFile || !!tempToken || (input.files && input.files.length > 0);
         var hasDesc = desc && (desc.value || "").trim().length > 0;
         var hasTitle = title && (title.value || "").trim().length > 0;
 
         if (!hasFile) {
-          e.preventDefault();
           alert(msgFile);
           input.focus();
           return;
         }
         if (!hasDesc) {
-          e.preventDefault();
           alert(msgDesc);
           if (desc) desc.focus();
           return;
         }
         if (!hasTitle) {
-          e.preventDefault();
           alert(msgTitle);
           if (title) title.focus();
           return;
         }
         if (scheduledAt && !scheduledAt.value) {
-          e.preventDefault();
           scheduledAt.focus();
           return;
         }
         var accountInput = form.querySelector('input[name="account_link_id"]');
         if (accountInput && !(accountInput.value || "").trim()) {
-          e.preventDefault();
           alert(msgAccount);
           var accountTrigger = document.getElementById("pub-account-open");
           if (accountTrigger) accountTrigger.focus();
           return;
         }
-        publishing = true;
+
+        var waitJob = null;
+        function go() {
+          if (!tempToken && !heldFile && !(input.files && input.files.length)) {
+            alert(msgFile);
+            if (waitJob) finishPubJob(waitJob, false, msgFile);
+            return;
+          }
+          sendPublish(waitJob);
+        }
+        if (uploadPromise) {
+          waitJob = addPubJob((title.value || "").trim());
+          if (waitJob.text) waitJob.text.textContent = uploadI18n.uploading;
+          uploadPromise.then(go).catch(function () {
+            if (waitJob) finishPubJob(waitJob, false, uploadI18n.uploadFail);
+          });
+        } else {
+          go();
+        }
       });
     }
   })();

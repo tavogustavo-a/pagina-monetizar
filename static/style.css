@@ -7818,6 +7818,70 @@ form.server-modal__body.api-form .panel-api-test-msg {
   margin: 0;
 }
 
+@keyframes pub-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pub-spinner {
+  display: inline-block;
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--accent2, #25f4ee);
+  border-radius: 50%;
+  animation: pub-spin 0.7s linear infinite;
+}
+
+.dropzone__spinner[hidden] {
+  display: none !important;
+}
+
+.dropzone--busy .dropzone__spinner {
+  display: inline-block !important;
+}
+
+#pub-publish-section .dropzone--busy .dropzone__input {
+  pointer-events: none;
+}
+
+.pub-bg-jobs {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.pub-bg-job {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.45rem 0.65rem;
+  border-radius: 0.5rem;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--text, #e8e8e8);
+}
+
+.pub-bg-job .pub-spinner {
+  margin-top: 0.12rem;
+}
+
+.pub-bg-job.is-ok {
+  border-color: rgba(37, 244, 238, 0.28);
+}
+
+.pub-bg-job.is-fail {
+  border-color: rgba(254, 44, 85, 0.35);
+}
+
 .sidebar-top {
   display: flex;
   flex-direction: column;

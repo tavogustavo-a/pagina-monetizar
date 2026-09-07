@@ -2404,12 +2404,29 @@ def api_video_temp_discard(request: Request, token: str):
     return {"ok": True}
 
 
+def _publicaciones_result(
+    request: Request, *, ok: bool, message: str, status: int = 400
+):
+    if "application/json" in (request.headers.get("accept") or "").lower():
+        return JSONResponse(
+            {"ok": ok, "message": message},
+            status_code=200 if ok else status,
+        )
+    if ok:
+        request.session["admin_ok"] = message
+    else:
+        request.session["admin_error"] = message
+    return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+
+
 @app.post("/admin/videos", name="admin_upload_video")
 async def admin_upload_video(request: Request):
     try:
         u = _require_publicaciones_user(request)
     except PermissionError as e:
         if str(e) == "login_required":
+            if "application/json" in (request.headers.get("accept") or "").lower():
+                return JSONResponse({"ok": False, "message": "login"}, status_code=401)
             return _publicaciones_redirect_login()
         return HTMLResponse("Permission denied.", status_code=403)
 
@@ -2425,18 +2442,17 @@ async def admin_upload_video(request: Request):
     x_use_funding = (form.get("x_use_funding") or "").strip() in ("1", "on", "true")
 
     if not db.user_can_upload_videos(u):
-        request.session["admin_error"] = _msg(request, "pub.flash.no_upload")
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+        return _publicaciones_result(request, ok=False, message=_msg(request, "pub.flash.no_upload"))
     quota_code = db.consume_publish_quota(u)
     if quota_code:
-        request.session["admin_error"] = _msg(request, quota_code)
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+        return _publicaciones_result(request, ok=False, message=_msg(request, quota_code))
 
     publish_choices = db.list_stats_filter_choices(u, lang=lang)
     choices_by_id = {c["id"]: c for c in publish_choices}
     if not choices_by_id:
-        request.session["admin_error"] = _msg(request, "pub.flash.no_accounts_registered")
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+        return _publicaciones_result(
+            request, ok=False, message=_msg(request, "pub.flash.no_accounts_registered")
+        )
     if db.user_is_tiktok_mode(u):
         allowed_platforms = set(PANEL_API_PLATFORM_IDS)
         ready = _tiktok_user_ready_platform_ids(u)
@@ -2462,17 +2478,19 @@ async def admin_upload_video(request: Request):
                         match_id = c["id"]
                         break
             if not match_id:
-                request.session["admin_error"] = _msg(
-                    request, "pub.flash.select_account_publish"
-                )
-                return RedirectResponse(
-                    url=request.url_for("admin_publicaciones"), status_code=303
+                return _publicaciones_result(
+                    request,
+                    ok=False,
+                    message=_msg(request, "pub.flash.select_account_publish"),
                 )
             account_link_id = match_id
     elif db.user_can_access_servers(u):
         if not account_link_id or account_link_id not in choices_by_id:
-            request.session["admin_error"] = _msg(request, "pub.flash.select_account_publish")
-            return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+            return _publicaciones_result(
+                request,
+                ok=False,
+                message=_msg(request, "pub.flash.select_account_publish"),
+            )
         acc = choices_by_id[account_link_id]
         allowed_platforms = set(acc.get("platform_ids") or [])
         selected_platforms = [p for p in selected_platforms if p in allowed_platforms]
@@ -2482,8 +2500,11 @@ async def admin_upload_video(request: Request):
         allowed_platforms = set(acc.get("platform_ids") or [])
         selected_platforms = [p for p in selected_platforms if p in allowed_platforms]
     elif account_link_id not in choices_by_id:
-        request.session["admin_error"] = _msg(request, "pub.flash.select_account_publish")
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+        return _publicaciones_result(
+            request,
+            ok=False,
+            message=_msg(request, "pub.flash.select_account_publish"),
+        )
     else:
         acc = choices_by_id.get(account_link_id)
         if acc:
@@ -2496,30 +2517,34 @@ async def admin_upload_video(request: Request):
             selected_platforms = ["tiktok"]
 
     if not selected_platforms:
-        request.session["admin_error"] = _msg(request, "pub.flash.no_platforms")
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+        return _publicaciones_result(
+            request, ok=False, message=_msg(request, "pub.flash.no_platforms")
+        )
 
     if not title:
-        request.session["admin_error"] = _msg(request, "pub.flash.missing_title")
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+        return _publicaciones_result(
+            request, ok=False, message=_msg(request, "pub.flash.missing_title")
+        )
 
     if not description:
-        request.session["admin_error"] = _msg(request, "pub.flash.missing_description")
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+        return _publicaciones_result(
+            request, ok=False, message=_msg(request, "pub.flash.missing_description")
+        )
 
     if "tiktok" in selected_platforms:
         choices = db.publicaciones_tiktoker_choices(u)
         if not choices:
-            request.session["admin_error"] = _msg(request, "pub.flash.no_accounts_registered")
-            return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+            return _publicaciones_result(
+                request, ok=False, message=_msg(request, "pub.flash.no_accounts_registered")
+            )
         owner_user_id = db.resolve_publish_owner_user_id(u, tiktoker_config_id)
         if not owner_user_id:
             cid = tiktoker_config_id
             if cid and db.get_config_internal_user_id(cid) is None:
-                request.session["admin_error"] = _msg(request, "pub.flash.no_user_assigned")
+                msg = _msg(request, "pub.flash.no_user_assigned")
             else:
-                request.session["admin_error"] = _msg(request, "pub.flash.select_account_publish")
-            return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+                msg = _msg(request, "pub.flash.select_account_publish")
+            return _publicaciones_result(request, ok=False, message=msg)
     else:
         if u.role == "user":
             owner_user_id = u.id
@@ -2529,7 +2554,7 @@ async def admin_upload_video(request: Request):
             ]
             owner_user_id = ready[0]["internal_user_id"] if ready else u.id
 
-    if not isinstance(upload, UploadFile) or not upload.filename:
+    if not isinstance(upload, UploadFile) or not (upload.filename or "").strip():
         upload = None
 
     temp_path = None
@@ -2540,12 +2565,15 @@ async def admin_upload_video(request: Request):
         suffix = temp_path.suffix.lower()
         if suffix not in ALLOWED_MEDIA_EXT:
             temp_path.unlink(missing_ok=True)
-            request.session["admin_error"] = _msg(
+            return _publicaciones_result(
                 request,
-                "pub.flash.file_type",
-                types=", ".join(sorted(ALLOWED_MEDIA_EXT)),
+                ok=False,
+                message=_msg(
+                    request,
+                    "pub.flash.file_type",
+                    types=", ".join(sorted(ALLOWED_MEDIA_EXT)),
+                ),
             )
-            return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
         content_type = "photo" if suffix in ALLOWED_PHOTO_EXT else "video"
         stored = f"{uuid.uuid4().hex}{suffix}"
         path = UPLOAD_DIR / stored
@@ -2554,28 +2582,33 @@ async def admin_upload_video(request: Request):
         raw_name = upload.filename or ""
         suffix = Path(raw_name).suffix.lower()
         if suffix not in ALLOWED_MEDIA_EXT:
-            request.session["admin_error"] = _msg(
+            return _publicaciones_result(
                 request,
-                "pub.flash.file_type",
-                types=", ".join(sorted(ALLOWED_MEDIA_EXT)),
+                ok=False,
+                message=_msg(
+                    request,
+                    "pub.flash.file_type",
+                    types=", ".join(sorted(ALLOWED_MEDIA_EXT)),
+                ),
             )
-            return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
 
         content_type = "photo" if suffix in ALLOWED_PHOTO_EXT else "video"
 
         contents = await upload.read()
         if len(contents) > MAX_UPLOAD_BYTES:
-            request.session["admin_error"] = _msg(
-                request, "pub.flash.file_too_large", max_mb=MAX_UPLOAD_MB
+            return _publicaciones_result(
+                request,
+                ok=False,
+                message=_msg(request, "pub.flash.file_too_large", max_mb=MAX_UPLOAD_MB),
             )
-            return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
 
         stored = f"{uuid.uuid4().hex}{suffix}"
         path = UPLOAD_DIR / stored
         path.write_bytes(contents)
     else:
-        request.session["admin_error"] = _msg(request, "pub.flash.missing_file")
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+        return _publicaciones_result(
+            request, ok=False, message=_msg(request, "pub.flash.missing_file")
+        )
 
     schedule_enabled = (form.get("schedule_enabled") or "").strip() in ("1", "on", "true")
     scheduled_raw = (form.get("scheduled_at") or "").strip()
@@ -2585,8 +2618,9 @@ async def admin_upload_video(request: Request):
         scheduled_utc = publish_schedule.parse_scheduled_at_local(scheduled_raw)
         if not scheduled_utc:
             path.unlink(missing_ok=True)
-            request.session["admin_error"] = _msg(request, "pub.flash.schedule_invalid")
-            return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+            return _publicaciones_result(
+                request, ok=False, message=_msg(request, "pub.flash.schedule_invalid")
+            )
         now_utc = publish_schedule.now_publish_tz().astimezone(timezone.utc)
         schedule_for_later = scheduled_utc > now_utc
 
@@ -2594,8 +2628,9 @@ async def admin_upload_video(request: Request):
         video = db.create_video(owner_user_id, title, description, stored)
     except Exception:
         path.unlink(missing_ok=True)
-        request.session["admin_error"] = _msg(request, "pub.flash.save_fail")
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+        return _publicaciones_result(
+            request, ok=False, message=_msg(request, "pub.flash.save_fail")
+        )
 
     if schedule_enabled and schedule_for_later and scheduled_utc:
         db.create_scheduled_publication(
@@ -2612,12 +2647,12 @@ async def admin_upload_video(request: Request):
         when_local = publish_schedule.format_scheduled_local(
             scheduled_utc.isoformat(), lang
         )
-        request.session["admin_ok"] = _msg(
-            request, "pub.flash.scheduled", when=when_local
+        return _publicaciones_result(
+            request, ok=True, message=_msg(request, "pub.flash.scheduled", when=when_local)
         )
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
 
-    ok_n, fail_n, _ = publish_schedule.execute_video_publish(
+    ok_n, fail_n, _ = await asyncio.to_thread(
+        publish_schedule.execute_video_publish,
         upload_dir=UPLOAD_DIR,
         user_id=u.id,
         video=video,
@@ -2632,19 +2667,20 @@ async def admin_upload_video(request: Request):
     past_schedule_immediate = schedule_enabled and scheduled_utc and not schedule_for_later
 
     if fail_n and ok_n:
-        request.session["admin_ok"] = _msg(
-            request, "pub.flash.partial", ok=ok_n, fail=fail_n
+        return _publicaciones_result(
+            request, ok=True, message=_msg(request, "pub.flash.partial", ok=ok_n, fail=fail_n)
         )
-    elif fail_n:
-        request.session["admin_error"] = _msg(
-            request, "pub.flash.partial", ok=ok_n, fail=fail_n
+    if fail_n:
+        return _publicaciones_result(
+            request, ok=False, message=_msg(request, "pub.flash.partial", ok=ok_n, fail=fail_n)
         )
-    elif past_schedule_immediate:
-        request.session["admin_ok"] = _msg(request, "pub.flash.schedule_past_immediate")
-    else:
-        request.session["admin_ok"] = _msg(request, "pub.flash.all_ok", n=ok_n)
-
-    return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+    if past_schedule_immediate:
+        return _publicaciones_result(
+            request, ok=True, message=_msg(request, "pub.flash.schedule_past_immediate")
+        )
+    return _publicaciones_result(
+        request, ok=True, message=_msg(request, "pub.flash.all_ok", n=ok_n)
+    )
 
 
 def _require_publish_retry_admin(request: Request) -> db.User:
