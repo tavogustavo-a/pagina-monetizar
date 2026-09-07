@@ -1,12 +1,22 @@
 {% if platform.id in filehost_platform_ids %}
 <ul class="tiktok-config-list">
   {% for c in filehost_by_platform.get(platform.id, []) %}
-  <li class="tiktok-config-card tiktok-config-card--linked">
+  <li
+    class="tiktok-config-card tiktok-config-card--linked js-filehost-linked"
+    data-account-id="{{ c.id }}"
+    data-account-name="{{ c.name }}"
+    data-link-mask="{{ c.api_key_mask }}"
+    data-payload="{{ {'id': c.id, 'api_key': c.api_key, 'extra': c.extra} | json_attr }}"
+  >
     <div class="tiktok-config-card__main">
       <div class="tiktok-config-card__head">
+        {% set relink_kind = 'filehost' %}
+        {% set relink_id = c.id %}
+        {% set relink_name = c.name %}
+        {% include "_servers_relink_btn.html" %}
         <span class="badge badge-active">{{ t('servers.connected') }}</span>
       </div>
-      <p class="tiktok-config-card__meta sub">{% if c.extra_mask %}{{ c.extra_mask }} · {% endif %}{{ c.api_key_mask }}</p>
+      <p class="tiktok-config-card__meta sub">{% if c.name %}{{ c.name }}{% if c.api_key_mask %} · {% endif %}{% endif %}{{ c.api_key_mask }}</p>
     </div>
     <div class="tiktok-config-card__actions">
       <button type="button" class="btn btn-ghost btn-sm btn-equipo-warn js-filehost-disconnect" data-account-id="{{ c.id }}">

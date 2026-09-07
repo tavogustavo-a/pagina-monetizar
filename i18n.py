@@ -269,7 +269,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "servers.coming_soon": {"en": "Coming soon", "es": "Próximamente"},
     "servers.accounts_btn": {"en": "Accounts", "es": "Cuentas"},
-    "servers.accounts_add": {"en": "Add account", "es": "Agregar cuenta"},
     "servers.platform_configure": {
         "en": "Configure server",
         "es": "Configurar servidor",
@@ -277,6 +276,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "servers.modal_accounts_title": {
         "en": "{platform} accounts · API credentials",
         "es": "Cuentas de {platform} · Credenciales de API",
+    },
+    "servers.modal_api_credentials": {
+        "en": "API credentials",
+        "es": "Credenciales de API",
     },
     "servers.modal_accounts_prefix": {
         "en": "{platform} accounts ·",
@@ -345,8 +348,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Conectar {platform}",
     },
     "servers.filehost_hint": {
-        "en": "Copy the API key from:",
-        "es": "Copia la API key aquí:",
+        "en": "",
+        "es": "",
     },
     "servers.filehost_field_key": {"en": "API key", "es": "API key"},
     "servers.filehost_field_email": {"en": "API email", "es": "Email de la API"},
@@ -375,16 +378,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Odysee no ofrece OAuth público para apps de terceros. Entra con el email y la contraseña de la cuenta de Odysee. El panel guarda el auth token, no la contraseña. El claim ID del canal es opcional.",
     },
     "servers.chain_hint_dtube": {
-        "en": "DTube posts on Hive. Use the Hive username and the posting WIF (not the master key). The video is uploaded to the DTube IPFS cluster, then a real Hive comment is broadcast. Do not paste the owner key.",
-        "es": "DTube publica en Hive. Usa el usuario de Hive y el posting WIF (no la clave master). El video se sube al cluster IPFS de DTube y luego se emite un comentario real en Hive. No pegues la owner key.",
+        "en": "",
+        "es": "",
     },
     "servers.chain_field_email": {"en": "Odysee email", "es": "Email de Odysee"},
     "servers.chain_field_password": {
         "en": "Odysee password",
         "es": "Contraseña de Odysee",
     },
-    "servers.chain_field_hive": {"en": "Hive username", "es": "Usuario de Hive"},
-    "servers.chain_field_wif": {"en": "Posting WIF", "es": "Posting WIF"},
+    "servers.chain_field_hive": {"en": "DTube username", "es": "Usuario de DTube"},
+    "servers.chain_field_wif": {"en": "Posting key", "es": "Clave posting"},
     "servers.chain_field_channel": {
         "en": "Channel claim ID (optional)",
         "es": "Claim ID del canal (opcional)",
@@ -395,8 +398,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Cuenta guardada ({name}).",
     },
     "servers.chain_missing": {
-        "en": "Odysee needs email and password. DTube needs Hive username and posting WIF.",
-        "es": "Odysee pide email y contraseña. DTube pide usuario de Hive y posting WIF.",
+        "en": "Odysee needs email and password. DTube needs username and posting key.",
+        "es": "Odysee pide email y contraseña. DTube pide usuario de DTube y clave posting.",
     },
     "servers.chain_test": {"en": "Test API", "es": "Probar API"},
     "servers.chain_badge_odysee": {"en": "LBRY", "es": "LBRY"},
@@ -606,121 +609,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "No se pudo desconectar.",
     },
     "servers.network_error": {"en": "Network error.", "es": "Error de red."},
-    "servers.groups_title": {"en": "Join accounts", "es": "Juntar cuentas"},
-    "servers.groups_optional": {"en": "Optional", "es": "Opcional"},
-    "servers.groups_auto_hint": {
-        "en": "Accounts with the same name are linked automatically. Manual groups below are optional.",
-        "es": "Las cuentas con el mismo nombre se vinculan solas. Los grupos manuales de abajo son opcionales.",
-    },
-    "servers.groups_auto_title": {
-        "en": "Automatic links",
-        "es": "Vinculaciones automáticas",
-    },
-    "servers.groups_auto_empty": {
-        "en": "Create accounts with the same name on different servers to link them.",
-        "es": "Crea cuentas con el mismo nombre en distintos servidores para vincularlas.",
-    },
-    "servers.groups_manual_title": {
-        "en": "Manual groups (optional)",
-        "es": "Grupos manuales (opcional)",
-    },
-    "servers.groups_info_title": {
-        "en": "About joining accounts",
-        "es": "Información de juntar cuentas",
-    },
-    "servers.groups_hint": {
-        "en": "Accounts with the same name publish together on every linked server. Each name can only exist once per server. Manual groups let you join accounts with different names.",
-        "es": "Las cuentas con el mismo nombre publican juntas en cada servidor vinculado. Cada nombre solo puede existir una vez por servidor. Los grupos manuales permiten juntar cuentas con nombres distintos.",
-    },
-    "servers.groups_create": {"en": "Create", "es": "Crear"},
-    "servers.groups_name": {"en": "Name", "es": "Nombre"},
-    "servers.groups_view_linked": {"en": "View linked", "es": "Ver vinculados"},
-    "servers.groups_linked_servers": {
-        "en": "Linked servers",
-        "es": "Servidores vinculados",
-    },
-    "servers.groups_search": {"en": "Search", "es": "Buscar"},
-    "servers.groups_search_ph": {
-        "en": "Search by account name…",
-        "es": "Buscar por nombre de cuenta…",
-    },
-    "servers.groups_accounts": {"en": "Accounts", "es": "Cuentas"},
-    "servers.groups_account_default": {
-        "en": "Configured account",
-        "es": "Cuenta configurada",
-    },
-    "servers.groups_picks_empty": {
-        "en": "No linked accounts available. Create accounts and link at least one server to each.",
-        "es": "No hay cuentas vinculadas. Crea cuentas y vincula al menos un servidor a cada una.",
-    },
-    "servers.groups_picks_all_taken": {
-        "en": "All accounts are already assigned to another group.",
-        "es": "Todas las cuentas ya están asignadas a otro grupo.",
-    },
-    "servers.groups_picks_taken": {
-        "en": "Already in another group",
-        "es": "Ya agrupado",
-    },
-    "servers.groups_picks_unlinked": {
-        "en": "No linked servers",
-        "es": "Sin vinculados",
-    },
-    "servers.groups_platforms": {"en": "Servers", "es": "Servidores"},
-    "servers.groups_empty": {
-        "en": "No manual groups yet.",
-        "es": "Aún no hay grupos manuales.",
-    },
-    "servers.groups_list_search": {
-        "en": "Search by group or account name...",
-        "es": "Buscar por nombre de grupo o cuenta...",
-    },
-    "servers.groups_pagination": {
-        "en": "Account groups pagination",
-        "es": "Paginación de grupos de cuentas",
-    },
-    "servers.groups_saved": {"en": "Group saved.", "es": "Grupo guardado."},
-    "servers.groups_deleted": {"en": "Group deleted.", "es": "Grupo eliminado."},
-    "servers.groups_name_required": {"en": "Enter a name.", "es": "Escribe un nombre."},
-    "servers.groups_platforms_required": {
-        "en": "Select at least one account.",
-        "es": "Selecciona al menos una cuenta.",
-    },
-    "servers.groups_name_taken": {
-        "en": "That name is already in use.",
-        "es": "Ese nombre ya está en uso.",
-    },
-    "servers.groups_name_account_conflict": {
-        "en": "That name is already used by an account. Choose a different group name.",
-        "es": "Ese nombre ya existe en Cuentas. Elige otro nombre para el grupo.",
-    },
-    "servers.groups_members_not_linked": {
-        "en": "Each account in the group must have at least one linked server.",
-        "es": "Cada cuenta del grupo debe tener al menos un servidor vinculado.",
-    },
-    "servers.groups_not_found": {"en": "Group not found.", "es": "Grupo no encontrado."},
-    "servers.groups_save_fail": {
-        "en": "Could not save the group.",
-        "es": "No se pudo guardar el grupo.",
-    },
-    "servers.groups_edit": {"en": "Edit", "es": "Editar"},
-    "servers.groups_delete": {"en": "Delete group", "es": "Eliminar grupo"},
-    "servers.groups_toggle": {
-        "en": "Enable or disable group",
-        "es": "Activar o desactivar grupo",
-    },
-    "servers.groups_confirm_delete": {
-        "en": "Delete this account group?",
-        "es": "¿Eliminar este grupo de cuentas?",
-    },
-    "servers.groups_modal_create": {
-        "en": "New account group",
-        "es": "Nuevo grupo de cuentas",
-    },
-    "servers.groups_modal_edit": {"en": "Edit group", "es": "Editar grupo"},
-    "servers.groups_accounts_edit": {
-        "en": "Group accounts (uncheck to remove)",
-        "es": "Cuentas grupo (desmarca para quitar)",
-    },
     "servers.groups_save": {"en": "Save", "es": "Guardar"},
     "servers.accounts_section_title": {"en": "Accounts", "es": "Cuentas"},
     "servers.accounts_search": {
@@ -748,10 +636,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "servers.accounts_link_name_taken": {
         "en": "That account name already exists.",
         "es": "Ese nombre de cuenta ya existe.",
-    },
-    "servers.accounts_group_name_conflict": {
-        "en": "That name is already used by a group in Join accounts. Choose a different name.",
-        "es": "Ese nombre ya existe en Juntar cuentas. Elige otro nombre para la cuenta.",
     },
     "servers.accounts_col_linked": {"en": "Linked servers", "es": "Servidores vinculados"},
     "servers.accounts_link_solo": {"en": "Only this server", "es": "Solo este servidor"},
@@ -784,6 +668,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     "servers.accounts_server_not_linked": {"en": "Disconnected", "es": "Desconectado"},
     "servers.accounts_platform": {"en": "Server", "es": "Servidor"},
     "servers.accounts_edit": {"en": "Edit", "es": "Editar"},
+    "servers.relink_prompt": {
+        "en": "Account this connection belongs to",
+        "es": "Cuenta a la que pertenece",
+    },
+    "servers.relink_missing": {
+        "en": "Enter the account name.",
+        "es": "Escribe el nombre de la cuenta.",
+    },
     "servers.accounts_delete": {"en": "Delete account", "es": "Eliminar cuenta"},
     "servers.accounts_toggle": {
         "en": "Enable or disable account",

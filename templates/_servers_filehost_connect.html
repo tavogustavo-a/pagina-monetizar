@@ -5,12 +5,11 @@
   <input type="hidden" name="id" value="" />
   <input type="hidden" name="platform_id" value="{{ platform.id }}" />
   <input type="hidden" name="link_name" class="js-filehost-link-name" value="" />
+  {% if settings_url %}
   <p class="sub filehost-hint">
-    {{ t('servers.filehost_hint') }}
-    {% if settings_url %}
     <a href="{{ settings_url }}" target="_blank" rel="noopener noreferrer">{{ settings_url }}</a>
-    {% endif %}
   </p>
+  {% endif %}
   <label class="field js-account-name-field" hidden>
     <span>{{ t('api.field.name') }}</span>
     <input type="text" name="name" autocomplete="off" />

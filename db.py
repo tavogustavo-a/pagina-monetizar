@@ -1072,19 +1072,6 @@ def _sync_account_links_from_accounts(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def _account_name_used_by_group(conn: sqlite3.Connection, name: str) -> bool:
-    row = conn.execute(
-        """
-        SELECT 1 AS ok
-        FROM server_groups
-        WHERE lower(trim(name)) = lower(trim(?))
-        LIMIT 1
-        """,
-        (name,),
-    ).fetchone()
-    return bool(row)
-
-
 def _ensure_user_account_links_table() -> None:
     conn = _connect()
     try:
@@ -1354,21 +1341,8 @@ def _link_id_for_account_name(conn: sqlite3.Connection, name: str) -> str | None
     return str(row["id"]) if row else None
 
 
-def _group_member_link_ids(group: dict[str, Any], conn: sqlite3.Connection) -> list[str]:
-    seen: set[str] = set()
-    out: list[str] = []
-    for member in group.get("members") or []:
-        name = (member.get("name") or "").strip()
-        lid = _link_id_for_account_name(conn, name)
-        if not lid or lid in seen:
-            continue
-        seen.add(lid)
-        out.append(lid)
-    return out
-
-
 def list_stats_filter_choices(viewer: User, *, lang: str = "es") -> list[dict[str, Any]]:
-    """Cuentas y grupos manuales disponibles en el filtro de Estadísticas."""
+    """Cuentas disponibles en el filtro de Estadísticas."""
     from platforms import platform_list
 
     choices: list[dict[str, Any]] = []
@@ -1508,42 +1482,6 @@ def list_stats_filter_choices(viewer: User, *, lang: str = "es") -> list[dict[st
             conn.commit()
         finally:
             conn.close()
-    if user_can_access_servers(viewer):
-        conn = _connect()
-        try:
-            for group in list_server_groups(lang):
-                if not group.get("active"):
-                    continue
-                members = group.get("members") or []
-                link_ids = _group_member_link_ids(group, conn)
-                platform_ids = sorted(
-                    {
-                        str(m.get("platform_id") or "").strip()
-                        for m in members
-                        if (m.get("platform_id") or "").strip()
-                    }
-                )
-                if not link_ids and not platform_ids:
-                    continue
-                source_maps = []
-                for member in members:
-                    member_name = str(member.get("name") or "").strip()
-                    if member_name:
-                        source_maps.append(
-                            _account_link_platform_sources(conn, member_name)
-                        )
-                choices.append(
-                    {
-                        "id": f"{STATS_GROUP_PREFIX}{group['id']}",
-                        "name": group.get("name") or group["id"],
-                        "kind": "group",
-                        "platform_ids": platform_ids,
-                        "platform_sources": _merge_platform_sources(source_maps),
-                        "link_ids": link_ids,
-                    }
-                )
-        finally:
-            conn.close()
     choices.sort(key=lambda item: str(item.get("name") or "").casefold())
     return choices
 
@@ -1655,8 +1593,6 @@ def create_account_link(name: str, *, lang: str = "es") -> dict[str, Any]:
     try:
         if _account_link_name_taken(conn, label):
             raise ValueError("link_name_taken")
-        if _account_name_used_by_group(conn, label):
-            raise ValueError("group_name_conflict")
         lid = str(uuid.uuid4())
         conn.execute(
             """
@@ -1727,8 +1663,6 @@ def rename_account_link(link_id: str, name: str, *, lang: str = "es") -> dict[st
         if old != label:
             if _account_link_name_taken(conn, label, exclude_id=lid):
                 raise ValueError("link_name_taken")
-            if _account_name_used_by_group(conn, label):
-                raise ValueError("group_name_conflict")
             try:
                 conn.execute(
                     """
@@ -4830,6 +4764,7 @@ def _vmos_public_row(r: Any) -> dict[str, Any]:
         "name": (r["name"] or "").strip() or (r["pad_code"] or "VMOS"),
         "access_key": r["access_key"] or "",
         "secret_key_set": bool(secret.strip()),
+        "secret_key": secret,
         "secret_key_mask": _mask_secret(secret),
         "pad_code": r["pad_code"] or "",
         "template_id": r["template_id"] or "",
@@ -5060,6 +4995,7 @@ def _filehost_public_row(r: Any) -> dict[str, Any]:
         "platform_id": r["platform_id"],
         "name": (r["name"] or "").strip() or "PPV",
         "api_key_set": bool(key.strip()),
+        "api_key": key,
         "api_key_mask": _mask_secret(key),
         "extra": extra,
         "extra_mask": _mask_secret(extra) if extra else "",
@@ -5245,6 +5181,7 @@ def _chain_public_row(r: Any) -> dict[str, Any]:
         "login": login,
         "login_mask": _mask_secret(login) if login else "",
         "secret_set": bool(str(r["secret"] or "").strip()),
+        "secret": str(r["secret"] or ""),
         "extra": extra,
         "extra_mask": _mask_secret(extra) if extra else "",
         "updated_at": r["updated_at"],
@@ -6010,6 +5947,67 @@ def bind_tiktok_config_name(config_id: str, account_name: str) -> None:
     sync_server_accounts_from_links()
 
 
+def rebind_platform_connection(kind: str, account_id: str, name: str) -> None:
+    """Cambia a qué cuenta lógica pertenece una conexión de servidor."""
+    label = _normalize_account_name(name)
+    oid = (account_id or "").strip()
+    src = (kind or "").strip().lower()
+    if not oid:
+        raise ValueError("not_found")
+    if not label:
+        raise ValueError("missing_name")
+    if src == "oauth":
+        bind_oauth_account_name(oid, label)
+        return
+    if src == "tiktok":
+        bind_tiktok_config_name(oid, label)
+        return
+    if src == "filehost":
+        raw = get_filehost_account_raw(oid)
+        if not raw:
+            raise ValueError("not_found")
+        upsert_filehost_account(
+            account_id=oid,
+            platform_id=str(raw["platform_id"] or ""),
+            name=label,
+            api_key=None,
+            extra=None,
+            link_name=label,
+        )
+        return
+    if src == "vmos":
+        raw = get_vmos_account_raw(oid)
+        if not raw:
+            raise ValueError("not_found")
+        upsert_vmos_account(
+            account_id=oid,
+            platform_id=str(raw["platform_id"] or ""),
+            name=label,
+            access_key=str(raw["access_key"] or ""),
+            secret_key=None,
+            pad_code=str(raw["pad_code"] or ""),
+            template_id=str(raw["template_id"] or ""),
+            remark=str(raw["remark"] or ""),
+            link_name=label,
+        )
+        return
+    if src == "chain":
+        raw = get_chain_account_raw(oid)
+        if not raw:
+            raise ValueError("not_found")
+        upsert_chain_account(
+            account_id=oid,
+            platform_id=str(raw["platform_id"] or ""),
+            name=label,
+            login=None,
+            secret=None,
+            extra=None,
+            link_name=label,
+        )
+        return
+    raise ValueError("unknown_kind")
+
+
 def update_oauth_tokens(
     account_id: str,
     *,
@@ -6449,8 +6447,6 @@ def upsert_platform_credentials(
                 """,
                 (cred_name,),
             ).fetchone()
-            if not has_link and _account_name_used_by_group(conn, cred_name):
-                raise ValueError("group_name_conflict")
         if cred_name:
             conn.execute(
                 """
@@ -6910,8 +6906,6 @@ def _ensure_account_link(
     ).fetchone()
     if row:
         return str(row["id"])
-    if _account_name_used_by_group(conn, label):
-        raise ValueError("group_name_conflict")
     now = datetime.now(timezone.utc).isoformat()
     lid = str(uuid.uuid4())
     conn.execute(
@@ -7361,8 +7355,6 @@ def create_server_account(name: str, platform_id: str, *, lang: str = "es") -> d
     conn = _connect()
     try:
         safe_name = _resolve_account_name(conn, pid, label)
-        if _account_name_used_by_group(conn, safe_name):
-            raise ValueError("group_name_conflict")
         conn.execute(
             """
             INSERT INTO server_accounts (
@@ -7465,404 +7457,6 @@ def delete_server_account(account_id: str) -> None:
     try:
         _delete_server_account_on_conn(conn, aid)
         _prune_empty_account_links_on_conn(conn)
-        conn.commit()
-    finally:
-        conn.close()
-
-
-def list_auto_account_groups(lang: str = "es") -> list[dict[str, Any]]:
-    accounts = [a for a in list_server_accounts(lang) if a.get("active")]
-    buckets: dict[str, list[dict[str, Any]]] = {}
-    for account in accounts:
-        key = _normalize_account_name(account.get("name", "")).lower()
-        if not key:
-            continue
-        buckets.setdefault(key, []).append(account)
-    groups: list[dict[str, Any]] = []
-    for key in sorted(buckets, key=lambda k: buckets[k][0]["name"].lower()):
-        members = buckets[key]
-        groups.append(
-            {
-                "id": f"auto:{key}",
-                "name": members[0]["name"],
-                "auto": True,
-                "active": True,
-                "members": members,
-                "platforms": [
-                    {
-                        "id": m["platform_id"],
-                        "account_id": m["id"],
-                        "cred_name": m["name"],
-                        "platform": m["platform"],
-                    }
-                    for m in members
-                ],
-                "account_count": len(members),
-                "platform_count": len({m["platform_id"] for m in members}),
-            }
-        )
-    return groups
-
-
-def list_server_group_account_choices(lang: str = "es") -> list[dict[str, Any]]:
-    """Cuentas disponibles para unir en grupos manuales (con o sin servidores)."""
-    choices: list[dict[str, Any]] = []
-    for group in get_server_account_groups(lang):
-        if not group.get("active", True):
-            continue
-        name = (group.get("name") or "").strip()
-        key = (group.get("key") or name.casefold()).strip()
-        if not name or not key:
-            continue
-        accounts = [a for a in (group.get("accounts") or []) if a.get("active", True)]
-        platform_ids = sorted(
-            {str(a["platform_id"]) for a in accounts if (a.get("platform_id") or "").strip()}
-        )
-        account_ids = [str(a["id"]) for a in accounts if (a.get("id") or "").strip()]
-        platform_labels = sorted(
-            {str(a.get("platform") or "") for a in accounts if (a.get("platform") or "").strip()}
-        )
-        choices.append(
-            {
-                "key": f"link:{key}",
-                "name": name,
-                "link_id": str(group.get("link_id") or ""),
-                "account_ids": account_ids,
-                "platform_ids": platform_ids,
-                "platforms": platform_labels,
-                "platform": ", ".join(platform_labels),
-                "platform_id": platform_ids[0] if platform_ids else "",
-                "account_id": account_ids[0] if account_ids else "",
-                "selectable": bool(platform_ids),
-            }
-        )
-    choices.sort(key=lambda item: str(item.get("name") or "").casefold())
-    return choices
-
-
-def _normalize_group_account_ids(
-    members: list[dict[str, str]] | None = None,
-    *,
-    account_ids: list[str] | None = None,
-) -> list[str]:
-    raw: list[str] = []
-    if members:
-        for m in members:
-            aid = (m.get("account_id") or m.get("id") or "").strip()
-            if aid:
-                raw.append(aid)
-    elif account_ids:
-        raw = [a.strip() for a in account_ids if (a or "").strip()]
-    if not raw:
-        return []
-    conn = _connect()
-    try:
-        out: list[str] = []
-        seen: set[str] = set()
-        for aid in raw:
-            if aid in seen:
-                continue
-            row = conn.execute(
-                "SELECT id FROM server_accounts WHERE id = ?", (aid,)
-            ).fetchone()
-            if row:
-                seen.add(aid)
-                out.append(aid)
-        return out
-    finally:
-        conn.close()
-
-
-def _server_group_name_taken(conn: sqlite3.Connection, name: str, *, exclude_id: str = "") -> bool:
-    if exclude_id:
-        row = conn.execute(
-            "SELECT 1 AS ok FROM server_groups WHERE lower(name) = lower(?) AND id != ?",
-            (name, exclude_id),
-        ).fetchone()
-    else:
-        row = conn.execute(
-            "SELECT 1 AS ok FROM server_groups WHERE lower(name) = lower(?)",
-            (name,),
-        ).fetchone()
-    return bool(row)
-
-
-def _server_group_name_used_by_account(conn: sqlite3.Connection, name: str) -> bool:
-    row = conn.execute(
-        """
-        SELECT 1 AS ok
-        FROM server_account_links
-        WHERE lower(trim(name)) = lower(trim(?))
-        LIMIT 1
-        """,
-        (name,),
-    ).fetchone()
-    if row:
-        return True
-    row = conn.execute(
-        """
-        SELECT 1 AS ok
-        FROM server_accounts
-        WHERE lower(trim(name)) = lower(trim(?))
-        LIMIT 1
-        """,
-        (name,),
-    ).fetchone()
-    return bool(row)
-
-
-def _validate_group_member_accounts_linked(
-    conn: sqlite3.Connection, account_ids: list[str]
-) -> None:
-    if not account_ids:
-        raise ValueError("platforms_required")
-    for aid in account_ids:
-        row = conn.execute(
-            """
-            SELECT platform_id FROM server_accounts
-            WHERE id = ? AND trim(platform_id) != ''
-            """,
-            (aid,),
-        ).fetchone()
-        if not row:
-            raise ValueError("members_not_linked")
-
-
-def _server_group_row(
-    conn: sqlite3.Connection, group_id: str, *, lang: str = "es"
-) -> dict[str, Any] | None:
-    row = conn.execute("SELECT * FROM server_groups WHERE id = ?", (group_id,)).fetchone()
-    if not row:
-        return None
-    members = conn.execute(
-        """
-        SELECT server_account_id
-        FROM server_group_members
-        WHERE group_id = ?
-        ORDER BY server_account_id
-        """,
-        (group_id,),
-    ).fetchall()
-    member_rows = [
-        acc
-        for m in members
-        if (acc := _server_account_public(conn, m["server_account_id"], lang=lang))
-    ]
-    return {
-        "id": row["id"],
-        "name": row["name"],
-        "active": bool(row["active"]),
-        "created_at": row["created_at"],
-        "updated_at": row["updated_at"],
-        "members": member_rows,
-        "platforms": [
-            {
-                "id": m["platform_id"],
-                "account_id": m["id"],
-                "cred_name": m["name"],
-            }
-            for m in member_rows
-        ],
-    }
-
-
-def _list_manual_server_groups(lang: str = "es") -> list[dict[str, Any]]:
-    seed_admin_if_missing()
-    conn = _connect()
-    try:
-        rows = conn.execute(
-            "SELECT id FROM server_groups ORDER BY name COLLATE NOCASE"
-        ).fetchall()
-        return [
-            g for gid in rows if (g := _server_group_row(conn, gid["id"], lang=lang))
-        ]
-    finally:
-        conn.close()
-
-
-def list_server_groups(lang: str = "es") -> list[dict[str, Any]]:
-    manual = _list_manual_server_groups(lang)
-    for group in manual:
-        group["auto"] = False
-    return manual
-
-
-def _manual_server_group_matches_query(group: dict[str, Any], query: str) -> bool:
-    q = (query or "").strip().casefold()
-    if not q:
-        return True
-    if q in (group.get("name") or "").casefold():
-        return True
-    for member in group.get("members") or []:
-        if q in (member.get("name") or "").casefold():
-            return True
-        if q in (member.get("platform") or "").casefold():
-            return True
-        if q in (member.get("platform_id") or "").casefold():
-            return True
-    return False
-
-
-def list_server_groups_page(
-    q: str = "",
-    page: int = 1,
-    per_page: int | None = TEAM_MEMBERS_PAGE_SIZE,
-    *,
-    lang: str = "es",
-) -> tuple[list[dict[str, Any]], int]:
-    groups = list_server_groups(lang)
-    if (q or "").strip():
-        groups = [g for g in groups if _manual_server_group_matches_query(g, q)]
-    total = len(groups)
-    if per_page is None:
-        return groups, total
-    page = max(1, int(page))
-    per_page = max(1, int(per_page))
-    start = (page - 1) * per_page
-    return groups[start : start + per_page], total
-
-
-def list_all_server_groups(lang: str = "es") -> list[dict[str, Any]]:
-    return list_auto_account_groups(lang) + _list_manual_server_groups(lang)
-
-
-def create_server_group(
-    name: str,
-    members: list[dict[str, str]] | None = None,
-    *,
-    account_ids: list[str] | None = None,
-    platform_ids: list[str] | None = None,
-    lang: str = "es",
-) -> dict[str, Any]:
-    seed_admin_if_missing()
-    label = (name or "").strip()
-    if not label:
-        raise ValueError("name_required")
-    aids = _normalize_group_account_ids(members, account_ids=account_ids)
-    if not aids:
-        raise ValueError("platforms_required")
-    sid = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
-    conn = _connect()
-    try:
-        if _server_group_name_taken(conn, label):
-            raise ValueError("name_taken")
-        if _server_group_name_used_by_account(conn, label):
-            raise ValueError("account_name_conflict")
-        _validate_group_member_accounts_linked(conn, aids)
-        conn.execute(
-            """
-            INSERT INTO server_groups (id, name, active, created_at, updated_at)
-            VALUES (?, ?, 1, ?, ?)
-            """,
-            (sid, label, now, now),
-        )
-        conn.executemany(
-            """
-            INSERT INTO server_group_members (group_id, server_account_id)
-            VALUES (?, ?)
-            """,
-            [(sid, aid) for aid in aids],
-        )
-        conn.commit()
-        created = _server_group_row(conn, sid, lang=lang)
-    finally:
-        conn.close()
-    if not created:
-        raise ValueError("save_fail")
-    return created
-
-
-def update_server_group(
-    group_id: str,
-    name: str,
-    members: list[dict[str, str]] | None = None,
-    *,
-    account_ids: list[str] | None = None,
-    platform_ids: list[str] | None = None,
-    lang: str = "es",
-) -> dict[str, Any]:
-    seed_admin_if_missing()
-    label = (name or "").strip()
-    if not label:
-        raise ValueError("name_required")
-    aids = _normalize_group_account_ids(members, account_ids=account_ids)
-    if not aids:
-        raise ValueError("platforms_required")
-    now = datetime.now(timezone.utc).isoformat()
-    conn = _connect()
-    try:
-        existing = conn.execute(
-            "SELECT id FROM server_groups WHERE id = ?", (group_id,)
-        ).fetchone()
-        if not existing:
-            raise ValueError("not_found")
-        if _server_group_name_taken(conn, label, exclude_id=group_id):
-            raise ValueError("name_taken")
-        if _server_group_name_used_by_account(conn, label):
-            raise ValueError("account_name_conflict")
-        _validate_group_member_accounts_linked(conn, aids)
-        conn.execute(
-            "UPDATE server_groups SET name = ?, updated_at = ? WHERE id = ?",
-            (label, now, group_id),
-        )
-        conn.execute(
-            "DELETE FROM server_group_members WHERE group_id = ?", (group_id,)
-        )
-        conn.executemany(
-            """
-            INSERT INTO server_group_members (group_id, server_account_id)
-            VALUES (?, ?)
-            """,
-            [(group_id, aid) for aid in aids],
-        )
-        conn.commit()
-        updated = _server_group_row(conn, group_id, lang=lang)
-    finally:
-        conn.close()
-    if not updated:
-        raise ValueError("not_found")
-    return updated
-
-
-def set_server_group_active(group_id: str, active: bool) -> dict[str, Any]:
-    seed_admin_if_missing()
-    now = datetime.now(timezone.utc).isoformat()
-    conn = _connect()
-    try:
-        cur = conn.execute(
-            "UPDATE server_groups SET active = ?, updated_at = ? WHERE id = ?",
-            (1 if active else 0, now, group_id),
-        )
-        if cur.rowcount == 0:
-            raise ValueError("not_found")
-        conn.commit()
-        row = _server_group_row(conn, group_id, lang="es")
-    finally:
-        conn.close()
-    if not row:
-        raise ValueError("not_found")
-    return row
-
-
-def delete_server_group(group_id: str) -> None:
-    seed_admin_if_missing()
-    conn = _connect()
-    try:
-        conn.execute("DELETE FROM server_group_members WHERE group_id = ?", (group_id,))
-        tables = {
-            str(r[0])
-            for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            ).fetchall()
-        }
-        if "server_group_members_v2" in tables:
-            conn.execute(
-                "DELETE FROM server_group_members_v2 WHERE group_id = ?", (group_id,)
-            )
-        cur = conn.execute("DELETE FROM server_groups WHERE id = ?", (group_id,))
-        if cur.rowcount == 0:
-            raise ValueError("not_found")
         conn.commit()
     finally:
         conn.close()

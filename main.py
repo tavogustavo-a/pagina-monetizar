@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jinja2 import FileSystemBytecodeCache
+from markupsafe import Markup
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -238,6 +239,20 @@ templates.env.globals["user_can_manage_panel_accounts"] = db.user_can_manage_pan
 templates.env.globals["support_unread_count"] = db.support_unread_count_for_viewer
 templates.env.globals["format_publish_schedule"] = publish_schedule.format_scheduled_local
 templates.env.filters["fromjson"] = json.loads
+
+
+def _json_attr(value: object) -> Markup:
+    escaped = (
+        json.dumps(value, ensure_ascii=True)
+        .replace("&", "&amp;")
+        .replace("'", "&#39;")
+        .replace('"', "&quot;")
+        .replace("<", "&lt;")
+    )
+    return Markup(escaped)
+
+
+templates.env.filters["json_attr"] = _json_attr
 templates.env.globals.update(site_config.legal_context())
 templates.env.globals["platform_select_label"] = platforms.platform_select_label
 
@@ -334,6 +349,12 @@ class PlatformApiBody(BaseModel):
     extra: str = ""
 
 
+class RelinkConnectionBody(BaseModel):
+    kind: str = ""
+    id: str = ""
+    name: str = ""
+
+
 class VmosAccountBody(BaseModel):
     id: str = ""
     platform_id: str = ""
@@ -365,18 +386,6 @@ class ChainAccountBody(BaseModel):
     link_name: str = ""
 
 
-class ServerGroupMemberBody(BaseModel):
-    platform_id: str = ""
-    account_id: str = ""
-
-
-class ServerGroupBody(BaseModel):
-    name: str = ""
-    account_ids: list[str] = []
-    members: list[ServerGroupMemberBody] = []
-    platform_ids: list[str] = []
-
-
 class ServerAccountBody(BaseModel):
     name: str = ""
     platform_id: str = ""
@@ -391,10 +400,6 @@ class AccountLinkBody(BaseModel):
 
 
 class AccountLinkActiveBody(BaseModel):
-    active: bool
-
-
-class ServerGroupActiveBody(BaseModel):
     active: bool
 
 
@@ -2886,10 +2891,7 @@ def admin_servidores(request: Request):
     vmos_grouped = db.list_vmos_accounts_grouped()
     filehost_grouped = db.list_filehost_accounts_grouped()
     chain_grouped = db.list_chain_accounts_grouped()
-    import rumble_publish
 
-    rumble_token_set = bool(rumble_publish.access_token())
-    rumble_channel = rumble_publish.channel_id()
     return _render(
         request,
         "admin_servidores.html",
@@ -2921,34 +2923,7 @@ def admin_servidores(request: Request):
             "chain_extra_fields": {
                 pid: chain.extra_field(pid) for pid in chain.PLATFORM_IDS
             },
-            "oauth_account_counts": {
-                "tiktok": len(tiktok_linked) + len(vmos_grouped.get("tiktok") or []),
-                "youtube": len(youtube_linked) + len(vmos_grouped.get("youtube") or []),
-                "instagram": len(instagram_linked) + len(vmos_grouped.get("instagram") or []),
-                "facebook": len(facebook_linked) + len(vmos_grouped.get("facebook") or []),
-                "x": len(x_linked) + len(vmos_grouped.get("x") or []),
-                "dailymotion": len(dailymotion_linked),
-                "bilibili": len(bilibili_linked),
-                "snapchat": len(snapchat_linked) + len(vmos_grouped.get("snapchat") or []),
-                "rumble": 1 if rumble_token_set else 0,
-                "threads": len(vmos_grouped.get("threads") or []),
-                "doodstream": len(filehost_grouped.get("doodstream") or []),
-                "streamwish": len(filehost_grouped.get("streamwish") or []),
-                "filemoon": len(filehost_grouped.get("filemoon") or []),
-                "mixdrop": len(filehost_grouped.get("mixdrop") or []),
-                "streamtape": len(filehost_grouped.get("streamtape") or []),
-                "voe": len(filehost_grouped.get("voe") or []),
-                "vidoza": len(filehost_grouped.get("vidoza") or []),
-                "lulustream": len(filehost_grouped.get("lulustream") or []),
-                "loadvid": len(filehost_grouped.get("loadvid") or []),
-                "vidsonic": len(filehost_grouped.get("vidsonic") or []),
-                "flyfile": len(filehost_grouped.get("flyfile") or []),
-                "venvo": len(filehost_grouped.get("venvo") or []),
-                "odysee": len(chain_grouped.get("odysee") or []),
-                "dtube": len(chain_grouped.get("dtube") or []),
-            },
             "platform_creds": {},
-            "group_account_choices": [],
             "server_accounts": [],
             "oauth_configured": tiktok_oauth.oauth_configured(),
             "oauth_scopes": tiktok_oauth.oauth_scopes(),
@@ -2968,8 +2943,6 @@ def admin_servidores(request: Request):
             "bilibili_redirect_uri": bilibili_oauth.redirect_uri(request),
             "snapchat_oauth_configured": snapchat_oauth.oauth_configured(),
             "snapchat_redirect_uri": snapchat_oauth.redirect_uri(request),
-            "rumble_token_set": rumble_token_set,
-            "rumble_channel": rumble_channel,
             "error": err,
             "success": ok,
         },
@@ -4612,6 +4585,30 @@ def api_oauth_delete(request: Request, account_id: str):
     return {"ok": True, "message": "Account disconnected."}
 
 
+@app.post("/admin/api/server-connections/relink")
+def api_server_connection_relink(request: Request, body: RelinkConnectionBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    try:
+        db.rebind_platform_connection(body.kind, body.id, body.name)
+    except ValueError as e:
+        code = str(e)
+        if code == "missing_name":
+            return JSONResponse(
+                {"ok": False, "error": i18n.t("servers.relink_missing", lang)},
+                status_code=400,
+            )
+        if code == "not_found":
+            return JSONResponse(
+                {"ok": False, "error": i18n.t("servers.accounts_not_found", lang)},
+                status_code=404,
+            )
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    return {"ok": True}
+
+
 @app.post("/admin/api/vmos")
 def api_vmos_save(request: Request, body: VmosAccountBody):
     deny = _require_server_admin_json(request)
@@ -4652,6 +4649,8 @@ def api_vmos_test(request: Request, body: VmosAccountBody):
     ak = (body.access_key or "").strip()
     sk = (body.secret_key or "").strip()
     pad = (body.pad_code or "").strip()
+    if sk in ("unchanged", "x" * 19):
+        sk = ""
     if body.id and (not sk or not ak):
         raw = db.get_vmos_account_raw(body.id)
         if raw:
@@ -4693,6 +4692,8 @@ def api_filehost_save(request: Request, body: FilehostAccountBody):
     pid = (body.platform_id or "").strip()
     key = (body.api_key or "").strip()
     extra = (body.extra or "").strip()
+    if key in ("unchanged", "x" * 19):
+        key = ""
     if body.id and not key:
         raw = db.get_filehost_account_raw(body.id)
         if raw:
@@ -4741,6 +4742,8 @@ def api_filehost_test(request: Request, body: FilehostAccountBody):
     lang = i18n.resolve_lang(request)
     key = (body.api_key or "").strip()
     extra = (body.extra or "").strip()
+    if key in ("unchanged", "x" * 19):
+        key = ""
     if body.id and not key:
         raw = db.get_filehost_account_raw(body.id)
         if raw:
@@ -4828,6 +4831,8 @@ def api_chain_test(request: Request, body: ChainAccountBody):
     login = (body.login or "").strip()
     secret = (body.secret or "").strip()
     extra = (body.extra or "").strip()
+    if secret in ("unchanged", "x" * 19):
+        secret = ""
     if body.id and (not login or not secret):
         raw = db.get_chain_account_raw(body.id)
         if raw:
@@ -5110,19 +5115,6 @@ def api_test_all_platforms(request: Request):
     return {"ok": True, "results": results}
 
 
-def _server_group_error_message(code: str, lang: str) -> str:
-    keys = {
-        "name_required": "servers.groups_name_required",
-        "platforms_required": "servers.groups_platforms_required",
-        "name_taken": "servers.groups_name_taken",
-        "account_name_conflict": "servers.groups_name_account_conflict",
-        "members_not_linked": "servers.groups_members_not_linked",
-        "not_found": "servers.groups_not_found",
-        "save_fail": "servers.groups_save_fail",
-    }
-    return i18n.t(keys.get(code, "servers.network_error"), lang)
-
-
 def _server_account_error_message(code: str, lang: str) -> str:
     keys = {
         "name_required": "servers.accounts_name_required",
@@ -5131,7 +5123,7 @@ def _server_account_error_message(code: str, lang: str) -> str:
         "save_fail": "servers.accounts_save_fail",
         "name_taken": "servers.accounts_name_taken",
         "link_name_taken": "servers.accounts_link_name_taken",
-        "group_name_conflict": "servers.accounts_group_name_conflict",
+        "missing_name": "servers.relink_missing",
     }
     return i18n.t(keys.get(code, "servers.network_error"), lang)
 
@@ -5153,7 +5145,6 @@ def api_create_account_link(request: Request, body: AccountLinkBody):
         "ok": True,
         "group": group,
         "message": i18n.t("servers.accounts_saved", lang),
-        "choices": db.list_server_group_account_choices(lang),
     }
 
 
@@ -5176,7 +5167,6 @@ def api_rename_account_link(request: Request, link_id: str, body: AccountLinkBod
         "ok": True,
         "group": group,
         "message": i18n.t("servers.accounts_saved", lang),
-        "choices": db.list_server_group_account_choices(lang),
     }
 
 
@@ -5196,7 +5186,6 @@ def api_delete_account_link(request: Request, link_id: str):
     return {
         "ok": True,
         "message": i18n.t("servers.accounts_deleted", lang),
-        "choices": db.list_server_group_account_choices(lang),
     }
 
 
@@ -5218,7 +5207,6 @@ def api_set_account_link_active(
     return {
         "ok": True,
         "group": group,
-        "choices": db.list_server_group_account_choices(lang),
     }
 
 
@@ -5232,8 +5220,6 @@ def api_list_server_accounts(request: Request):
     return {
         "ok": True,
         "accounts": accounts,
-        "auto_groups": db.list_auto_account_groups(lang),
-        "choices": db.list_server_group_account_choices(lang),
     }
 
 
@@ -5289,7 +5275,6 @@ def api_create_server_account(request: Request, body: ServerAccountBody):
         "ok": True,
         "message": i18n.t("servers.accounts_saved", lang),
         "account": account,
-        "choices": db.list_server_group_account_choices(lang),
     }
 
 
@@ -5314,7 +5299,6 @@ def api_update_server_account(request: Request, account_id: str, body: ServerAcc
         "ok": True,
         "message": i18n.t("servers.accounts_saved", lang),
         "account": account,
-        "choices": db.list_server_group_account_choices(lang),
     }
 
 
@@ -5336,7 +5320,6 @@ def api_set_server_account_active(
     return {
         "ok": True,
         "account": account,
-        "choices": db.list_server_group_account_choices(lang),
     }
 
 
@@ -5356,151 +5339,7 @@ def api_delete_server_account(request: Request, account_id: str):
     return {
         "ok": True,
         "message": i18n.t("servers.accounts_deleted", lang),
-        "choices": db.list_server_group_account_choices(lang),
     }
-
-
-@app.get("/admin/api/server-groups")
-def api_list_server_groups(request: Request):
-    deny = _require_server_admin_json(request)
-    if deny:
-        return deny
-    lang = i18n.resolve_lang(request)
-    return {"ok": True, "groups": db.list_all_server_groups(lang)}
-
-
-@app.get("/admin/api/server-groups/list")
-def api_list_server_groups_page(
-    request: Request, q: str = "", page: int = 1, per_page: str = "10"
-):
-    deny = _require_server_admin_json(request)
-    if deny:
-        return deny
-    lang = i18n.resolve_lang(request)
-    page_size = db.normalize_team_members_per_page(per_page)
-    page = max(1, page)
-    try:
-        groups, total = db.list_server_groups_page(q, page, page_size, lang=lang)
-    except Exception:
-        return JSONResponse(
-            {"ok": False, "error": i18n.t("servers.network_error", lang)},
-            status_code=500,
-        )
-    if page_size is None:
-        total_pages = 1
-        page = 1
-        per_page_out: int | str = "all"
-    else:
-        total_pages = max(1, (total + page_size - 1) // page_size) if total else 1
-        if page > total_pages:
-            page = total_pages
-            groups, total = db.list_server_groups_page(
-                q, page, page_size, lang=lang
-            )
-        per_page_out = page_size
-    return {
-        "ok": True,
-        "groups": groups,
-        "page": page,
-        "per_page": per_page_out,
-        "total": total,
-        "total_pages": total_pages,
-        "has_prev": page > 1 and page_size is not None,
-        "has_next": page < total_pages and page_size is not None,
-    }
-
-
-@app.post("/admin/api/server-groups")
-def api_create_server_group(request: Request, body: ServerGroupBody):
-    deny = _require_server_admin_json(request)
-    if deny:
-        return deny
-    lang = i18n.resolve_lang(request)
-    members = [m.model_dump() for m in body.members] if body.members else None
-    account_ids = body.account_ids or None
-    try:
-        group = db.create_server_group(
-            body.name,
-            members,
-            account_ids=account_ids,
-            platform_ids=body.platform_ids or None,
-            lang=lang,
-        )
-    except ValueError as e:
-        return JSONResponse(
-            {"ok": False, "error": _server_group_error_message(str(e), lang)},
-            status_code=400,
-        )
-    return {
-        "ok": True,
-        "message": i18n.t("servers.groups_saved", lang),
-        "group": group,
-    }
-
-
-@app.put("/admin/api/server-groups/{group_id}")
-def api_update_server_group(request: Request, group_id: str, body: ServerGroupBody):
-    deny = _require_server_admin_json(request)
-    if deny:
-        return deny
-    lang = i18n.resolve_lang(request)
-    members = [m.model_dump() for m in body.members] if body.members else None
-    account_ids = body.account_ids or None
-    try:
-        group = db.update_server_group(
-            group_id,
-            body.name,
-            members,
-            account_ids=account_ids,
-            platform_ids=body.platform_ids or None,
-            lang=lang,
-        )
-    except ValueError as e:
-        code = str(e)
-        status = 404 if code == "not_found" else 400
-        return JSONResponse(
-            {"ok": False, "error": _server_group_error_message(code, lang)},
-            status_code=status,
-        )
-    return {
-        "ok": True,
-        "message": i18n.t("servers.groups_saved", lang),
-        "group": group,
-    }
-
-
-@app.post("/admin/api/server-groups/{group_id}/active")
-def api_set_server_group_active(
-    request: Request, group_id: str, body: ServerGroupActiveBody
-):
-    deny = _require_server_admin_json(request)
-    if deny:
-        return deny
-    lang = i18n.resolve_lang(request)
-    try:
-        group = db.set_server_group_active(group_id, body.active)
-    except ValueError as e:
-        return JSONResponse(
-            {"ok": False, "error": _server_group_error_message(str(e), lang)},
-            status_code=404,
-        )
-    return {"ok": True, "group": group}
-
-
-@app.delete("/admin/api/server-groups/{group_id}")
-def api_delete_server_group(request: Request, group_id: str):
-    deny = _require_server_admin_json(request)
-    if deny:
-        return deny
-    lang = i18n.resolve_lang(request)
-    try:
-        db.delete_server_group(group_id)
-    except ValueError as e:
-        return JSONResponse(
-            {"ok": False, "error": _server_group_error_message(str(e), lang)},
-            status_code=404,
-        )
-    return {"ok": True, "message": i18n.t("servers.groups_deleted", lang)}
 
 
 @app.get("/admin/api/equipo/cuentas")

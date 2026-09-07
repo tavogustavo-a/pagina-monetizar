@@ -3,7 +3,13 @@
   <input type="hidden" name="id" value="" />
   <input type="hidden" name="platform_id" value="{{ platform.id }}" />
   <input type="hidden" name="link_name" class="js-chain-link-name" value="" />
-  <p class="sub js-chain-form-hint">{% if platform.id == 'dtube' %}{{ t('servers.chain_hint_dtube') }}{% else %}{{ t('servers.chain_hint_odysee') }}{% endif %}</p>
+  {% if platform.id == 'dtube' %}
+  <p class="sub filehost-hint">
+    <a href="https://wallet.hive.blog" target="_blank" rel="noopener noreferrer">https://wallet.hive.blog</a>
+  </p>
+  {% else %}
+  <p class="sub js-chain-form-hint">{{ t('servers.chain_hint_odysee') }}</p>
+  {% endif %}
   <label class="field js-account-name-field" hidden>
     <span>{{ t('api.field.name') }}</span>
     <input type="text" name="name" autocomplete="off" />

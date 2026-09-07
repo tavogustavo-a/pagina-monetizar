@@ -5053,9 +5053,10 @@ input:focus {
 
 .servers-list__info {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.18rem;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.12rem;
   min-width: 0;
 }
 
@@ -5092,13 +5093,6 @@ input:focus {
   font-size: 0.68rem;
 }
 
-.servers-list__accounts {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
 .servers-list__accounts-btn {
   position: relative;
   justify-content: center;
@@ -5114,30 +5108,6 @@ input:focus {
   width: 0.92rem;
   height: 0.92rem;
   flex-shrink: 0;
-}
-
-.servers-list__accounts-btn .servers-list__count {
-  position: absolute;
-  top: -0.22rem;
-  right: -0.22rem;
-  min-width: 0.85rem;
-  height: 0.85rem;
-  padding: 0 0.15rem;
-  font-size: 0.52rem;
-}
-
-.servers-list__count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  padding: 0 0.35rem;
-  border-radius: 999px;
-  background: rgba(37, 244, 238, 0.15);
-  color: var(--accent2);
-  font-size: 0.72rem;
-  font-weight: 600;
 }
 
 .server-modal__panel {
