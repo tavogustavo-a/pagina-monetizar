@@ -28,11 +28,17 @@ def _from_creds(key: str) -> str:
 
 
 def access_token() -> str:
-    return (os.environ.get("RUMBLE_ACCESS_TOKEN") or "").strip() or _from_creds("access_token")
+    try:
+        return db.cred_value("rumble", "access_token", os.environ.get("RUMBLE_ACCESS_TOKEN") or "")
+    except Exception:
+        return (os.environ.get("RUMBLE_ACCESS_TOKEN") or "").strip() or _from_creds("access_token")
 
 
 def channel_id() -> str:
-    return (os.environ.get("RUMBLE_CHANNEL_ID") or "").strip() or _from_creds("extra")
+    try:
+        return db.cred_value("rumble", "extra", os.environ.get("RUMBLE_CHANNEL_ID") or "")
+    except Exception:
+        return (os.environ.get("RUMBLE_CHANNEL_ID") or "").strip() or _from_creds("extra")
 
 
 def license_type() -> str:

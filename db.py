@@ -4,6 +4,8 @@ import os
 import random
 import sqlite3
 import uuid
+from contextlib import contextmanager
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -790,6 +792,7 @@ def init_db() -> None:
     _ensure_scheduled_publications_table()
     _ensure_platform_credentials_name_column()
     _ensure_platform_credentials_owner_column()
+    _ensure_account_platform_credentials_table()
     _ensure_server_groups_tables()
     _ensure_server_accounts_table()
     _ensure_server_accounts_source_columns()
@@ -868,6 +871,34 @@ def _ensure_platform_credentials_owner_column() -> None:
                 "ALTER TABLE platform_credentials ADD COLUMN owner_user_id TEXT"
             )
             conn.commit()
+    finally:
+        conn.close()
+
+
+def _ensure_account_platform_credentials_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS account_platform_credentials (
+                id TEXT PRIMARY KEY,
+                platform_id TEXT NOT NULL,
+                account_name TEXT NOT NULL,
+                account_key TEXT NOT NULL,
+                client_id TEXT NOT NULL DEFAULT '',
+                client_secret TEXT NOT NULL DEFAULT '',
+                access_token TEXT NOT NULL DEFAULT '',
+                extra TEXT NOT NULL DEFAULT '',
+                owner_user_id TEXT,
+                last_test_ok INTEGER,
+                last_test_at TEXT,
+                last_test_message TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL,
+                UNIQUE (platform_id, account_key)
+            )
+            """
+        )
+        conn.commit()
     finally:
         conn.close()
 
@@ -1649,6 +1680,10 @@ def delete_account_link(link_id: str) -> None:
                 "DELETE FROM scheduled_publications WHERE account_link_id = ?", (lid,)
             )
         conn.execute("DELETE FROM user_account_links WHERE account_link_id = ?", (lid,))
+        conn.execute(
+            "DELETE FROM account_platform_credentials WHERE account_key = lower(trim(?))",
+            (name,),
+        )
         accounts = conn.execute(
             "SELECT id FROM server_accounts WHERE lower(trim(name)) = lower(trim(?))",
             (name,),
@@ -6006,34 +6041,49 @@ def _mask_secret(value: str) -> str:
     return "••••" + s[-4:]
 
 
-def get_platform_credentials_raw(platform_id: str) -> dict[str, Any] | None:
-    seed_admin_if_missing()
-    pid = (platform_id or "").strip()
-    if not pid:
-        return None
-    conn = _connect()
+_creds_account: ContextVar[str] = ContextVar("creds_account", default="")
+
+
+def set_credentials_account_name(name: str | None) -> Token[str]:
+    return _creds_account.set((name or "").strip())
+
+
+def reset_credentials_account_name(token: Token[str] | None) -> None:
+    if token is not None:
+        _creds_account.reset(token)
+
+
+def credentials_account_name() -> str:
+    return (_creds_account.get() or "").strip()
+
+
+@contextmanager
+def using_credentials_account(name: str | None):
+    token = set_credentials_account_name(name)
     try:
-        row = conn.execute(
-            "SELECT * FROM platform_credentials WHERE platform_id = ?",
-            (pid,),
-        ).fetchone()
-        if not row:
-            return None
-        data = {k: row[k] for k in row.keys()}
-        # SQLite guarda booleanos como 0/1; normalizar para comparaciones `is True`.
-        if data.get("last_test_ok") is not None:
-            data["last_test_ok"] = bool(data["last_test_ok"])
-        return data
+        yield
     finally:
-        conn.close()
+        reset_credentials_account_name(token)
 
 
-def get_platform_credentials_public(platform_id: str) -> dict[str, Any]:
+def cred_value(platform_id: str, field: str, env_fallback: str = "") -> str:
+    """Clave de esa cuenta si hay contexto; si no, env o credencial global."""
     raw = get_platform_credentials_raw(platform_id) or {}
+    val = str(raw.get(field) or "").strip()
+    if val:
+        return val
+    if credentials_account_name():
+        return ""
+    return (env_fallback or "").strip()
+
+
+def _credentials_public_from_raw(platform_id: str, raw: dict[str, Any] | None) -> dict[str, Any]:
+    raw = raw or {}
     ok = raw.get("last_test_ok")
+    name = (raw.get("account_name") or raw.get("name") or credentials_account_name() or "").strip()
     return {
         "platform_id": platform_id,
-        "name": (raw.get("name") or "").strip(),
+        "name": name,
         "client_id": raw.get("client_id") or "",
         "client_secret_set": bool((raw.get("client_secret") or "").strip()),
         "client_secret_mask": _mask_secret(raw.get("client_secret") or ""),
@@ -6050,6 +6100,45 @@ def get_platform_credentials_public(platform_id: str) -> dict[str, Any]:
             or (raw.get("extra") or "").strip()
         ),
     }
+
+
+def _row_to_cred_dict(row: Any) -> dict[str, Any]:
+    data = {k: row[k] for k in row.keys()}
+    if data.get("last_test_ok") is not None:
+        data["last_test_ok"] = bool(data["last_test_ok"])
+    return data
+
+
+def get_platform_credentials_raw(platform_id: str) -> dict[str, Any] | None:
+    seed_admin_if_missing()
+    pid = (platform_id or "").strip()
+    if not pid:
+        return None
+    label = credentials_account_name()
+    conn = _connect()
+    try:
+        if label:
+            row = conn.execute(
+                """
+                SELECT * FROM account_platform_credentials
+                WHERE platform_id = ? AND account_key = lower(trim(?))
+                """,
+                (pid, label),
+            ).fetchone()
+            return _row_to_cred_dict(row) if row else None
+        row = conn.execute(
+            "SELECT * FROM platform_credentials WHERE platform_id = ?",
+            (pid,),
+        ).fetchone()
+        if not row:
+            return None
+        return _row_to_cred_dict(row)
+    finally:
+        conn.close()
+
+
+def get_platform_credentials_public(platform_id: str) -> dict[str, Any]:
+    return _credentials_public_from_raw(platform_id, get_platform_credentials_raw(platform_id))
 
 
 def list_platform_credentials_public() -> dict[str, dict[str, Any]]:
@@ -6070,12 +6159,17 @@ def upsert_platform_credentials(
 ) -> dict[str, Any]:
     seed_admin_if_missing()
     pid = (platform_id or "").strip()
+    if name is not None:
+        set_credentials_account_name(name)
+    label = credentials_account_name()
     existing = get_platform_credentials_raw(pid) or {}
     now = datetime.now(timezone.utc).isoformat()
 
-    cred_name = existing.get("name") or ""
+    cred_name = existing.get("account_name") or existing.get("name") or ""
     if name is not None:
         cred_name = name.strip()
+    if label:
+        cred_name = label
 
     cid = existing.get("client_id") or ""
     secret = existing.get("client_secret") or ""
@@ -6110,35 +6204,69 @@ def upsert_platform_credentials(
             ).fetchone()
             if not has_link and _account_name_used_by_group(conn, cred_name):
                 raise ValueError("group_name_conflict")
-        conn.execute(
-            """
-            INSERT INTO platform_credentials (
-                platform_id, name, client_id, client_secret, access_token, extra,
-                owner_user_id, last_test_ok, last_test_at, last_test_message, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(platform_id) DO UPDATE SET
-                name = excluded.name,
-                client_id = excluded.client_id,
-                client_secret = excluded.client_secret,
-                access_token = excluded.access_token,
-                extra = excluded.extra,
-                owner_user_id = COALESCE(excluded.owner_user_id, platform_credentials.owner_user_id),
-                updated_at = excluded.updated_at
-            """,
-            (
-                pid,
-                cred_name,
-                cid,
-                secret,
-                token,
-                extra_val,
-                owner or None,
-                existing.get("last_test_ok"),
-                existing.get("last_test_at") or "",
-                existing.get("last_test_message") or "",
-                now,
-            ),
-        )
+        if cred_name:
+            conn.execute(
+                """
+                INSERT INTO account_platform_credentials (
+                    id, platform_id, account_name, account_key, client_id, client_secret,
+                    access_token, extra, owner_user_id, last_test_ok, last_test_at,
+                    last_test_message, updated_at
+                ) VALUES (?, ?, ?, lower(trim(?)), ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(platform_id, account_key) DO UPDATE SET
+                    account_name = excluded.account_name,
+                    client_id = excluded.client_id,
+                    client_secret = excluded.client_secret,
+                    access_token = excluded.access_token,
+                    extra = excluded.extra,
+                    owner_user_id = COALESCE(excluded.owner_user_id, account_platform_credentials.owner_user_id),
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    existing.get("id") or str(uuid.uuid4()),
+                    pid,
+                    cred_name,
+                    cred_name,
+                    cid,
+                    secret,
+                    token,
+                    extra_val,
+                    owner or None,
+                    existing.get("last_test_ok"),
+                    existing.get("last_test_at") or "",
+                    existing.get("last_test_message") or "",
+                    now,
+                ),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO platform_credentials (
+                    platform_id, name, client_id, client_secret, access_token, extra,
+                    owner_user_id, last_test_ok, last_test_at, last_test_message, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(platform_id) DO UPDATE SET
+                    name = excluded.name,
+                    client_id = excluded.client_id,
+                    client_secret = excluded.client_secret,
+                    access_token = excluded.access_token,
+                    extra = excluded.extra,
+                    owner_user_id = COALESCE(excluded.owner_user_id, platform_credentials.owner_user_id),
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    pid,
+                    cred_name,
+                    cid,
+                    secret,
+                    token,
+                    extra_val,
+                    owner or None,
+                    existing.get("last_test_ok"),
+                    existing.get("last_test_at") or "",
+                    existing.get("last_test_message") or "",
+                    now,
+                ),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -6155,21 +6283,31 @@ def clear_platform_credentials(platform_id: str) -> dict[str, Any]:
     if not pid:
         raise ValueError("not_found")
     now = datetime.now(timezone.utc).isoformat()
+    label = credentials_account_name()
     conn = _connect()
     try:
-        conn.execute(
-            """
-            UPDATE platform_credentials
-            SET name = '', client_id = '', client_secret = '', access_token = '', extra = '',
-                last_test_ok = NULL, last_test_at = '', last_test_message = '', updated_at = ?
-            WHERE platform_id = ?
-            """,
-            (now, pid),
-        )
-        conn.execute(
-            "DELETE FROM server_accounts WHERE source_kind = 'platform' AND source_ref = ?",
-            (pid,),
-        )
+        if label:
+            conn.execute(
+                """
+                DELETE FROM account_platform_credentials
+                WHERE platform_id = ? AND account_key = lower(trim(?))
+                """,
+                (pid, label),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE platform_credentials
+                SET name = '', client_id = '', client_secret = '', access_token = '', extra = '',
+                    last_test_ok = NULL, last_test_at = '', last_test_message = '', updated_at = ?
+                WHERE platform_id = ?
+                """,
+                (now, pid),
+            )
+            conn.execute(
+                "DELETE FROM server_accounts WHERE source_kind = 'platform' AND source_ref = ?",
+                (pid,),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -6181,31 +6319,42 @@ def save_platform_test_result(platform_id: str, ok: bool, message: str) -> None:
     seed_admin_if_missing()
     now = datetime.now(timezone.utc).isoformat()
     pid = (platform_id or "").strip()
+    label = credentials_account_name()
     conn = _connect()
     try:
-        existing = conn.execute(
-            "SELECT platform_id FROM platform_credentials WHERE platform_id = ?",
-            (pid,),
-        ).fetchone()
-        if existing:
+        if label:
             conn.execute(
                 """
-                UPDATE platform_credentials
+                UPDATE account_platform_credentials
                 SET last_test_ok = ?, last_test_at = ?, last_test_message = ?, updated_at = ?
-                WHERE platform_id = ?
+                WHERE platform_id = ? AND account_key = lower(trim(?))
                 """,
-                (1 if ok else 0, now, (message or "")[:400], now, pid),
+                (1 if ok else 0, now, (message or "")[:400], now, pid, label),
             )
         else:
-            conn.execute(
-                """
-                INSERT INTO platform_credentials (
-                    platform_id, name, client_id, client_secret, access_token, extra,
-                    last_test_ok, last_test_at, last_test_message, updated_at
-                ) VALUES (?, '', '', '', '', '', ?, ?, ?, ?)
-                """,
-                (pid, 1 if ok else 0, now, (message or "")[:400], now),
-            )
+            existing = conn.execute(
+                "SELECT platform_id FROM platform_credentials WHERE platform_id = ?",
+                (pid,),
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    """
+                    UPDATE platform_credentials
+                    SET last_test_ok = ?, last_test_at = ?, last_test_message = ?, updated_at = ?
+                    WHERE platform_id = ?
+                    """,
+                    (1 if ok else 0, now, (message or "")[:400], now, pid),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO platform_credentials (
+                        platform_id, name, client_id, client_secret, access_token, extra,
+                        last_test_ok, last_test_at, last_test_message, updated_at
+                    ) VALUES (?, '', '', '', '', '', ?, ?, ?, ?)
+                    """,
+                    (pid, 1 if ok else 0, now, (message or "")[:400], now),
+                )
         conn.commit()
     finally:
         conn.close()

@@ -20,20 +20,36 @@ def _from_creds(key: str) -> str:
     try:
         import db
 
-        raw = db.get_platform_credentials_raw("dailymotion") or {}
-        return str(raw.get(key) or "").strip()
+        return db.cred_value("dailymotion", key, "")
     except Exception:
         return ""
 
 
 def client_id() -> str:
-    return (os.environ.get("DAILYMOTION_CLIENT_ID") or "").strip() or _from_creds("client_id")
+    try:
+        import db
+
+        return db.cred_value(
+            "dailymotion", "client_id", os.environ.get("DAILYMOTION_CLIENT_ID") or ""
+        )
+    except Exception:
+        return (os.environ.get("DAILYMOTION_CLIENT_ID") or "").strip() or _from_creds("client_id")
 
 
 def client_secret() -> str:
-    return (
-        (os.environ.get("DAILYMOTION_CLIENT_SECRET") or "").strip() or _from_creds("client_secret")
-    )
+    try:
+        import db
+
+        return db.cred_value(
+            "dailymotion",
+            "client_secret",
+            os.environ.get("DAILYMOTION_CLIENT_SECRET") or "",
+        )
+    except Exception:
+        return (
+            (os.environ.get("DAILYMOTION_CLIENT_SECRET") or "").strip()
+            or _from_creds("client_secret")
+        )
 
 
 def redirect_uri(request=None) -> str:

@@ -578,38 +578,36 @@
     <form class="api-form js-api-form" data-platform-id="{{ platform.id }}">
       <label class="field">
         <span>{{ t('api.field.name') }}</span>
-        <input type="text" name="name" value="{{ creds.name or '' }}" autocomplete="off" />
+        <input type="text" name="name" value="" autocomplete="off" />
       </label>
       {% if 'client_id' in platform.fields %}
       <label class="field">
         <span>{{ platform.label_client_id }}</span>
-        <input type="text" name="client_id" value="{{ creds.client_id or '' }}" autocomplete="off" />
+        <input type="text" name="client_id" value="" autocomplete="off" />
       </label>
       {% endif %}
       {% if 'client_secret' in platform.fields %}
       <label class="field">
-        <span>{{ platform.label_client_secret }}{% if creds.client_secret_set %} · {{ creds.client_secret_mask }}{% endif %}</span>
+        <span class="js-secret-label">{{ platform.label_client_secret }}</span>
         <input type="password" name="client_secret" value="" placeholder="{{ t('api.keep_secret') }}" autocomplete="new-password" />
       </label>
       {% endif %}
       {% if 'extra' in platform.fields %}
       <label class="field">
         <span>{{ t('api.field.extra.' ~ platform.id) }}</span>
-        <input type="text" name="extra" value="{% if creds.extra %}{{ creds.extra }}{% elif platform.id == 'tiktok' %}{{ tiktok_redirect_uri }}{% elif platform.id == 'dailymotion' %}{{ dailymotion_redirect_uri }}{% elif platform.id == 'instagram' %}{{ instagram_redirect_uri }}{% elif platform.id == 'facebook' %}{{ facebook_redirect_uri }}{% elif platform.id == 'x' %}{{ x_redirect_uri }}{% elif platform.id == 'bilibili' %}{{ bilibili_redirect_uri }}{% elif platform.id == 'snapchat' %}{{ snapchat_redirect_uri }}{% endif %}" autocomplete="off" />
+        <input type="text" name="extra" data-default-extra="{% if platform.id == 'tiktok' %}{{ tiktok_redirect_uri }}{% elif platform.id == 'dailymotion' %}{{ dailymotion_redirect_uri }}{% elif platform.id == 'instagram' %}{{ instagram_redirect_uri }}{% elif platform.id == 'facebook' %}{{ facebook_redirect_uri }}{% elif platform.id == 'x' %}{{ x_redirect_uri }}{% elif platform.id == 'bilibili' %}{{ bilibili_redirect_uri }}{% elif platform.id == 'snapchat' %}{{ snapchat_redirect_uri }}{% endif %}" value="" autocomplete="off" />
       </label>
       {% endif %}
       {% if 'access_token' in platform.fields %}
       <label class="field">
-        <span>{{ t('api.field.access_token') }}{% if creds.access_token_set %} · {{ creds.access_token_mask }}{% endif %}</span>
+        <span class="js-token-label">{{ t('api.field.access_token') }}</span>
         <input type="password" name="access_token" value="" placeholder="{{ t('api.keep_secret') }}" autocomplete="new-password" />
       </label>
       {% endif %}
       <div class="api-form__actions">
         <button type="submit" class="btn btn-accent">{{ t('api.save') }}</button>
         <button type="button" class="btn btn-ghost js-test-platform" data-platform-id="{{ platform.id }}">⚡ {{ t('api.test') }}</button>
-        {% if creds.configured %}
-        <button type="button" class="btn btn-ghost btn-equipo-warn js-clear-api" data-platform-id="{{ platform.id }}">{{ t('api.clear') }}</button>
-        {% endif %}
+        <button type="button" class="btn btn-ghost btn-equipo-warn js-clear-api" data-platform-id="{{ platform.id }}" hidden>{{ t('api.clear') }}</button>
       </div>
       <p class="sub js-api-form-msg" hidden></p>
     </form>
@@ -637,14 +635,11 @@
     <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.tiktok_redirect_hint') }} <code>{{ tiktok_redirect_uri }}</code></p>
     <div class="server-modal__linked">
-    {% if oauth_configured %}
-    <a href="/oauth/tiktok/connect" class="btn btn-tiktok">
+    <a href="/oauth/tiktok/connect" class="btn btn-tiktok js-oauth-connect" hidden>
       <span class="btn-tiktok__icon" aria-hidden="true">♪</span>
       {{ t('servers.connect_with_tiktok') }}
     </a>
-    {% else %}
-    <p class="sub">{{ t('servers.oauth_missing') }}</p>
-    {% endif %}
+    <p class="sub js-oauth-missing">{{ t('servers.oauth_missing') }}</p>
     </div>
     <ul class="tiktok-config-list">
       {% for c in linked_accounts %}
@@ -674,14 +669,11 @@
     <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.youtube_redirect_hint') }} <code>{{ youtube_redirect_uri }}</code></p>
     <div class="server-modal__linked">
-    {% if youtube_oauth_configured %}
-    <a href="/oauth/youtube/connect" class="btn btn-youtube">
+    <a href="/oauth/youtube/connect" class="btn btn-youtube js-oauth-connect" hidden>
       <span class="btn-youtube__icon" aria-hidden="true">▶</span>
       {{ t('servers.connect_with_youtube') }}
     </a>
-    {% else %}
-    <p class="sub">{{ t('servers.youtube_oauth_missing') }}</p>
-    {% endif %}
+    <p class="sub js-oauth-missing">{{ t('servers.youtube_oauth_missing') }}</p>
     </div>
     <ul class="tiktok-config-list">
       {% for c in youtube_linked %}
@@ -709,14 +701,11 @@
     <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.instagram_redirect_hint') }} <code>{{ instagram_redirect_uri }}</code></p>
     <div class="server-modal__linked">
-    {% if instagram_oauth_configured %}
-    <a href="/oauth/instagram/connect" class="btn btn-instagram">
+    <a href="/oauth/instagram/connect" class="btn btn-instagram js-oauth-connect" hidden>
       <span class="btn-instagram__icon" aria-hidden="true">◎</span>
       {{ t('servers.connect_with_instagram') }}
     </a>
-    {% else %}
-    <p class="sub">{{ t('servers.instagram_oauth_missing') }}</p>
-    {% endif %}
+    <p class="sub js-oauth-missing">{{ t('servers.instagram_oauth_missing') }}</p>
     </div>
     <ul class="tiktok-config-list">
       {% for c in instagram_linked %}
@@ -744,14 +733,11 @@
     <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.facebook_redirect_hint') }} <code>{{ facebook_redirect_uri }}</code></p>
     <div class="server-modal__linked">
-    {% if facebook_oauth_configured %}
-    <a href="/oauth/facebook/connect" class="btn btn-facebook">
+    <a href="/oauth/facebook/connect" class="btn btn-facebook js-oauth-connect" hidden>
       <span class="btn-facebook__icon" aria-hidden="true">f</span>
       {{ t('servers.connect_with_facebook') }}
     </a>
-    {% else %}
-    <p class="sub">{{ t('servers.facebook_oauth_missing') }}</p>
-    {% endif %}
+    <p class="sub js-oauth-missing">{{ t('servers.facebook_oauth_missing') }}</p>
     </div>
     <ul class="tiktok-config-list">
       {% for c in facebook_linked %}
@@ -779,14 +765,11 @@
     <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.x_redirect_hint') }} <code>{{ x_redirect_uri }}</code></p>
     <div class="server-modal__linked">
-    {% if x_oauth_configured %}
-    <a href="/oauth/x/connect" class="btn btn-x">
+    <a href="/oauth/x/connect" class="btn btn-x js-oauth-connect" hidden>
       <span class="btn-x__icon" aria-hidden="true">𝕏</span>
       {{ t('servers.connect_with_x') }}
     </a>
-    {% else %}
-    <p class="sub">{{ t('servers.x_oauth_missing') }}</p>
-    {% endif %}
+    <p class="sub js-oauth-missing">{{ t('servers.x_oauth_missing') }}</p>
     </div>
     <ul class="tiktok-config-list">
       {% for c in x_linked %}
@@ -814,14 +797,11 @@
     <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.bilibili_redirect_hint') }} <code>{{ bilibili_redirect_uri }}</code></p>
     <div class="server-modal__linked">
-    {% if bilibili_oauth_configured %}
-    <a href="/oauth/bilibili/connect" class="btn btn-bilibili">
+    <a href="/oauth/bilibili/connect" class="btn btn-bilibili js-oauth-connect" hidden>
       <span class="btn-bilibili__icon" aria-hidden="true">▶</span>
       {{ t('servers.connect_with_bilibili') }}
     </a>
-    {% else %}
-    <p class="sub">{{ t('servers.bilibili_oauth_missing') }}</p>
-    {% endif %}
+    <p class="sub js-oauth-missing">{{ t('servers.bilibili_oauth_missing') }}</p>
     </div>
     <ul class="tiktok-config-list">
       {% for c in bilibili_linked %}
@@ -847,39 +827,28 @@
 
     {% if platform.id == 'rumble' %}
     <p class="sub servers-oauth-redirect">{{ t('servers.rumble_partner_hint') }}</p>
-    {% if rumble_token_set %}
-    <ul class="tiktok-config-list">
+    <ul class="tiktok-config-list js-rumble-linked" hidden>
       <li class="tiktok-config-card tiktok-config-card--linked">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title">{{ rumble_channel or t('platform.rumble') }}</strong>
+            <strong class="tiktok-config-card__title js-rumble-channel">{{ t('platform.rumble') }}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
-          <p class="tiktok-config-card__meta sub">
-            {% if rumble_channel %}
-            {{ t('servers.rumble_ready', channel=rumble_channel) }}
-            {% else %}
-            {{ t('servers.rumble_token_only') }}
-            {% endif %}
-          </p>
+          <p class="tiktok-config-card__meta sub js-rumble-meta">{{ t('servers.rumble_token_only') }}</p>
         </div>
       </li>
     </ul>
-    {% endif %}
     {% endif %}
 
     {% if platform.id == 'snapchat' %}
     <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.snapchat_redirect_hint') }} <code>{{ snapchat_redirect_uri }}</code></p>
     <div class="server-modal__linked">
-    {% if snapchat_oauth_configured %}
-    <a href="/oauth/snapchat/connect" class="btn btn-snapchat">
+    <a href="/oauth/snapchat/connect" class="btn btn-snapchat js-oauth-connect" hidden>
       <span class="btn-snapchat__icon" aria-hidden="true">👻</span>
       {{ t('servers.connect_with_snapchat') }}
     </a>
-    {% else %}
-    <p class="sub">{{ t('servers.snapchat_oauth_missing') }}</p>
-    {% endif %}
+    <p class="sub js-oauth-missing">{{ t('servers.snapchat_oauth_missing') }}</p>
     </div>
     <ul class="tiktok-config-list">
       {% for c in snapchat_linked %}
@@ -907,14 +876,11 @@
     <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.dailymotion_redirect_hint') }} <code>{{ dailymotion_redirect_uri }}</code></p>
     <div class="server-modal__linked">
-    {% if dailymotion_oauth_configured %}
-    <a href="/oauth/dailymotion/connect" class="btn btn-dailymotion">
+    <a href="/oauth/dailymotion/connect" class="btn btn-dailymotion js-oauth-connect" hidden>
       <span class="btn-dailymotion__icon" aria-hidden="true">▶</span>
       {{ t('servers.connect_with_dailymotion') }}
     </a>
-    {% else %}
-    <p class="sub">{{ t('servers.dailymotion_oauth_missing') }}</p>
-    {% endif %}
+    <p class="sub js-oauth-missing">{{ t('servers.dailymotion_oauth_missing') }}</p>
     </div>
     <ul class="tiktok-config-list">
       {% for c in dailymotion_linked %}
@@ -1833,6 +1799,7 @@
             .then(function (x) {
               submit.disabled = false;
               if (x.body && x.body.ok) {
+                applyPlatformCreds(form, x.body);
                 if (typeof window.__reloadServerGroups === "function") {
                   window.__reloadServerGroups();
                 }
@@ -1897,8 +1864,13 @@
           if (!pid || !confirm(clearApiConfirm)) return;
           var form = btn.closest(".js-api-form");
           var msgEl = form ? form.querySelector(".js-api-form-msg") : null;
+          var accountQ = "";
+          if (form) {
+            var nm = form.querySelector('input[name="name"]');
+            if (nm && nm.value) accountQ = "?account=" + encodeURIComponent(String(nm.value).trim());
+          }
           btn.disabled = true;
-          fetch("/admin/api/platforms/" + encodeURIComponent(pid) + "/credentials", {
+          fetch("/admin/api/platforms/" + encodeURIComponent(pid) + "/credentials" + accountQ, {
             method: "DELETE",
             credentials: "same-origin",
             headers: { Accept: "application/json" },
@@ -1915,10 +1887,11 @@
                 return;
               }
               if (form) {
-                form.querySelectorAll("input").forEach(function (input) {
-                  if (input.type === "checkbox" || input.type === "radio") return;
-                  input.value = "";
-                });
+                var nameKeep = "";
+                var nmKeep = form.querySelector('input[name="name"]');
+                if (nmKeep) nameKeep = nmKeep.value;
+                applyPlatformCreds(form, {});
+                if (nmKeep) nmKeep.value = nameKeep;
               }
               if (typeof window.__reloadServerGroups === "function") {
                 window.__reloadServerGroups();
@@ -1966,10 +1939,83 @@
         }
         input.value = "";
       });
+      root.querySelectorAll("input[data-default-extra]").forEach(function (input) {
+        input.value = input.getAttribute("data-default-extra") || "";
+      });
       root.querySelectorAll(".js-api-form-msg").forEach(function (msgEl) {
         msgEl.hidden = true;
         msgEl.textContent = "";
       });
+    }
+
+    function applyPlatformCreds(root, creds) {
+      if (!root) return;
+      creds = creds || {};
+      var host = root;
+      if (root.classList && root.classList.contains("js-api-form") && root.parentElement) {
+        host = root.parentElement;
+      }
+      var cid = root.querySelector('input[name="client_id"]');
+      if (cid) cid.value = creds.client_id || "";
+      var extra = root.querySelector('input[name="extra"]');
+      if (extra) {
+        extra.value = creds.extra || extra.getAttribute("data-default-extra") || "";
+      }
+      var clearBtn = root.querySelector(".js-clear-api");
+      if (clearBtn) clearBtn.hidden = !creds.configured;
+      var secretLabel = root.querySelector(".js-secret-label");
+      if (secretLabel) {
+        var base = secretLabel.getAttribute("data-base") || String(secretLabel.textContent || "").split(" · ")[0];
+        secretLabel.setAttribute("data-base", base);
+        secretLabel.textContent =
+          creds.client_secret_set && creds.client_secret_mask
+            ? base + " · " + creds.client_secret_mask
+            : base;
+      }
+      var tokenLabel = root.querySelector(".js-token-label");
+      if (tokenLabel) {
+        var tbase = tokenLabel.getAttribute("data-base") || String(tokenLabel.textContent || "").split(" · ")[0];
+        tokenLabel.setAttribute("data-base", tbase);
+        tokenLabel.textContent =
+          creds.access_token_set && creds.access_token_mask
+            ? tbase + " · " + creds.access_token_mask
+            : tbase;
+      }
+      var connect = host.querySelector(".js-oauth-connect");
+      var missing = host.querySelector(".js-oauth-missing");
+      if (connect || missing) {
+        var ready = !!(creds.client_id && creds.client_secret_set);
+        if (connect) connect.hidden = !ready;
+        if (missing) missing.hidden = ready;
+      }
+      var rumble = host.querySelector(".js-rumble-linked");
+      if (rumble) {
+        rumble.hidden = !creds.access_token_set;
+        var ch = host.querySelector(".js-rumble-channel");
+        if (ch && (creds.extra || "").trim()) ch.textContent = String(creds.extra).trim();
+      }
+    }
+
+    function loadAccountPlatformCreds(platformId, accountName) {
+      if (!modalBody) return;
+      if (!platformId || !accountName) {
+        applyPlatformCreds(modalBody, {});
+        return;
+      }
+      fetch(
+        "/admin/api/platforms/" +
+          encodeURIComponent(platformId) +
+          "/credentials?account=" +
+          encodeURIComponent(accountName),
+        { credentials: "same-origin", headers: { Accept: "application/json" } }
+      )
+        .then(function (r) { return r.json(); })
+        .then(function (body) {
+          applyPlatformCreds(modalBody, body && body.ok ? body : {});
+        })
+        .catch(function () {
+          applyPlatformCreds(modalBody, {});
+        });
     }
 
     function openModal(platformId, platformName, trigger, modalOptions) {
@@ -2016,6 +2062,11 @@
       bindFilehost(modalBody);
       bindChain(modalBody);
       bindApiForms(modalBody);
+      if (isCreate) {
+        applyPlatformCreds(modalBody, {});
+      } else {
+        loadAccountPlatformCreds(platformId, accountName);
+      }
       if (fromAccountPicker) {
         modal.classList.add("equipo-modal--stack");
       } else {

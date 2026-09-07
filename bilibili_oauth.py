@@ -27,13 +27,30 @@ def _from_creds(key: str) -> str:
 
 
 def client_id() -> str:
-    return (os.environ.get("BILIBILI_CLIENT_ID") or "").strip() or _from_creds("client_id")
+    try:
+        import db
+
+        return db.cred_value(
+            "bilibili", "client_id", os.environ.get("BILIBILI_CLIENT_ID") or ""
+        )
+    except Exception:
+        return (os.environ.get("BILIBILI_CLIENT_ID") or "").strip() or _from_creds("client_id")
 
 
 def client_secret() -> str:
-    return (
-        (os.environ.get("BILIBILI_CLIENT_SECRET") or "").strip() or _from_creds("client_secret")
-    )
+    try:
+        import db
+
+        return db.cred_value(
+            "bilibili",
+            "client_secret",
+            os.environ.get("BILIBILI_CLIENT_SECRET") or "",
+        )
+    except Exception:
+        return (
+            (os.environ.get("BILIBILI_CLIENT_SECRET") or "").strip()
+            or _from_creds("client_secret")
+        )
 
 
 def redirect_uri(request=None) -> str:

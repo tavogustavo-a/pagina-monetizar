@@ -116,6 +116,7 @@ def test_platform(
         return {"ok": False, "message": t("api.unknown_platform", lang)}
     try:
         if draft is not None:
+            db.set_credentials_account_name(str(draft.get("name") or ""))
             _set_test_overlay(pid, draft)
         ok, message = testers[pid](lang)
         if save_result:
@@ -134,6 +135,19 @@ def verify_account_platform(
     """Consulta la API de esa cuenta/servidor antes de buscar o extraer videos."""
     import proxy_util
 
+    name = db.get_account_link_name(account_link_id) or ""
+    with db.using_credentials_account(name):
+        return _verify_account_platform_with_proxy(
+            platform_id, account_link_id, lang, proxy_util
+        )
+
+
+def _verify_account_platform_with_proxy(
+    platform_id: str,
+    account_link_id: str,
+    lang: str,
+    proxy_util: Any,
+) -> dict[str, Any]:
     pid = (platform_id or "").strip()
     if pid in vmos.PLATFORM_IDS and db.resolve_vmos_account_for_publish(
         pid, account_link_id

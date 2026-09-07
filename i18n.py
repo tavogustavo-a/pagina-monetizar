@@ -529,8 +529,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Pega esta Callback URL exacta en Dailymotion Studio → API keys y luego pulsa Conectar con Dailymotion.",
     },
     "servers.oauth_save_then_connect": {
-        "en": "Saving API keys only stores the app. The server stays “Not linked” until you click Connect and sign in. Disconnect or Remove API unlinks it. Connecting another account on the same card replaces the previous one.",
-        "es": "Guardar las claves solo guarda la app. El servidor sigue «Sin vincular» hasta que pulses Conectar e inicies sesión. Desconectar o Quitar API lo desvincula. Si conectas otra cuenta en la misma ficha, reemplaza la anterior.",
+        "en": "Each account name has its own API Key and Secret (they are not shared). Saving the keys only stores the app for this name. The server stays “Not linked” until you click Connect and sign in. Disconnect or Remove API unlinks it. Connecting another account on the same card replaces the previous one.",
+        "es": "Cada nombre de cuenta tiene su propia API Key y Secret (no se comparten). Guardar las claves solo guarda la app de este nombre. El servidor sigue «Sin vincular» hasta que pulses Conectar e inicies sesión. Desconectar o Quitar API lo desvincula. Si conectas otra cuenta en la misma ficha, reemplaza la anterior.",
     },
     "servers.oauth_saved_click_connect": {
         "en": "API saved. Now click Connect so this account is linked.",

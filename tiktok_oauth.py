@@ -20,28 +20,24 @@ DEFAULT_SCOPES = "user.info.basic,video.upload"
 
 def client_key() -> str:
     env = (os.environ.get("TIKTOK_CLIENT_KEY") or os.environ.get("TIKTOK_CLIENT_ID") or "").strip()
-    if env:
-        return env
     try:
         import db
 
-        raw = db.get_platform_credentials_raw("tiktok") or {}
-        return (raw.get("client_id") or "").strip()
+        return db.cred_value("tiktok", "client_id", env)
     except Exception:
+        if env:
+            return env
         return ""
 
 
 def client_secret() -> str:
     env = os.environ.get("TIKTOK_CLIENT_SECRET", "").strip()
-    if env:
-        return env
     try:
         import db
 
-        raw = db.get_platform_credentials_raw("tiktok") or {}
-        return (raw.get("client_secret") or "").strip()
+        return db.cred_value("tiktok", "client_secret", env)
     except Exception:
-        return ""
+        return env
 
 
 def redirect_uri(request=None) -> str:

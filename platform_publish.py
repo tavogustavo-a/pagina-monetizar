@@ -268,14 +268,16 @@ def publish_to_platform(
         account_link_id=account_link_id,
     )
     pid = (platform_id or "").strip()
-    if pid in vmos.PLATFORM_IDS and db.resolve_vmos_account_for_publish(
-        pid, account_link_id
-    ):
-        return _publish_to_platform(**kwargs)
+    name = db.get_account_link_name(account_link_id) if account_link_id else ""
+    with db.using_credentials_account(name):
+        if pid in vmos.PLATFORM_IDS and db.resolve_vmos_account_for_publish(
+            pid, account_link_id
+        ):
+            return _publish_to_platform(**kwargs)
 
-    proxy_url = db.get_active_proxy_url_for_account(account_link_id)
-    with proxy_util.using_proxy(proxy_url):
-        return _publish_to_platform(**kwargs)
+        proxy_url = db.get_active_proxy_url_for_account(account_link_id)
+        with proxy_util.using_proxy(proxy_url):
+            return _publish_to_platform(**kwargs)
 
 
 def _publish_to_platform(

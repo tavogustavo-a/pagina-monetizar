@@ -32,13 +32,30 @@ def _from_creds(key: str) -> str:
 
 
 def client_id() -> str:
-    return (os.environ.get("INSTAGRAM_CLIENT_ID") or "").strip() or _from_creds("client_id")
+    try:
+        import db
+
+        return db.cred_value(
+            "instagram", "client_id", os.environ.get("INSTAGRAM_CLIENT_ID") or ""
+        )
+    except Exception:
+        return (os.environ.get("INSTAGRAM_CLIENT_ID") or "").strip() or _from_creds("client_id")
 
 
 def client_secret() -> str:
-    return (
-        (os.environ.get("INSTAGRAM_CLIENT_SECRET") or "").strip() or _from_creds("client_secret")
-    )
+    try:
+        import db
+
+        return db.cred_value(
+            "instagram",
+            "client_secret",
+            os.environ.get("INSTAGRAM_CLIENT_SECRET") or "",
+        )
+    except Exception:
+        return (
+            (os.environ.get("INSTAGRAM_CLIENT_SECRET") or "").strip()
+            or _from_creds("client_secret")
+        )
 
 
 def redirect_uri(request=None) -> str:

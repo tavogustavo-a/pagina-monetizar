@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -174,8 +175,28 @@ async def lifespan(app: FastAPI):
             _SCHEDULER_LOCK_FH = None
 
 
+class _AccountCredentialsMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        name = (
+            request.query_params.get("link_name")
+            or request.query_params.get("account")
+            or ""
+        ).strip()
+        if not name:
+            try:
+                name = str(request.session.get("oauth_link_target_name") or "").strip()
+            except Exception:
+                name = ""
+        token = db.set_credentials_account_name(name)
+        try:
+            return await call_next(request)
+        finally:
+            db.reset_credentials_account_name(token)
+
+
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=500)
+app.add_middleware(_AccountCredentialsMiddleware)
 app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
@@ -3660,6 +3681,12 @@ def _revoke_oauth_remote(row: dict) -> None:
     pid = str(row.get("platform_id") or "").strip()
     access = str(row.get("access_token") or "").strip()
     refresh = str(row.get("refresh_token") or "").strip()
+    name = str(row.get("account_name") or "").strip()
+    with db.using_credentials_account(name):
+        _revoke_oauth_remote_inner(pid, access, refresh, row)
+
+
+def _revoke_oauth_remote_inner(pid: str, access: str, refresh: str, row: dict) -> None:
     try:
         if pid == "youtube":
             youtube_oauth.revoke_tokens(access, refresh)
@@ -4947,6 +4974,19 @@ def api_xconfig_check(request: Request):
     }
 
 
+@app.get("/admin/api/platforms/{platform_id}/credentials")
+def api_get_platform_credentials(request: Request, platform_id: str, account: str = ""):
+    deny = _require_platform_credentials_json(request, platform_id)
+    if deny:
+        return deny
+    if platform_id not in platforms.PLATFORM_IDS:
+        return JSONResponse({"ok": False, "error": "Unknown platform."}, status_code=404)
+    label = (account or "").strip()
+    if label:
+        db.set_credentials_account_name(label)
+    return {"ok": True, **db.get_platform_credentials_public(platform_id)}
+
+
 @app.post("/admin/api/platforms/{platform_id}/credentials")
 def api_save_platform_credentials(request: Request, platform_id: str, body: PlatformApiBody):
     deny = _require_platform_credentials_json(request, platform_id)
@@ -4956,6 +4996,7 @@ def api_save_platform_credentials(request: Request, platform_id: str, body: Plat
         return JSONResponse({"ok": False, "error": "Unknown platform."}, status_code=404)
     lang = i18n.resolve_lang(request)
     user = require_admin_privileges(request)
+    db.set_credentials_account_name((body.name or "").strip())
     try:
         public = db.upsert_platform_credentials(
             platform_id,
@@ -4975,13 +5016,16 @@ def api_save_platform_credentials(request: Request, platform_id: str, body: Plat
 
 
 @app.delete("/admin/api/platforms/{platform_id}/credentials")
-def api_clear_platform_credentials(request: Request, platform_id: str):
+def api_clear_platform_credentials(request: Request, platform_id: str, account: str = ""):
     deny = _require_platform_credentials_json(request, platform_id)
     if deny:
         return deny
     if platform_id not in platforms.PLATFORM_IDS:
         return JSONResponse({"ok": False, "error": "Unknown platform."}, status_code=404)
     lang = i18n.resolve_lang(request)
+    label = (account or "").strip()
+    if label:
+        db.set_credentials_account_name(label)
     public = db.clear_platform_credentials(platform_id)
     return {"ok": True, "message": i18n.t("api.cleared", lang), **public}
 
