@@ -132,6 +132,7 @@ def build_authorize_url(*, state: str, redirect_uri_value: str | None = None) ->
         "redirect_uri": ru,
         "scope": oauth_scopes(),
         "state": state,
+        "display": "page",
     }
     return AUTH_URL + "?" + urllib.parse.urlencode(params)
 

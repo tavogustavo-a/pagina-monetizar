@@ -524,9 +524,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Connect with Dailymotion",
         "es": "Conectar con Dailymotion",
     },
-    "servers.dailymotion_oauth_missing": {
-        "en": "Save the Dailymotion API Key and API Secret first (Dailymotion Studio → API keys).",
-        "es": "Guarda primero la API Key y el API Secret de Dailymotion (Dailymotion Studio → API keys).",
+    "servers.dailymotion_google_login_hint": {
+        "en": "If you signed up with Google, that OAuth screen often has no Google button. First open dailymotion.com in this browser and sign in with Google. Then click Connect again — you should only need to authorize the app. Or use “Forgot password” on Dailymotion to set a password for that Gmail and use it on the form.",
+        "es": "Si te registraste con Google, esa pantalla de Dailymotion casi nunca muestra el botón de Google. Abre dailymotion.com en este mismo navegador, entra con Google y luego pulsa otra vez Conectar: debería pedir solo autorizar la app. O usa «¿Olvidaste tu contraseña?» en Dailymotion para poner una clave a ese Gmail y entrar con correo y contraseña.",
     },
     "servers.dailymotion_redirect_hint": {
         "en": "Paste this exact Callback URL in Dailymotion Studio → API keys, then Connect with Dailymotion.",
