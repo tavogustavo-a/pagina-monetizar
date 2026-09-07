@@ -65,12 +65,14 @@ def _set_test_overlay(pid: str, draft: dict[str, Any] | None) -> None:
     overlay: dict[str, Any] = {}
     if draft.get("client_id") is not None:
         overlay["client_id"] = (draft.get("client_id") or "").strip()
-    client_secret = (draft.get("client_secret") or "").strip()
-    if client_secret:
-        overlay["client_secret"] = client_secret
-    access_token = (draft.get("access_token") or "").strip()
-    if access_token:
-        overlay["access_token"] = access_token
+    if "client_secret" in draft:
+        secret = (draft.get("client_secret") or "").strip()
+        if secret not in ("unchanged", "x" * 19):
+            overlay["client_secret"] = secret
+    if "access_token" in draft:
+        token = (draft.get("access_token") or "").strip()
+        if token not in ("unchanged", "x" * 19):
+            overlay["access_token"] = token
     if draft.get("extra") is not None:
         overlay["extra"] = (draft.get("extra") or "").strip()
     _test_overlay[pid] = overlay

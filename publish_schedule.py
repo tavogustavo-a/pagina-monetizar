@@ -142,6 +142,7 @@ def execute_video_publish(
             lang=lang,
             tiktok_config_id=tiktoker_config_id if pid == "tiktok" else None,
             account_link_id=account_link_id,
+            x_use_funding=bool(x_use_funding) if pid == "x" else False,
         )
         status = "ok" if ok else "fail"
         if ok:

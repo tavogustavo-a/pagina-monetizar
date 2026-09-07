@@ -327,6 +327,11 @@ def publish_media(
     except ValueError:
         return False, t("pub.x.no_token", lang)
 
+    if not x_oauth.oauth_configured():
+        if db.x_app_mode() == "own":
+            return False, t("pub.x.need_own_api", lang)
+        return False, t("pub.x.need_funding_api", lang)
+
     text = _caption(title, description)
 
     try:

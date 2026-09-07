@@ -254,6 +254,7 @@ def publish_to_platform(
     lang: str = "es",
     tiktok_config_id: str | None = None,
     account_link_id: str | None = None,
+    x_use_funding: bool = False,
 ) -> tuple[bool, str]:
     import proxy_util
 
@@ -269,15 +270,19 @@ def publish_to_platform(
     )
     pid = (platform_id or "").strip()
     name = db.get_account_link_name(account_link_id) if account_link_id else ""
+    x_mode = "auto"
+    if pid == "x":
+        x_mode = "funding" if x_use_funding else "own"
     with db.using_credentials_account(name):
-        if pid in vmos.PLATFORM_IDS and db.resolve_vmos_account_for_publish(
-            pid, account_link_id
-        ):
-            return _publish_to_platform(**kwargs)
+        with db.using_x_app_mode(x_mode):
+            if pid in vmos.PLATFORM_IDS and db.resolve_vmos_account_for_publish(
+                pid, account_link_id
+            ):
+                return _publish_to_platform(**kwargs)
 
-        proxy_url = db.get_active_proxy_url_for_account(account_link_id)
-        with proxy_util.using_proxy(proxy_url):
-            return _publish_to_platform(**kwargs)
+            proxy_url = db.get_active_proxy_url_for_account(account_link_id)
+            with proxy_util.using_proxy(proxy_url):
+                return _publish_to_platform(**kwargs)
 
 
 def _publish_to_platform(

@@ -4570,7 +4570,7 @@ def api_vmos_save(request: Request, body: VmosAccountBody):
             platform_id=body.platform_id,
             name=body.name,
             access_key=body.access_key,
-            secret_key=body.secret_key or None,
+            secret_key=body.secret_key,
             pad_code=body.pad_code,
             template_id=body.template_id,
             remark=body.remark,
@@ -4658,7 +4658,7 @@ def api_filehost_save(request: Request, body: FilehostAccountBody):
             account_id=body.id,
             platform_id=pid,
             name=body.name or detail,
-            api_key=body.api_key or None,
+            api_key=body.api_key,
             extra=extra,
             link_name=body.link_name,
         )
@@ -4744,7 +4744,7 @@ def api_chain_save(request: Request, body: ChainAccountBody):
             platform_id=pid,
             name=body.name or detail,
             login=login,
-            secret=body.secret or None,
+            secret=body.secret,
             extra=extra,
             link_name=body.link_name,
         )
@@ -4984,7 +4984,7 @@ def api_get_platform_credentials(request: Request, platform_id: str, account: st
     label = (account or "").strip()
     if label:
         db.set_credentials_account_name(label)
-    return {"ok": True, **db.get_platform_credentials_public(platform_id)}
+    return {"ok": True, **db.get_platform_credentials_editor(platform_id)}
 
 
 @app.post("/admin/api/platforms/{platform_id}/credentials")
@@ -5002,8 +5002,8 @@ def api_save_platform_credentials(request: Request, platform_id: str, body: Plat
             platform_id,
             name=body.name,
             client_id=body.client_id,
-            client_secret=body.client_secret or None,
-            access_token=body.access_token or None,
+            client_secret=body.client_secret,
+            access_token=body.access_token,
             extra=body.extra,
             owner_user_id=user.id if db.user_can_manage_panel_accounts(user) else None,
         )
@@ -5012,7 +5012,9 @@ def api_save_platform_credentials(request: Request, platform_id: str, body: Plat
             {"ok": False, "error": _server_account_error_message(str(e), lang)},
             status_code=400,
         )
-    return {"ok": True, "message": i18n.t("api.saved", lang), **public}
+    editor = db.get_platform_credentials_editor(platform_id)
+    msg_key = "api.cleared" if not editor.get("configured") else "api.saved"
+    return {"ok": True, "message": i18n.t(msg_key, lang), **editor}
 
 
 @app.delete("/admin/api/platforms/{platform_id}/credentials")

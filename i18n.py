@@ -501,8 +501,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Conectar con X",
     },
     "servers.x_oauth_missing": {
-        "en": "Save the X Client ID and Client Secret first (developer.x.com → OAuth 2.0 confidential client).",
-        "es": "Guarda primero el Client ID y el Client Secret de X (developer.x.com → cliente confidencial OAuth 2.0).",
+        "en": "Save this account’s X Client ID and Secret, or connect using Config X (the account that pays for the API).",
+        "es": "Guarda el Client ID y el Secret de esta cuenta, o conéctala con la API de Config X (la cuenta que paga la API).",
+    },
+    "servers.x_api_inherit_hint": {
+        "en": "X is the exception: other names can connect with the Config X app (the account that pays for the API). Only save Client ID and Secret here if this name should spend from its own X API when you uncheck “Use Config X balance” at publish time.",
+        "es": "X es la excepción: los demás nombres pueden conectarse con la app de Config X (la cuenta que paga la API). Guarda Client ID y Secret aquí solo si este nombre debe gastar de su propia API de X cuando desmarques «Usar saldo de Config X» al publicar.",
     },
     "servers.x_redirect_hint": {
         "en": "Paste this exact Callback URI in the X developer portal (SITE_URL/oauth/x/callback).",
@@ -1622,6 +1626,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pub.x.no_token": {
         "en": "Connect an X account from Servers (Connect with X).",
         "es": "Conecta una cuenta de X en Servidores (Conectar con X).",
+    },
+    "pub.x.need_own_api": {
+        "en": "This X account is set to use its own API. Save its Client ID and Secret in Servers first.",
+        "es": "Esta cuenta de X está marcada para gastar de su propia API. Guarda primero su Client ID y Secret en Servidores.",
+    },
+    "pub.x.need_funding_api": {
+        "en": "Config X has no API app keys. Save Client ID and Secret on the X account that pays for the API.",
+        "es": "Config X no tiene claves de API. Guarda el Client ID y el Secret en la cuenta de X que paga la API.",
     },
     "pub.x.file_missing": {
         "en": "The media file was not found on the server.",
@@ -3578,8 +3590,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Usar saldo de Config X ({name}) para esta publicación en X",
     },
     "pub.x_use_funding_hint": {
-        "en": "The cost is deducted from the recharge account, not from each X account. Uncheck it to spend from the publishing account itself.",
-        "es": "El costo se descuenta de la cuenta de recarga, no de cada cuenta de X. Desmárcalo para gastar del saldo de la propia cuenta que publica.",
+        "en": "Checked: this post uses the Config X developer app (and its balance). Uncheck it only if this account has its own X API keys and should spend from that app.",
+        "es": "Marcado: esta publicación usa la app de Config X (y su saldo). Desmárcalo solo si esta cuenta tiene su propia API de X y debe gastar de esa app.",
     },
     "nav.membresias": {"en": "Pricing", "es": "Precio"},
     "nav.pagos": {"en": "Payments", "es": "Pagos"},

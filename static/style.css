@@ -3209,6 +3209,12 @@ input:focus {
   margin: 0;
 }
 
+.api-form .js-oauth-callback-field,
+.servers-oauth-redirect:not(.servers-oauth-redirect--keep),
+.servers-oauth-copy {
+  display: none;
+}
+
 .api-form__actions {
   display: flex;
   flex-wrap: wrap;

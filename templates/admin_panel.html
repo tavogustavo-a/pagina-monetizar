@@ -664,23 +664,20 @@
     </div>
     <form id="panel-api-form" class="server-modal__body proxys-form api-form">
       <input type="hidden" id="panel-api-platform-id" name="platform_id" value="" />
+      <input type="hidden" id="panel-api-name" name="name" value="" />
       <p class="sub panel-api-modal__intro" id="panel-api-intro" hidden></p>
-      <label class="field">
-        <span>{{ t('api.field.name') }}</span>
-        <input type="text" id="panel-api-name" name="name" autocomplete="off" />
-      </label>
       <label class="field">
         <span id="panel-api-client-id-label"></span>
         <input type="text" id="panel-api-client-id" name="client_id" autocomplete="off" />
       </label>
       <label class="field">
         <span id="panel-api-client-secret-label"></span>
-        <input type="password" id="panel-api-client-secret" name="client_secret" value="" autocomplete="new-password" placeholder="{{ t('api.keep_secret') }}" />
+        <div class="password-input-wrap">
+          <input type="password" id="panel-api-client-secret" class="js-api-secret" name="client_secret" value="" autocomplete="new-password" />
+          {% include "_password_eye.html" %}
+        </div>
       </label>
-      <p class="sub servers-oauth-redirect" id="panel-api-redirect-wrap" hidden>
-        <span id="panel-api-redirect-hint"></span>
-        <code id="panel-api-redirect-uri"></code>
-      </p>
+      <p class="sub servers-oauth-redirect" id="panel-api-redirect-wrap" hidden></p>
       <p id="panel-api-form-error" class="alert-error proxys-form__error" hidden></p>
       <p id="panel-api-test-msg" class="sub panel-api-test-msg" hidden></p>
       <div class="proxys-form__actions{% if user_is_tiktok_mode(user) %} proxys-form__actions--center panel-api-modal__actions{% endif %}">
@@ -2264,9 +2261,6 @@
     var apiClientSecret = document.getElementById("panel-api-client-secret");
     var apiClientIdLabel = document.getElementById("panel-api-client-id-label");
     var apiClientSecretLabel = document.getElementById("panel-api-client-secret-label");
-    var apiRedirectWrap = document.getElementById("panel-api-redirect-wrap");
-    var apiRedirectHint = document.getElementById("panel-api-redirect-hint");
-    var apiRedirectUri = document.getElementById("panel-api-redirect-uri");
     var apiIntro = document.getElementById("panel-api-intro");
     var apiError = document.getElementById("panel-api-form-error");
     var apiTestMsg = document.getElementById("panel-api-test-msg");
@@ -2274,8 +2268,78 @@
     var apiTest = document.getElementById("panel-api-test");
     var apiNetworkMsg = {{ t('servers.network_error') | tojson }};
     var apiModalTitleTpl = {{ t('panel.api_modal_title') | tojson }};
-    var apiKeepSecret = {{ t('api.keep_secret') | tojson }};
+    var secretShowLabel = {{ t('login.show_password') | tojson }};
+    var secretHideLabel = {{ t('login.hide_password') | tojson }};
+    var SECRET_MASK = "xxxxxxxxxxxxxxxxxxx";
     var lastApiTrigger = null;
+
+    function fillSecretInput(input, realValue) {
+      if (!input) return;
+      var stored = String(realValue || "");
+      input.dataset.storedSecret = stored;
+      var btn = input.parentElement && input.parentElement.querySelector(".js-toggle-secret");
+      if (btn) {
+        btn.classList.remove("is-visible");
+        btn.setAttribute("aria-pressed", "false");
+        btn.setAttribute("aria-label", secretShowLabel);
+      }
+      if (stored) {
+        input.dataset.pristine = "1";
+        input.value = SECRET_MASK;
+        input.type = "text";
+      } else {
+        input.dataset.pristine = "0";
+        input.value = "";
+        input.type = "password";
+      }
+    }
+
+    function readSecretInput(input) {
+      if (!input) return "";
+      var v = String(input.value || "").trim();
+      if (!v) return "";
+      if (input.dataset.pristine === "1") return "unchanged";
+      return v;
+    }
+
+    function bindSecretToggles(root) {
+      if (!root) return;
+      root.querySelectorAll(".js-api-secret").forEach(function (input) {
+        if (input.dataset.secretBound) return;
+        input.dataset.secretBound = "1";
+        input.addEventListener("input", function () {
+          var stored = input.dataset.storedSecret || "";
+          if (input.dataset.pristine === "1" && input.value !== SECRET_MASK && input.value !== stored) {
+            input.dataset.pristine = "0";
+          }
+        });
+        input.addEventListener("focus", function () {
+          if (input.dataset.pristine === "1" && input.value === SECRET_MASK) input.select();
+        });
+      });
+      root.querySelectorAll(".js-toggle-secret").forEach(function (btn) {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", function () {
+          var wrap = btn.closest(".password-input-wrap");
+          var input = wrap ? wrap.querySelector(".js-api-secret") : null;
+          if (!input) return;
+          var stored = input.dataset.storedSecret || "";
+          var showing = !btn.classList.contains("is-visible");
+          btn.classList.toggle("is-visible", showing);
+          btn.setAttribute("aria-pressed", showing ? "true" : "false");
+          btn.setAttribute("aria-label", showing ? secretHideLabel : secretShowLabel);
+          if (input.dataset.pristine === "1") {
+            input.value = showing ? stored : SECRET_MASK;
+            input.type = "text";
+            return;
+          }
+          input.type = showing ? "text" : "password";
+        });
+      });
+    }
+
+    bindSecretToggles(apiForm);
 
     function closePanelApiModal() {
       if (!apiModal) return;
@@ -2302,30 +2366,12 @@
         apiClientIdLabel.textContent = btn.getAttribute("data-label-client-id") || "";
       }
       if (apiClientSecretLabel) {
-        var secretLabel = btn.getAttribute("data-label-client-secret") || "";
-        var secretSet = btn.getAttribute("data-creds-secret-set") === "1";
-        var secretMask = btn.getAttribute("data-creds-secret-mask") || "";
-        apiClientSecretLabel.textContent = secretSet && secretMask
-          ? secretLabel + " · " + secretMask
-          : secretLabel;
+        apiClientSecretLabel.textContent = btn.getAttribute("data-label-client-secret") || "";
       }
-      if (apiName) apiName.value = btn.getAttribute("data-creds-name") || "";
-      if (apiClientId) apiClientId.value = btn.getAttribute("data-creds-client-id") || "";
-      if (apiClientSecret) {
-        apiClientSecret.value = "";
-        apiClientSecret.placeholder = apiKeepSecret;
-      }
-      if (apiRedirectWrap && apiRedirectHint && apiRedirectUri) {
-        var hint = btn.getAttribute("data-redirect-hint") || "";
-        var uri = btn.getAttribute("data-redirect-uri") || "";
-        if (hint && uri) {
-          apiRedirectHint.textContent = hint + " ";
-          apiRedirectUri.textContent = uri;
-          apiRedirectWrap.hidden = false;
-        } else {
-          apiRedirectWrap.hidden = true;
-        }
-      }
+      var accountName = btn.getAttribute("data-creds-name") || "";
+      if (apiName) apiName.value = accountName;
+      if (apiClientId) apiClientId.value = "";
+      fillSecretInput(apiClientSecret, "");
       if (apiIntro) {
         var missingHint = btn.getAttribute("data-missing-hint") || "";
         if (missingHint) {
@@ -2341,7 +2387,17 @@
       apiModal.classList.add("is-open");
       apiModal.setAttribute("aria-hidden", "false");
       document.body.style.overflow = "hidden";
-      if (apiName) apiName.focus();
+      if (apiClientId) apiClientId.focus();
+      var credUrl = "/admin/api/platforms/" + encodeURIComponent(pid) + "/credentials";
+      if (accountName) credUrl += "?account=" + encodeURIComponent(accountName);
+      fetch(credUrl, { credentials: "same-origin", headers: { Accept: "application/json" } })
+        .then(function (r) { return r.json(); })
+        .then(function (body) {
+          if (!body || !body.ok) return;
+          if (apiClientId) apiClientId.value = body.client_id || "";
+          fillSecretInput(apiClientSecret, body.client_secret || "");
+        })
+        .catch(function () {});
     }
 
     document.querySelectorAll(".js-panel-api-open").forEach(function (btn) {
@@ -2360,7 +2416,7 @@
       return {
         name: apiName ? apiName.value : "",
         client_id: apiClientId ? apiClientId.value : "",
-        client_secret: apiClientSecret ? apiClientSecret.value : "",
+        client_secret: readSecretInput(apiClientSecret),
       };
     }
 

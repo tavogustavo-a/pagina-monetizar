@@ -322,7 +322,7 @@
       <input type="hidden" name="platform_id" id="vmos-platform-id" value="" />
       <input type="hidden" name="link_name" id="vmos-link-name" value="" />
       <p class="sub" id="vmos-form-hint">{{ t('servers.vmos_hint') }}</p>
-      <label class="field">
+      <label class="field js-account-name-field" hidden>
         <span>{{ t('api.field.name') }}</span>
         <input type="text" name="name" autocomplete="off" />
       </label>
@@ -332,7 +332,10 @@
       </label>
       <label class="field">
         <span>{{ t('servers.vmos_field_secret') }}</span>
-        <input type="password" name="secret_key" required autocomplete="new-password" />
+        <div class="password-input-wrap">
+          <input type="password" name="secret_key" class="js-api-secret" autocomplete="new-password" />
+          {% include "_password_eye.html" %}
+        </div>
       </label>
       <label class="field">
         <span>{{ t('servers.vmos_field_pad') }}</span>
@@ -368,13 +371,16 @@
       <input type="hidden" name="platform_id" id="filehost-platform-id" value="" />
       <input type="hidden" name="link_name" id="filehost-link-name" value="" />
       <p class="sub">{{ t('servers.filehost_hint') }}</p>
-      <label class="field">
+      <label class="field js-account-name-field" hidden>
         <span>{{ t('api.field.name') }}</span>
         <input type="text" name="name" autocomplete="off" />
       </label>
       <label class="field">
         <span>{{ t('servers.filehost_field_key') }}</span>
-        <input type="password" name="api_key" required autocomplete="new-password" />
+        <div class="password-input-wrap">
+          <input type="password" name="api_key" class="js-api-secret" autocomplete="new-password" />
+          {% include "_password_eye.html" %}
+        </div>
       </label>
       <label class="field" id="filehost-extra-wrap" hidden>
         <span id="filehost-extra-label">{{ t('servers.filehost_field_email') }}</span>
@@ -401,7 +407,7 @@
       <input type="hidden" name="platform_id" id="chain-platform-id" value="" />
       <input type="hidden" name="link_name" id="chain-link-name" value="" />
       <p class="sub" id="chain-form-hint">{{ t('servers.chain_hint_odysee') }}</p>
-      <label class="field">
+      <label class="field js-account-name-field" hidden>
         <span>{{ t('api.field.name') }}</span>
         <input type="text" name="name" autocomplete="off" />
       </label>
@@ -411,7 +417,10 @@
       </label>
       <label class="field">
         <span id="chain-secret-label">{{ t('servers.chain_field_password') }}</span>
-        <input type="password" name="secret" id="chain-secret-input" required autocomplete="off" />
+        <div class="password-input-wrap">
+          <input type="password" name="secret" id="chain-secret-input" class="js-api-secret" autocomplete="off" />
+          {% include "_password_eye.html" %}
+        </div>
       </label>
       <label class="field" id="chain-extra-wrap">
         <span id="chain-extra-label">{{ t('servers.chain_field_channel') }}</span>
@@ -576,7 +585,7 @@
   <div data-platform-template="{{ platform.id }}">
     {% if platform.fields %}
     <form class="api-form js-api-form" data-platform-id="{{ platform.id }}">
-      <label class="field">
+      <label class="field js-account-name-field" hidden>
         <span>{{ t('api.field.name') }}</span>
         <input type="text" name="name" value="" autocomplete="off" />
       </label>
@@ -589,25 +598,31 @@
       {% if 'client_secret' in platform.fields %}
       <label class="field">
         <span class="js-secret-label">{{ platform.label_client_secret }}</span>
-        <input type="password" name="client_secret" value="" placeholder="{{ t('api.keep_secret') }}" autocomplete="new-password" />
+        <div class="password-input-wrap">
+          <input type="password" name="client_secret" class="js-api-secret" value="" autocomplete="new-password" />
+          {% include "_password_eye.html" %}
+        </div>
       </label>
       {% endif %}
+      {% set hide_callback = platform.id in ['tiktok', 'dailymotion', 'instagram', 'facebook', 'x', 'bilibili', 'snapchat', 'youtube'] %}
       {% if 'extra' in platform.fields %}
-      <label class="field">
+      <label class="field{% if hide_callback %} js-oauth-callback-field{% endif %}"{% if hide_callback %} hidden{% endif %}>
         <span>{{ t('api.field.extra.' ~ platform.id) }}</span>
-        <input type="text" name="extra" data-default-extra="{% if platform.id == 'tiktok' %}{{ tiktok_redirect_uri }}{% elif platform.id == 'dailymotion' %}{{ dailymotion_redirect_uri }}{% elif platform.id == 'instagram' %}{{ instagram_redirect_uri }}{% elif platform.id == 'facebook' %}{{ facebook_redirect_uri }}{% elif platform.id == 'x' %}{{ x_redirect_uri }}{% elif platform.id == 'bilibili' %}{{ bilibili_redirect_uri }}{% elif platform.id == 'snapchat' %}{{ snapchat_redirect_uri }}{% endif %}" value="" autocomplete="off" />
+        <input type="text" name="extra" data-default-extra="{% if platform.id == 'tiktok' %}{{ tiktok_redirect_uri }}{% elif platform.id == 'dailymotion' %}{{ dailymotion_redirect_uri }}{% elif platform.id == 'instagram' %}{{ instagram_redirect_uri }}{% elif platform.id == 'facebook' %}{{ facebook_redirect_uri }}{% elif platform.id == 'x' %}{{ x_redirect_uri }}{% elif platform.id == 'bilibili' %}{{ bilibili_redirect_uri }}{% elif platform.id == 'snapchat' %}{{ snapchat_redirect_uri }}{% elif platform.id == 'youtube' %}{{ youtube_redirect_uri }}{% endif %}" value="" autocomplete="off" />
       </label>
       {% endif %}
       {% if 'access_token' in platform.fields %}
       <label class="field">
         <span class="js-token-label">{{ t('api.field.access_token') }}</span>
-        <input type="password" name="access_token" value="" placeholder="{{ t('api.keep_secret') }}" autocomplete="new-password" />
+        <div class="password-input-wrap">
+          <input type="password" name="access_token" class="js-api-secret" value="" autocomplete="new-password" />
+          {% include "_password_eye.html" %}
+        </div>
       </label>
       {% endif %}
       <div class="api-form__actions">
         <button type="submit" class="btn btn-accent">{{ t('api.save') }}</button>
         <button type="button" class="btn btn-ghost js-test-platform" data-platform-id="{{ platform.id }}">⚡ {{ t('api.test') }}</button>
-        <button type="button" class="btn btn-ghost btn-equipo-warn js-clear-api" data-platform-id="{{ platform.id }}" hidden>{{ t('api.clear') }}</button>
       </div>
       <p class="sub js-api-form-msg" hidden></p>
     </form>
@@ -632,7 +647,7 @@
     {% endif %}
 
     {% if platform.id == 'tiktok' %}
-    <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
+    <p class="sub servers-oauth-copy">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.tiktok_redirect_hint') }} <code>{{ tiktok_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     <a href="/oauth/tiktok/connect" class="btn btn-tiktok js-oauth-connect" hidden>
@@ -666,7 +681,7 @@
     {% endif %}
 
     {% if platform.id == 'youtube' %}
-    <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
+    <p class="sub servers-oauth-copy">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.youtube_redirect_hint') }} <code>{{ youtube_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     <a href="/oauth/youtube/connect" class="btn btn-youtube js-oauth-connect" hidden>
@@ -698,7 +713,7 @@
     {% endif %}
 
     {% if platform.id == 'instagram' %}
-    <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
+    <p class="sub servers-oauth-copy">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.instagram_redirect_hint') }} <code>{{ instagram_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     <a href="/oauth/instagram/connect" class="btn btn-instagram js-oauth-connect" hidden>
@@ -730,7 +745,7 @@
     {% endif %}
 
     {% if platform.id == 'facebook' %}
-    <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
+    <p class="sub servers-oauth-copy">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.facebook_redirect_hint') }} <code>{{ facebook_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     <a href="/oauth/facebook/connect" class="btn btn-facebook js-oauth-connect" hidden>
@@ -762,7 +777,7 @@
     {% endif %}
 
     {% if platform.id == 'x' %}
-    <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
+    <p class="sub">{{ t('servers.x_api_inherit_hint') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.x_redirect_hint') }} <code>{{ x_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     <a href="/oauth/x/connect" class="btn btn-x js-oauth-connect" hidden>
@@ -794,7 +809,7 @@
     {% endif %}
 
     {% if platform.id == 'bilibili' %}
-    <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
+    <p class="sub servers-oauth-copy">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.bilibili_redirect_hint') }} <code>{{ bilibili_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     <a href="/oauth/bilibili/connect" class="btn btn-bilibili js-oauth-connect" hidden>
@@ -826,7 +841,7 @@
     {% endif %}
 
     {% if platform.id == 'rumble' %}
-    <p class="sub servers-oauth-redirect">{{ t('servers.rumble_partner_hint') }}</p>
+    <p class="sub servers-oauth-redirect servers-oauth-redirect--keep">{{ t('servers.rumble_partner_hint') }}</p>
     <ul class="tiktok-config-list js-rumble-linked" hidden>
       <li class="tiktok-config-card tiktok-config-card--linked">
         <div class="tiktok-config-card__main">
@@ -841,7 +856,7 @@
     {% endif %}
 
     {% if platform.id == 'snapchat' %}
-    <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
+    <p class="sub servers-oauth-copy">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.snapchat_redirect_hint') }} <code>{{ snapchat_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     <a href="/oauth/snapchat/connect" class="btn btn-snapchat js-oauth-connect" hidden>
@@ -873,7 +888,7 @@
     {% endif %}
 
     {% if platform.id == 'dailymotion' %}
-    <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
+    <p class="sub servers-oauth-copy">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.dailymotion_redirect_hint') }} <code>{{ dailymotion_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     <a href="/oauth/dailymotion/connect" class="btn btn-dailymotion js-oauth-connect" hidden>
@@ -1001,7 +1016,9 @@
       searchPlaceholder: {{ t('servers.accounts_search') | tojson }}
     };
     var savedClickConnectMsg = {{ t('servers.oauth_saved_click_connect') | tojson }};
-    var clearApiConfirm = {{ t('api.clear_confirm') | tojson }};
+    var secretShowLabel = {{ t('login.show_password') | tojson }};
+    var secretHideLabel = {{ t('login.hide_password') | tojson }};
+    var SECRET_MASK = "xxxxxxxxxxxxxxxxxxx";
     var accountsCache = [
       {% for acc in server_accounts %}
       {
@@ -1224,7 +1241,7 @@
             platform_id: fd.get("platform_id") || "",
             name: fd.get("name") || "",
             access_key: fd.get("access_key") || "",
-            secret_key: fd.get("secret_key") || "",
+            secret_key: readSecretInput(vmosForm.querySelector('input[name="secret_key"]')),
             pad_code: fd.get("pad_code") || "",
             template_id: fd.get("template_id") || "",
             remark: fd.get("remark") || "",
@@ -1270,7 +1287,7 @@
             var payload = {
               id: fd.get("id") || "",
               access_key: fd.get("access_key") || "",
-              secret_key: fd.get("secret_key") || "",
+              secret_key: readSecretInput(vmosForm.querySelector('input[name="secret_key"]')),
               pad_code: fd.get("pad_code") || "",
             };
             var msgEl = vmosForm.querySelector(".js-vmos-form-msg");
@@ -1321,6 +1338,10 @@
           if (linkInput) linkInput.value = linkName;
           var nameInput = vmosForm.querySelector('[name="name"]');
           if (nameInput && linkName) nameInput.value = linkName;
+          var nameWrap = vmosForm.querySelector(".js-account-name-field");
+          if (nameWrap) nameWrap.hidden = !!linkName;
+          fillSecretInput(vmosForm.querySelector('input[name="secret_key"]'), "");
+          bindSecretToggles(vmosForm);
           if (vmosTitle) {
             vmosTitle.textContent = String(vmosTitleTpl).replace("__NAME__", pname);
           }
@@ -1408,7 +1429,7 @@
             id: fd.get("id") || "",
             platform_id: fd.get("platform_id") || "",
             name: fd.get("name") || "",
-            api_key: fd.get("api_key") || "",
+            api_key: readSecretInput(hostForm.querySelector('input[name="api_key"]')),
             extra: fd.get("extra") || "",
             link_name: fd.get("link_name") || "",
           };
@@ -1452,7 +1473,7 @@
             var payload = {
               id: fd.get("id") || "",
               platform_id: fd.get("platform_id") || "",
-              api_key: fd.get("api_key") || "",
+              api_key: readSecretInput(hostForm.querySelector('input[name="api_key"]')),
               extra: fd.get("extra") || "",
             };
             var msgEl = hostForm.querySelector(".js-filehost-form-msg");
@@ -1504,6 +1525,10 @@
           if (linkInput) linkInput.value = linkName;
           var nameInput = hostForm.querySelector('[name="name"]');
           if (nameInput && linkName) nameInput.value = linkName;
+          var nameWrap = hostForm.querySelector(".js-account-name-field");
+          if (nameWrap) nameWrap.hidden = !!linkName;
+          fillSecretInput(hostForm.querySelector('input[name="api_key"]'), "");
+          bindSecretToggles(hostForm);
           if (hostTitle) {
             hostTitle.textContent = String(filehostTitleTpl).replace("__NAME__", pname);
           }
@@ -1592,7 +1617,7 @@
             platform_id: fd.get("platform_id") || "",
             name: fd.get("name") || "",
             login: fd.get("login") || "",
-            secret: fd.get("secret") || "",
+            secret: readSecretInput(chainForm.querySelector('input[name="secret"]')),
             extra: fd.get("extra") || "",
             link_name: fd.get("link_name") || "",
           };
@@ -1637,7 +1662,7 @@
               id: fd.get("id") || "",
               platform_id: fd.get("platform_id") || "",
               login: fd.get("login") || "",
-              secret: fd.get("secret") || "",
+              secret: readSecretInput(chainForm.querySelector('input[name="secret"]')),
               extra: fd.get("extra") || "",
             };
             var msgEl = chainForm.querySelector(".js-chain-form-msg");
@@ -1680,10 +1705,19 @@
           chainForm.querySelector('[name="id"]').value = "";
           document.getElementById("chain-platform-id").value = pid;
           applyChainFields(pid);
+          var linkName = (typeof editingGroupName === "string" && editingGroupName) || "";
+          if (!linkName) {
+            var credName = document.querySelector("#server-modal-body input[name='name']");
+            linkName = credName ? String(credName.value || "").trim() : "";
+          }
           var linkInput = document.getElementById("chain-link-name");
           var nameInput = chainForm.querySelector('[name="name"]');
-          if (linkInput) linkInput.value = document.getElementById("account-link-name") ? document.getElementById("account-link-name").value : "";
-          if (nameInput && linkInput) nameInput.value = linkInput.value;
+          if (linkInput) linkInput.value = linkName;
+          if (nameInput && linkName) nameInput.value = linkName;
+          var nameWrap = chainForm.querySelector(".js-account-name-field");
+          if (nameWrap) nameWrap.hidden = !!linkName;
+          fillSecretInput(chainForm.querySelector('input[name="secret"]'), "");
+          bindSecretToggles(chainForm);
           if (chainTitle) {
             chainTitle.textContent = String(chainTitleTpl).replace("__NAME__", pname);
           }
@@ -1727,19 +1761,88 @@
       });
     }
 
+    function fillSecretInput(input, realValue) {
+      if (!input) return;
+      var stored = String(realValue || "");
+      input.dataset.storedSecret = stored;
+      var btn = input.parentElement && input.parentElement.querySelector(".js-toggle-secret");
+      if (btn) {
+        btn.classList.remove("is-visible");
+        btn.setAttribute("aria-pressed", "false");
+        btn.setAttribute("aria-label", secretShowLabel);
+      }
+      if (stored) {
+        input.dataset.pristine = "1";
+        input.value = SECRET_MASK;
+        input.type = "text";
+      } else {
+        input.dataset.pristine = "0";
+        input.value = "";
+        input.type = "password";
+      }
+    }
+
+    function readSecretInput(input) {
+      if (!input) return "";
+      var v = String(input.value || "").trim();
+      if (!v) return "";
+      if (input.dataset.pristine === "1") return "unchanged";
+      return v;
+    }
+
+    function bindSecretToggles(root) {
+      root.querySelectorAll(".js-api-secret").forEach(function (input) {
+        if (input.dataset.secretBound) return;
+        input.dataset.secretBound = "1";
+        input.addEventListener("input", function () {
+          var stored = input.dataset.storedSecret || "";
+          var v = input.value;
+          if (input.dataset.pristine === "1" && v !== SECRET_MASK && v !== stored) {
+            input.dataset.pristine = "0";
+          }
+        });
+        input.addEventListener("focus", function () {
+          if (input.dataset.pristine === "1" && input.value === SECRET_MASK) {
+            input.select();
+          }
+        });
+      });
+      root.querySelectorAll(".js-toggle-secret").forEach(function (btn) {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", function () {
+          var wrap = btn.closest(".password-input-wrap");
+          var input = wrap ? wrap.querySelector(".js-api-secret") : null;
+          if (!input) return;
+          var stored = input.dataset.storedSecret || "";
+          var showing = !btn.classList.contains("is-visible");
+          btn.classList.toggle("is-visible", showing);
+          btn.setAttribute("aria-pressed", showing ? "true" : "false");
+          btn.setAttribute("aria-label", showing ? secretHideLabel : secretShowLabel);
+          if (input.dataset.pristine === "1") {
+            input.value = showing ? stored : SECRET_MASK;
+            input.type = "text";
+            return;
+          }
+          input.type = showing ? "text" : "password";
+        });
+      });
+    }
+
+    function apiFormPayload(form) {
+      var fd = new FormData(form);
+      return {
+        name: fd.get("name") || "",
+        client_id: fd.get("client_id") || "",
+        client_secret: readSecretInput(form.querySelector('input[name="client_secret"]')),
+        access_token: readSecretInput(form.querySelector('input[name="access_token"]')),
+        extra: fd.get("extra") || "",
+      };
+    }
+
     function testPlatform(platformId, msgEl, btn, form) {
       if (btn) btn.disabled = true;
-      var payload = null;
-      if (form) {
-        var fd = new FormData(form);
-        payload = {
-          name: fd.get("name") || "",
-          client_id: fd.get("client_id") || "",
-          client_secret: fd.get("client_secret") || "",
-          access_token: fd.get("access_token") || "",
-          extra: fd.get("extra") || "",
-        };
-      }
+      var payload = form ? apiFormPayload(form) : {};
       return fetch("/admin/api/platforms/" + encodeURIComponent(platformId) + "/test", {
         method: "POST",
         credentials: "same-origin",
@@ -1778,14 +1881,7 @@
         form.addEventListener("submit", function (e) {
           e.preventDefault();
           var pid = form.getAttribute("data-platform-id");
-          var fd = new FormData(form);
-          var payload = {
-            name: fd.get("name") || "",
-            client_id: fd.get("client_id") || "",
-            client_secret: fd.get("client_secret") || "",
-            access_token: fd.get("access_token") || "",
-            extra: fd.get("extra") || "",
-          };
+          var payload = apiFormPayload(form);
           var msgEl = form.querySelector(".js-api-form-msg");
           var submit = form.querySelector('button[type="submit"]');
           submit.disabled = true;
@@ -1814,7 +1910,9 @@
                 if (stayForConnect) {
                   if (msgEl) {
                     msgEl.hidden = false;
-                    msgEl.textContent = savedClickConnectMsg;
+                    msgEl.textContent = x.body.configured === false
+                      ? (x.body.message || "")
+                      : savedClickConnectMsg;
                     msgEl.className = "sub js-api-form-msg api-msg--ok";
                   }
                   if (fromPicker && accountPickerReturnState && accountPickerReturnState.key) {
@@ -1856,72 +1954,7 @@
           testPlatform(pid, msgEl, btn, form);
         });
       });
-      root.querySelectorAll(".js-clear-api").forEach(function (btn) {
-        if (btn.dataset.bound) return;
-        btn.dataset.bound = "1";
-        btn.addEventListener("click", function () {
-          var pid = btn.getAttribute("data-platform-id");
-          if (!pid || !confirm(clearApiConfirm)) return;
-          var form = btn.closest(".js-api-form");
-          var msgEl = form ? form.querySelector(".js-api-form-msg") : null;
-          var accountQ = "";
-          if (form) {
-            var nm = form.querySelector('input[name="name"]');
-            if (nm && nm.value) accountQ = "?account=" + encodeURIComponent(String(nm.value).trim());
-          }
-          btn.disabled = true;
-          fetch("/admin/api/platforms/" + encodeURIComponent(pid) + "/credentials" + accountQ, {
-            method: "DELETE",
-            credentials: "same-origin",
-            headers: { Accept: "application/json" },
-          })
-            .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
-            .then(function (x) {
-              btn.disabled = false;
-              if (!x.res.ok || !x.body || !x.body.ok) {
-                if (msgEl) {
-                  msgEl.hidden = false;
-                  msgEl.textContent = (x.body && (x.body.message || x.body.error)) || networkMsg;
-                  msgEl.className = "sub js-api-form-msg api-msg--fail";
-                }
-                return;
-              }
-              if (form) {
-                var nameKeep = "";
-                var nmKeep = form.querySelector('input[name="name"]');
-                if (nmKeep) nameKeep = nmKeep.value;
-                applyPlatformCreds(form, {});
-                if (nmKeep) nmKeep.value = nameKeep;
-              }
-              if (typeof window.__reloadServerGroups === "function") {
-                window.__reloadServerGroups();
-              }
-              if (typeof window.__reloadServerAccounts === "function") {
-                window.__reloadServerAccounts();
-              }
-              if (accountPickerReturnState && accountPickerReturnState.key) {
-                renderAccountPickerList(
-                  accountPickerReturnState.key,
-                  accountPickerReturnState.name
-                );
-              }
-              if (msgEl) {
-                msgEl.hidden = false;
-                msgEl.textContent = x.body.message || "";
-                msgEl.className = "sub js-api-form-msg api-msg--ok";
-              }
-              btn.remove();
-            })
-            .catch(function () {
-              btn.disabled = false;
-              if (msgEl) {
-                msgEl.hidden = false;
-                msgEl.textContent = networkMsg;
-                msgEl.className = "sub js-api-form-msg api-msg--fail";
-              }
-            });
-        });
-      });
+      bindSecretToggles(root);
     }
 
     function setModalTitle(platformId, platformName) {
@@ -1961,30 +1994,27 @@
       if (extra) {
         extra.value = creds.extra || extra.getAttribute("data-default-extra") || "";
       }
-      var clearBtn = root.querySelector(".js-clear-api");
-      if (clearBtn) clearBtn.hidden = !creds.configured;
+      fillSecretInput(root.querySelector('input[name="client_secret"]'), creds.client_secret || "");
+      fillSecretInput(root.querySelector('input[name="access_token"]'), creds.access_token || "");
       var secretLabel = root.querySelector(".js-secret-label");
       if (secretLabel) {
         var base = secretLabel.getAttribute("data-base") || String(secretLabel.textContent || "").split(" · ")[0];
         secretLabel.setAttribute("data-base", base);
-        secretLabel.textContent =
-          creds.client_secret_set && creds.client_secret_mask
-            ? base + " · " + creds.client_secret_mask
-            : base;
+        secretLabel.textContent = base;
       }
       var tokenLabel = root.querySelector(".js-token-label");
       if (tokenLabel) {
         var tbase = tokenLabel.getAttribute("data-base") || String(tokenLabel.textContent || "").split(" · ")[0];
         tokenLabel.setAttribute("data-base", tbase);
-        tokenLabel.textContent =
-          creds.access_token_set && creds.access_token_mask
-            ? tbase + " · " + creds.access_token_mask
-            : tbase;
+        tokenLabel.textContent = tbase;
       }
       var connect = host.querySelector(".js-oauth-connect");
       var missing = host.querySelector(".js-oauth-missing");
       if (connect || missing) {
         var ready = !!(creds.client_id && creds.client_secret_set);
+        if (connect && (connect.getAttribute("href") || "").indexOf("/oauth/x/") !== -1) {
+          ready = ready || !!creds.x_inherit_funding;
+        }
         if (connect) connect.hidden = !ready;
         if (missing) missing.hidden = ready;
       }
@@ -2050,6 +2080,8 @@
         var nameInput = modalBody.querySelector('input[name="name"]');
         if (nameInput) nameInput.value = accountName;
       }
+      var nameWrap = modalBody.querySelector(".js-account-name-field");
+      if (nameWrap) nameWrap.hidden = !isCreate;
       // Al conectar OAuth desde una cuenta concreta, une la conexión a esa cuenta.
       if (accountName && !isCreate) {
         modalBody.querySelectorAll('a[href*="/oauth/"][href*="/connect"]').forEach(function (a) {

@@ -4832,9 +4832,10 @@ def upsert_vmos_account(
             ).fetchone()
             if not existing:
                 raise ValueError("not_found")
-        secret = (existing["secret_key"] if existing else "") or ""
-        if secret_key is not None and str(secret_key).strip():
-            secret = str(secret_key).strip()
+        secret = _incoming_secret(
+            (existing["secret_key"] if existing else "") or "",
+            secret_key,
+        )
         if not oid:
             oid = str(uuid.uuid4())
         if not existing and (
@@ -5028,10 +5029,11 @@ def upsert_filehost_account(
             ).fetchone()
             if not existing:
                 raise ValueError("not_found")
-        key = (existing["api_key"] if existing else "") or ""
+        key = _incoming_secret(
+            (existing["api_key"] if existing else "") or "",
+            api_key,
+        )
         extra_val = (existing["extra"] if existing else "") or ""
-        if api_key is not None and str(api_key).strip():
-            key = str(api_key).strip()
         if extra is not None:
             extra_val = str(extra).strip()
         if not oid:
@@ -5220,6 +5222,8 @@ def upsert_chain_account(
         if extra is not None:
             extra_val = str(extra).strip()
         incoming_secret = str(secret).strip() if secret is not None else ""
+        if incoming_secret in ("unchanged", "x" * 19):
+            incoming_secret = ""
         if not oid:
             oid = str(uuid.uuid4())
         if not existing and not login_val:
@@ -6066,6 +6070,70 @@ def using_credentials_account(name: str | None):
         reset_credentials_account_name(token)
 
 
+_x_app_mode: ContextVar[str] = ContextVar("x_app_mode", default="auto")
+
+
+@contextmanager
+def using_x_app_mode(mode: str | None):
+    raw = (mode or "auto").strip().lower()
+    if raw not in ("auto", "funding", "own"):
+        raw = "auto"
+    token = _x_app_mode.set(raw)
+    try:
+        yield
+    finally:
+        _x_app_mode.reset(token)
+
+
+def x_funding_app_account_name() -> str:
+    """Nombre de la cuenta X que paga la API (Config X), si hay una activa."""
+    for src in list_x_funding_sources():
+        if src.get("active") and src.get("connected"):
+            return str(src.get("name") or "").strip()
+    return ""
+
+
+def _x_field_from_raw(raw: dict[str, Any] | None, field: str) -> str:
+    return str((raw or {}).get(field) or "").strip()
+
+
+def x_app_has_keys(raw: dict[str, Any] | None) -> bool:
+    return bool(_x_field_from_raw(raw, "client_id") and _x_field_from_raw(raw, "client_secret"))
+
+
+def x_funding_app_raw() -> dict[str, Any] | None:
+    name = x_funding_app_account_name()
+    if name:
+        raw = get_account_platform_credentials_raw("x", name)
+        if x_app_has_keys(raw):
+            return raw
+    token = set_credentials_account_name("")
+    try:
+        raw = get_platform_credentials_raw("x")
+        if x_app_has_keys(raw):
+            return raw
+    finally:
+        reset_credentials_account_name(token)
+    return None
+
+
+def x_app_mode() -> str:
+    return (_x_app_mode.get() or "auto").strip().lower() or "auto"
+
+
+def x_app_cred(field: str, env_fallback: str = "") -> str:
+    """Client ID/Secret de X: propia, Config X, o global. `own` no hereda."""
+    mode = x_app_mode()
+    own = _x_field_from_raw(get_platform_credentials_raw("x"), field)
+    funded = _x_field_from_raw(x_funding_app_raw(), field)
+    env = (env_fallback or "").strip()
+    if mode == "own":
+        return own
+    if mode == "funding":
+        return funded or env
+    return own or funded or env
+
+
 def cred_value(platform_id: str, field: str, env_fallback: str = "") -> str:
     """Clave de esa cuenta si hay contexto; si no, env o credencial global."""
     raw = get_platform_credentials_raw(platform_id) or {}
@@ -6109,23 +6177,38 @@ def _row_to_cred_dict(row: Any) -> dict[str, Any]:
     return data
 
 
+def get_account_platform_credentials_raw(
+    platform_id: str, account_name: str
+) -> dict[str, Any] | None:
+    seed_admin_if_missing()
+    pid = (platform_id or "").strip()
+    label = (account_name or "").strip()
+    if not pid or not label:
+        return None
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT * FROM account_platform_credentials
+            WHERE platform_id = ? AND account_key = lower(trim(?))
+            """,
+            (pid, label),
+        ).fetchone()
+        return _row_to_cred_dict(row) if row else None
+    finally:
+        conn.close()
+
+
 def get_platform_credentials_raw(platform_id: str) -> dict[str, Any] | None:
     seed_admin_if_missing()
     pid = (platform_id or "").strip()
     if not pid:
         return None
     label = credentials_account_name()
+    if label:
+        return get_account_platform_credentials_raw(pid, label)
     conn = _connect()
     try:
-        if label:
-            row = conn.execute(
-                """
-                SELECT * FROM account_platform_credentials
-                WHERE platform_id = ? AND account_key = lower(trim(?))
-                """,
-                (pid, label),
-            ).fetchone()
-            return _row_to_cred_dict(row) if row else None
         row = conn.execute(
             "SELECT * FROM platform_credentials WHERE platform_id = ?",
             (pid,),
@@ -6138,13 +6221,45 @@ def get_platform_credentials_raw(platform_id: str) -> dict[str, Any] | None:
 
 
 def get_platform_credentials_public(platform_id: str) -> dict[str, Any]:
-    return _credentials_public_from_raw(platform_id, get_platform_credentials_raw(platform_id))
+    data = _credentials_public_from_raw(platform_id, get_platform_credentials_raw(platform_id))
+    pid = (platform_id or "").strip()
+    if pid != "x":
+        return data
+    own_ready = bool(data.get("client_id") and data.get("client_secret_set"))
+    fund_name = x_funding_app_account_name()
+    current = (credentials_account_name() or "").strip()
+    inherit = False
+    if not own_ready and x_app_has_keys(x_funding_app_raw()):
+        if not current or current.lower() != fund_name.lower():
+            inherit = True
+    data["x_inherit_funding"] = inherit
+    data["x_funding_name"] = fund_name
+    return data
+
+
+def get_platform_credentials_editor(platform_id: str) -> dict[str, Any]:
+    """Igual que public, más el secret/token reales para el formulario de Servidores."""
+    data = get_platform_credentials_public(platform_id)
+    raw = get_platform_credentials_raw(platform_id) or {}
+    data["client_secret"] = str(raw.get("client_secret") or "")
+    data["access_token"] = str(raw.get("access_token") or "")
+    return data
 
 
 def list_platform_credentials_public() -> dict[str, dict[str, Any]]:
     from platforms import PLATFORM_IDS
 
     return {pid: get_platform_credentials_public(pid) for pid in PLATFORM_IDS}
+
+
+def _incoming_secret(existing: str, incoming: str | None) -> str:
+    """Vacío borra; máscara xxxxx o 'unchanged' conserva; otro texto reemplaza."""
+    if incoming is None:
+        return existing
+    s = (incoming or "").strip()
+    if s in ("unchanged", "x" * 19):
+        return existing
+    return s
 
 
 def upsert_platform_credentials(
@@ -6177,12 +6292,10 @@ def upsert_platform_credentials(
         cid = client_id.strip()
         if not cid:
             secret = ""
-    if client_secret is not None and client_secret.strip() and client_secret.strip() != "unchanged":
-        secret = client_secret.strip()
+    secret = _incoming_secret(secret, client_secret)
 
     token = existing.get("access_token") or ""
-    if access_token is not None and access_token.strip() and access_token.strip() != "unchanged":
-        token = access_token.strip()
+    token = _incoming_secret(token, access_token)
 
     extra_val = existing.get("extra") or ""
     if extra is not None:
@@ -6191,6 +6304,9 @@ def upsert_platform_credentials(
     owner = existing.get("owner_user_id") or ""
     if owner_user_id is not None:
         owner = (owner_user_id or "").strip()
+
+    if not cid and not secret and not token:
+        return clear_platform_credentials(pid)
 
     conn = _connect()
     try:

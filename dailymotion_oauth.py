@@ -13,7 +13,44 @@ AUTH_URL = "https://www.dailymotion.com/oauth/authorize"
 TOKEN_URL = "https://api.dailymotion.com/oauth/token"
 V2 = "https://api.dailymotion.com/v2"
 
-DEFAULT_SCOPES = "video.manage manage_videos userinfo email"
+# Scopes del authorize clásico (www.dailymotion.com/oauth). video.manage es de API v2,
+# no del parámetro scope y Dailymotion lo rechaza como "video manage".
+DEFAULT_SCOPES = "manage_videos userinfo email"
+AUTHORIZE_SCOPES = frozenset(
+    {
+        "read",
+        "write",
+        "delete",
+        "email",
+        "userinfo",
+        "feed",
+        "manage_videos",
+        "manage_comments",
+        "manage_playlists",
+        "manage_tiles",
+        "manage_subscriptions",
+        "manage_friends",
+        "manage_favorites",
+        "manage_likes",
+        "manage_groups",
+        "manage_records",
+        "manage_subtitles",
+        "manage_features",
+        "manage_history",
+        "read_insights",
+        "manage_claim_rules",
+        "delegate_account_management",
+        "manage_analytics",
+        "manage_player",
+        "manage_players",
+        "manage_user_settings",
+        "manage_collections",
+        "manage_app_connections",
+        "manage_applications",
+        "manage_domains",
+        "manage_podcasts",
+    }
+)
 
 
 def _from_creds(key: str) -> str:
@@ -61,7 +98,22 @@ def redirect_uri(request=None) -> str:
 
 
 def oauth_scopes() -> str:
-    return (os.environ.get("DAILYMOTION_SCOPES") or DEFAULT_SCOPES).strip()
+    raw = (os.environ.get("DAILYMOTION_SCOPES") or DEFAULT_SCOPES).strip()
+    cleaned: list[str] = []
+    for part in raw.replace(",", " ").split():
+        token = part.strip()
+        if token in {"video.manage", "video manage"}:
+            token = "manage_videos"
+        if token == "video" or token == "manage":
+            continue
+        if token in AUTHORIZE_SCOPES and token not in cleaned:
+            cleaned.append(token)
+    if "manage_videos" not in cleaned:
+        cleaned.insert(0, "manage_videos")
+    for extra in ("userinfo", "email"):
+        if extra not in cleaned:
+            cleaned.append(extra)
+    return " ".join(cleaned)
 
 
 def oauth_configured() -> bool:

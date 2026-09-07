@@ -32,7 +32,7 @@ def client_id() -> str:
     try:
         import db
 
-        return db.cred_value("x", "client_id", os.environ.get("X_CLIENT_ID") or "")
+        return db.x_app_cred("client_id", os.environ.get("X_CLIENT_ID") or "")
     except Exception:
         return (os.environ.get("X_CLIENT_ID") or "").strip() or _from_creds("client_id")
 
@@ -41,7 +41,7 @@ def client_secret() -> str:
     try:
         import db
 
-        return db.cred_value("x", "client_secret", os.environ.get("X_CLIENT_SECRET") or "")
+        return db.x_app_cred("client_secret", os.environ.get("X_CLIENT_SECRET") or "")
     except Exception:
         return (os.environ.get("X_CLIENT_SECRET") or "").strip() or _from_creds("client_secret")
 
