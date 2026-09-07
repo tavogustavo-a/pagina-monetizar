@@ -71,15 +71,25 @@ def _parse_iso(value: str) -> datetime | None:
 def _should_refresh(row: dict[str, Any]) -> bool:
     expires = _parse_iso(str(row.get("token_expires_at") or ""))
     if not expires:
-        return bool(str(row.get("refresh_token") or "").strip())
+        return True
     return expires - datetime.now(timezone.utc) < timedelta(minutes=10)
+
+
+def _uses_studio_key(row: dict[str, Any]) -> bool:
+    return not str(row.get("refresh_token") or "").strip()
+
+
+def _has_v2_studio_scope(row: dict[str, Any]) -> bool:
+    scopes = str(row.get("oauth_scopes") or "").lower()
+    return "video.manage" in scopes or "bundle." in scopes
 
 
 def _refresh_row(row: dict[str, Any]) -> dict[str, Any]:
     refresh = str(row.get("refresh_token") or "").strip()
-    if not refresh:
-        raise ValueError("missing_token")
-    data = dailymotion_oauth.refresh_access_token(refresh)
+    if refresh:
+        data = dailymotion_oauth.refresh_access_token(refresh)
+    else:
+        data = dailymotion_oauth.exchange_client_credentials()
     token = str(data.get("access_token") or "").strip()
     if not token:
         raise ValueError("missing_token")
@@ -90,6 +100,7 @@ def _refresh_row(row: dict[str, Any]) -> dict[str, Any]:
         access_token=token,
         refresh_token=new_refresh,
         expires_in=int(expires_in) if expires_in is not None else None,
+        oauth_scopes=str(data.get("scope") or "").strip() or None,
     )
     return db.get_oauth_account_row(str(row["id"])) or row
 
@@ -104,7 +115,12 @@ def _token_row(account_link_id: str | None) -> tuple[str, dict[str, Any]]:
     token = str(row.get("access_token") or "").strip()
     if not token:
         raise ValueError("missing_token")
-    if _should_refresh(row):
+    need = _should_refresh(row)
+    if _uses_studio_key(row) and (
+        not _has_v2_studio_scope(row) or str(row.get("open_id") or "").startswith("key:")
+    ):
+        need = True
+    if need:
         try:
             row = _refresh_row(row)
             token = str(row.get("access_token") or token).strip()
@@ -175,9 +191,29 @@ def _upload_v2(token: str, path: Path) -> str:
     return file_url
 
 
+def _auth_error(err: BaseException) -> bool:
+    msg = str(err).lower()
+    return any(
+        part in msg
+        for part in (
+            "token",
+            "auth",
+            "401",
+            "expired",
+            "invalid credentials",
+            "unauthor",
+        )
+    )
+
+
 def _upload_legacy(token: str, path: Path) -> str:
     q = urllib.parse.urlencode({"access_token": token})
-    session = _request(f"{LEGACY}/file/upload?{q}")
+    try:
+        session = _request(f"{LEGACY}/file/upload?{q}")
+    except ValueError as e:
+        if not _auth_error(e):
+            raise
+        session = _request(f"{LEGACY}/file/upload", headers=_bearer(token))
     upload_url = str(session.get("upload_url") or "").strip()
     if not upload_url:
         raise ValueError("Dailymotion did not return an upload URL.")
@@ -218,7 +254,47 @@ def _create_v2(token: str, profile_id: str, file_url: str, title: str, descripti
     return vid
 
 
-def _create_legacy(token: str, file_url: str, title: str, description: str) -> str:
+def _create_legacy_user(
+    token: str, user_id: str, file_url: str, title: str, description: str
+) -> str:
+    fields = {
+        "access_token": token,
+        "url": file_url,
+        "title": title[:TITLE_MAX] or "Video",
+        "description": description[:DESC_MAX],
+        "published": "true",
+        "channel": _category(),
+        "is_created_for_kids": "false",
+    }
+    data = _request(
+        f"{LEGACY}/user/{urllib.parse.quote(user_id)}/videos",
+        method="POST",
+        data=urllib.parse.urlencode(fields).encode("utf-8"),
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=90,
+    )
+    vid = str(data.get("id") or "").strip()
+    if not vid:
+        raise ValueError("missing_video_id")
+    return vid
+
+
+def _resolve_profile_id(token: str, row: dict[str, Any]) -> str:
+    oid = str(row.get("open_id") or "").strip()
+    if oid and not oid.startswith("key:"):
+        return oid
+    configured = dailymotion_oauth.configured_profile_id()
+    if configured:
+        return configured
+    profiles = dailymotion_oauth.list_v2_profiles(token)
+    if profiles:
+        pid = str(profiles[0].get("open_id") or "").strip()
+        if pid:
+            return pid
+    raise ValueError("missing_profile")
+
+
+def _create_legacy_me(token: str, file_url: str, title: str, description: str) -> str:
     fields = {
         "access_token": token,
         "url": file_url,
@@ -237,7 +313,7 @@ def _create_legacy(token: str, file_url: str, title: str, description: str) -> s
     )
     vid = str(data.get("id") or "").strip()
     if not vid:
-        raise ValueError("Dailymotion did not return a video id.")
+        raise ValueError("missing_video_id")
     return vid
 
 
@@ -250,7 +326,7 @@ def publish_video(
     lang: str,
     account_link_id: str | None = None,
 ) -> tuple[bool, str]:
-    from i18n import t
+    from i18n import explain_provider_error, t
 
     if content_type == "photo" or Path(file_path).suffix.lower() in {
         ".jpg",
@@ -274,36 +350,52 @@ def publish_video(
 
     label = str(title or "").strip() or "Video"
     desc = str(description or "").strip()
-    profile_id = str(row.get("open_id") or "").strip()
+    studio = _uses_studio_key(row)
 
-    def _send(access: str) -> str:
+    def _send(access: str, *, studio_key: bool) -> str:
+        if studio_key:
+            pid = _resolve_profile_id(access, row)
+            file_url = _upload_v2(access, path)
+            try:
+                return _create_v2(access, pid, file_url, label, desc)
+            except ValueError:
+                return _create_legacy_user(access, pid, file_url, label, desc)
         try:
             file_url = _upload_v2(access, path)
-            if profile_id:
-                try:
-                    return _create_v2(access, profile_id, file_url, label, desc)
-                except ValueError:
-                    pass
-            return _create_legacy(access, file_url, label, desc)
+            pid = _resolve_profile_id(access, row)
+            try:
+                return _create_v2(access, pid, file_url, label, desc)
+            except ValueError:
+                return _create_legacy_me(access, file_url, label, desc)
         except ValueError:
             file_url = _upload_legacy(access, path)
-            return _create_legacy(access, file_url, label, desc)
+            return _create_legacy_me(access, file_url, label, desc)
 
     try:
         try:
-            video_id = _send(token)
+            video_id = _send(token, studio_key=studio)
         except ValueError as e:
-            msg = str(e).lower()
-            if "token" in msg or "auth" in msg or "401" in msg or "expired" in msg:
-                row = _refresh_row(row)
-                token = str(row.get("access_token") or "").strip()
-                video_id = _send(token)
-            else:
+            if str(e) in {"missing_profile", "missing_token"} or not _auth_error(e):
                 raise
+            row = _refresh_row(row)
+            token = str(row.get("access_token") or "").strip()
+            if not token:
+                raise ValueError("missing_token") from e
+            video_id = _send(token, studio_key=_uses_studio_key(row) or studio)
         return True, t("pub.dailymotion.ok", lang, id=video_id)
     except ValueError as e:
         if str(e) == "missing_token":
             return False, t("pub.dailymotion.no_token", lang)
-        return False, t("pub.dailymotion.upload_fail", lang, error=str(e)[:180])
+        if str(e) == "missing_profile":
+            return False, t("pub.dailymotion.err_no_profile", lang)
+        return False, t(
+            "pub.dailymotion.upload_fail",
+            lang,
+            error=explain_provider_error("dailymotion", str(e), lang),
+        )
     except Exception as e:
-        return False, t("pub.dailymotion.upload_fail", lang, error=str(e)[:180])
+        return False, t(
+            "pub.dailymotion.upload_fail",
+            lang,
+            error=explain_provider_error("dailymotion", str(e), lang),
+        )

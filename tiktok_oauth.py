@@ -45,24 +45,9 @@ def client_secret() -> str:
 
 
 def redirect_uri(request=None) -> str:
-    env = os.environ.get("TIKTOK_REDIRECT_URI", "").strip()
-    if env:
-        return env
-    try:
-        import db
+    from site_config import resolve_oauth_redirect
 
-        raw = db.get_platform_credentials_raw("tiktok") or {}
-        extra = (raw.get("extra") or "").strip()
-        if extra:
-            return extra
-    except Exception:
-        pass
-    try:
-        from site_config import oauth_callback_url
-
-        return oauth_callback_url("tiktok", request)
-    except Exception:
-        return "http://127.0.0.1:8000/oauth/tiktok/callback"
+    return resolve_oauth_redirect("tiktok", request, os.environ.get("TIKTOK_REDIRECT_URI") or "")
 
 
 def oauth_scopes() -> str:

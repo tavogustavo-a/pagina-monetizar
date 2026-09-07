@@ -240,7 +240,7 @@ def publish_video(
     lang: str,
     account_link_id: str | None = None,
 ) -> tuple[bool, str]:
-    from i18n import t
+    from i18n import explain_provider_error, t
 
     if Path(file_path).suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
         return False, t("pub.youtube.no_photo", lang)
@@ -302,6 +302,14 @@ def publish_video(
         key = str(e)
         if key == "missing_token":
             return False, t("pub.youtube.no_token", lang)
-        return False, t("pub.youtube.upload_fail", lang, error=str(e)[:180])
+        return False, t(
+            "pub.youtube.upload_fail",
+            lang,
+            error=explain_provider_error("youtube", str(e), lang),
+        )
     except Exception as e:
-        return False, t("pub.youtube.upload_fail", lang, error=str(e)[:180])
+        return False, t(
+            "pub.youtube.upload_fail",
+            lang,
+            error=explain_provider_error("youtube", str(e), lang),
+        )

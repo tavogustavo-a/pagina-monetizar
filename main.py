@@ -4974,6 +4974,18 @@ def api_save_platform_credentials(request: Request, platform_id: str, body: Plat
     return {"ok": True, "message": i18n.t("api.saved", lang), **public}
 
 
+@app.delete("/admin/api/platforms/{platform_id}/credentials")
+def api_clear_platform_credentials(request: Request, platform_id: str):
+    deny = _require_platform_credentials_json(request, platform_id)
+    if deny:
+        return deny
+    if platform_id not in platforms.PLATFORM_IDS:
+        return JSONResponse({"ok": False, "error": "Unknown platform."}, status_code=404)
+    lang = i18n.resolve_lang(request)
+    public = db.clear_platform_credentials(platform_id)
+    return {"ok": True, "message": i18n.t("api.cleared", lang), **public}
+
+
 @app.post("/admin/api/platforms/{platform_id}/test")
 def api_test_platform(request: Request, platform_id: str, body: PlatformApiBody):
     deny = _require_platform_credentials_json(request, platform_id)

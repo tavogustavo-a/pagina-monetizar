@@ -595,7 +595,7 @@
       {% if 'extra' in platform.fields %}
       <label class="field">
         <span>{{ t('api.field.extra.' ~ platform.id) }}</span>
-        <input type="text" name="extra" value="{{ creds.extra or '' }}" autocomplete="off" />
+        <input type="text" name="extra" value="{% if creds.extra %}{{ creds.extra }}{% elif platform.id == 'tiktok' %}{{ tiktok_redirect_uri }}{% elif platform.id == 'dailymotion' %}{{ dailymotion_redirect_uri }}{% elif platform.id == 'instagram' %}{{ instagram_redirect_uri }}{% elif platform.id == 'facebook' %}{{ facebook_redirect_uri }}{% elif platform.id == 'x' %}{{ x_redirect_uri }}{% elif platform.id == 'bilibili' %}{{ bilibili_redirect_uri }}{% elif platform.id == 'snapchat' %}{{ snapchat_redirect_uri }}{% endif %}" autocomplete="off" />
       </label>
       {% endif %}
       {% if 'access_token' in platform.fields %}
@@ -607,6 +607,9 @@
       <div class="api-form__actions">
         <button type="submit" class="btn btn-accent">{{ t('api.save') }}</button>
         <button type="button" class="btn btn-ghost js-test-platform" data-platform-id="{{ platform.id }}">⚡ {{ t('api.test') }}</button>
+        {% if creds.configured %}
+        <button type="button" class="btn btn-ghost btn-equipo-warn js-clear-api" data-platform-id="{{ platform.id }}">{{ t('api.clear') }}</button>
+        {% endif %}
       </div>
       <p class="sub js-api-form-msg" hidden></p>
     </form>
@@ -631,6 +634,7 @@
     {% endif %}
 
     {% if platform.id == 'tiktok' %}
+    <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.tiktok_redirect_hint') }} <code>{{ tiktok_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     {% if oauth_configured %}
@@ -667,6 +671,7 @@
     {% endif %}
 
     {% if platform.id == 'youtube' %}
+    <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.youtube_redirect_hint') }} <code>{{ youtube_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     {% if youtube_oauth_configured %}
@@ -701,6 +706,7 @@
     {% endif %}
 
     {% if platform.id == 'instagram' %}
+    <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.instagram_redirect_hint') }} <code>{{ instagram_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     {% if instagram_oauth_configured %}
@@ -735,6 +741,7 @@
     {% endif %}
 
     {% if platform.id == 'facebook' %}
+    <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.facebook_redirect_hint') }} <code>{{ facebook_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     {% if facebook_oauth_configured %}
@@ -769,6 +776,7 @@
     {% endif %}
 
     {% if platform.id == 'x' %}
+    <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.x_redirect_hint') }} <code>{{ x_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     {% if x_oauth_configured %}
@@ -803,6 +811,7 @@
     {% endif %}
 
     {% if platform.id == 'bilibili' %}
+    <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.bilibili_redirect_hint') }} <code>{{ bilibili_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     {% if bilibili_oauth_configured %}
@@ -860,6 +869,7 @@
     {% endif %}
 
     {% if platform.id == 'snapchat' %}
+    <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.snapchat_redirect_hint') }} <code>{{ snapchat_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     {% if snapchat_oauth_configured %}
@@ -894,6 +904,7 @@
     {% endif %}
 
     {% if platform.id == 'dailymotion' %}
+    <p class="sub">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.dailymotion_redirect_hint') }} <code>{{ dailymotion_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     {% if dailymotion_oauth_configured %}
@@ -981,14 +992,14 @@
       es: {
         editServersTitle: "Editar servidores de",
         editServersInfoTitle: "Editar servidores",
-        editServersHint: "Elige un servidor para revisar credenciales, probar la API y corregir errores antes de publicar.",
+        editServersHint: "Elige un servidor para revisar credenciales, probar la API y corregir errores antes de publicar. En Dailymotion, YouTube, X y similares, «Vinculado» aparece solo después de pulsar Conectar y autorizar la cuenta: guardar la API Key no basta.",
         serverLinked: "Vinculado",
         serverNotLinked: "Sin vincular"
       },
       en: {
         editServersTitle: "Edit servers for",
         editServersInfoTitle: "Edit servers",
-        editServersHint: "Pick a server to review credentials, test the API, and fix issues before publishing.",
+        editServersHint: "Pick a server to review credentials, test the API, and fix issues before publishing. For Dailymotion, YouTube, X and similar, “Linked” appears only after you click Connect and authorize the account — saving the API Key is not enough.",
         serverLinked: "Linked",
         serverNotLinked: "Not linked"
       }
@@ -1023,6 +1034,8 @@
       noResults: {{ t('team.no_results') | tojson }},
       searchPlaceholder: {{ t('servers.accounts_search') | tojson }}
     };
+    var savedClickConnectMsg = {{ t('servers.oauth_saved_click_connect') | tojson }};
+    var clearApiConfirm = {{ t('api.clear_confirm') | tojson }};
     var accountsCache = [
       {% for acc in server_accounts %}
       {
@@ -1826,6 +1839,25 @@
                 if (typeof window.__reloadServerAccounts === "function") {
                   window.__reloadServerAccounts();
                 }
+                var connectLink = modalBody
+                  ? modalBody.querySelector('a[href*="/oauth/"][href*="/connect"]')
+                  : null;
+                var stayForConnect = !!connectLink;
+                var fromPicker = modal && modal.classList.contains("equipo-modal--stack");
+                if (stayForConnect) {
+                  if (msgEl) {
+                    msgEl.hidden = false;
+                    msgEl.textContent = savedClickConnectMsg;
+                    msgEl.className = "sub js-api-form-msg api-msg--ok";
+                  }
+                  if (fromPicker && accountPickerReturnState && accountPickerReturnState.key) {
+                    renderAccountPickerList(
+                      accountPickerReturnState.key,
+                      accountPickerReturnState.name
+                    );
+                  }
+                  return;
+                }
                 if (modal && modal.classList.contains("is-open")) {
                   closeModal();
                 }
@@ -1855,6 +1887,66 @@
           var form = btn.closest(".js-api-form");
           var msgEl = form ? form.querySelector(".js-api-form-msg") : null;
           testPlatform(pid, msgEl, btn, form);
+        });
+      });
+      root.querySelectorAll(".js-clear-api").forEach(function (btn) {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", function () {
+          var pid = btn.getAttribute("data-platform-id");
+          if (!pid || !confirm(clearApiConfirm)) return;
+          var form = btn.closest(".js-api-form");
+          var msgEl = form ? form.querySelector(".js-api-form-msg") : null;
+          btn.disabled = true;
+          fetch("/admin/api/platforms/" + encodeURIComponent(pid) + "/credentials", {
+            method: "DELETE",
+            credentials: "same-origin",
+            headers: { Accept: "application/json" },
+          })
+            .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+            .then(function (x) {
+              btn.disabled = false;
+              if (!x.res.ok || !x.body || !x.body.ok) {
+                if (msgEl) {
+                  msgEl.hidden = false;
+                  msgEl.textContent = (x.body && (x.body.message || x.body.error)) || networkMsg;
+                  msgEl.className = "sub js-api-form-msg api-msg--fail";
+                }
+                return;
+              }
+              if (form) {
+                form.querySelectorAll("input").forEach(function (input) {
+                  if (input.type === "checkbox" || input.type === "radio") return;
+                  input.value = "";
+                });
+              }
+              if (typeof window.__reloadServerGroups === "function") {
+                window.__reloadServerGroups();
+              }
+              if (typeof window.__reloadServerAccounts === "function") {
+                window.__reloadServerAccounts();
+              }
+              if (accountPickerReturnState && accountPickerReturnState.key) {
+                renderAccountPickerList(
+                  accountPickerReturnState.key,
+                  accountPickerReturnState.name
+                );
+              }
+              if (msgEl) {
+                msgEl.hidden = false;
+                msgEl.textContent = x.body.message || "";
+                msgEl.className = "sub js-api-form-msg api-msg--ok";
+              }
+              btn.remove();
+            })
+            .catch(function () {
+              btn.disabled = false;
+              if (msgEl) {
+                msgEl.hidden = false;
+                msgEl.textContent = networkMsg;
+                msgEl.className = "sub js-api-form-msg api-msg--fail";
+              }
+            });
         });
       });
     }

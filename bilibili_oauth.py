@@ -37,15 +37,11 @@ def client_secret() -> str:
 
 
 def redirect_uri(request=None) -> str:
-    env = (os.environ.get("BILIBILI_REDIRECT_URI") or "").strip()
-    if env:
-        return env
-    try:
-        from site_config import oauth_callback_url
+    from site_config import resolve_oauth_redirect
 
-        return oauth_callback_url("bilibili", request)
-    except Exception:
-        return "http://127.0.0.1:8000/oauth/bilibili/callback"
+    return resolve_oauth_redirect(
+        "bilibili", request, os.environ.get("BILIBILI_REDIRECT_URI") or ""
+    )
 
 
 def oauth_scopes() -> str:

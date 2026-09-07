@@ -28,22 +28,57 @@ def is_local_host(host: str | None) -> bool:
 
 
 def effective_site_url(request=None) -> str:
-    """En local usa la URL de la petición; en producción SITE_URL del .env."""
-    if request is not None:
-        try:
-            host = getattr(getattr(request, "url", None), "hostname", None)
-            if is_local_host(host):
-                return str(request.base_url).rstrip("/")
-        except Exception:
-            pass
+    """URL pública del panel (SITE_URL). La callback OAuth debe coincidir con la consola del proveedor."""
     return SITE_URL
 
 
 def oauth_callback_url(platform_id: str, request=None) -> str:
     pid = (platform_id or "").strip().lower()
     if not pid:
-        return effective_site_url(request)
-    return f"{effective_site_url(request)}/oauth/{pid}/callback"
+        return SITE_URL
+    return f"{SITE_URL}/oauth/{pid}/callback"
+
+
+def resolve_oauth_redirect(
+    platform_id: str,
+    request=None,
+    env_value: str = "",
+) -> str:
+    """Env → Callback guardada (https pública) → SITE_URL/oauth/{plataforma}/callback."""
+    env = (env_value or "").strip()
+    if env:
+        return env
+    extra = oauth_redirect_from_credentials(platform_id)
+    if extra:
+        return extra
+    try:
+        return oauth_callback_url(platform_id, request)
+    except Exception:
+        pid = (platform_id or "").strip().lower() or "oauth"
+        return f"{SITE_URL}/oauth/{pid}/callback"
+
+
+def oauth_redirect_from_credentials(platform_id: str) -> str:
+    """Si en Servidores guardaron una Callback/Redirect URI pública (campo extra), usarla."""
+    pid = (platform_id or "").strip().lower()
+    if not pid:
+        return ""
+    try:
+        import db
+        from urllib.parse import urlparse
+
+        raw = db.get_platform_credentials_raw(pid) or {}
+        extra = str(raw.get("extra") or "").strip()
+        low = extra.lower()
+        if not (low.startswith("http://") or low.startswith("https://")):
+            return ""
+        host = urlparse(extra).hostname
+        if is_local_host(host):
+            return ""
+        return extra
+    except Exception:
+        pass
+    return ""
 
 
 SMTP_HOST = os.environ.get("SMTP_HOST", "").strip()

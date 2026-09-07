@@ -2983,6 +2983,13 @@ input:focus {
   opacity: 0.55;
 }
 
+.badge-api-ready {
+  color: #f0b429;
+  border: 1px solid rgba(240, 180, 41, 0.35);
+  background: rgba(240, 180, 41, 0.12);
+  opacity: 1;
+}
+
 .servers-group-form {
   display: flex;
   flex-direction: column;

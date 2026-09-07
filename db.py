@@ -4844,6 +4844,13 @@ def upsert_vmos_account(
             ),
         )
         try:
+            _release_other_links_for_platform(
+                conn,
+                source_kind="vmos",
+                platform_id=pid,
+                link_name=account_label,
+                keep_ref=oid,
+            )
             _upsert_linked_server_account(
                 conn,
                 source_kind="vmos",
@@ -5017,6 +5024,13 @@ def upsert_filehost_account(
             (oid, pid, label, key, extra_val, created, now),
         )
         try:
+            _release_other_links_for_platform(
+                conn,
+                source_kind="filehost",
+                platform_id=pid,
+                link_name=account_label,
+                keep_ref=oid,
+            )
             _upsert_linked_server_account(
                 conn,
                 source_kind="filehost",
@@ -5199,6 +5213,13 @@ def upsert_chain_account(
             (oid, pid, label, login_val, secret_val, extra_val, created, now),
         )
         try:
+            _release_other_links_for_platform(
+                conn,
+                source_kind="chain",
+                platform_id=pid,
+                link_name=account_label,
+                keep_ref=oid,
+            )
             _upsert_linked_server_account(
                 conn,
                 source_kind="chain",
@@ -5751,16 +5772,34 @@ def count_other_oauth_accounts_with_refresh(
 
 
 def bind_oauth_account_name(oauth_account_id: str, account_name: str) -> None:
-    """Une la cuenta OAuth a una cuenta lógica de Servidores por nombre (alias persistente)."""
+    """Une la cuenta OAuth a una cuenta lógica. Si ya había otra de la misma red, la reemplaza."""
     oid = (oauth_account_id or "").strip()
     name = (account_name or "").strip()
     if not oid or not name:
         return
+    now = datetime.now(timezone.utc).isoformat()
     conn = _connect()
     try:
+        row = conn.execute(
+            "SELECT platform_id FROM oauth_accounts WHERE id = ?", (oid,)
+        ).fetchone()
+        if not row:
+            return
+        pid = str(row["platform_id"] or "").strip()
+        if pid:
+            conn.execute(
+                """
+                UPDATE oauth_accounts
+                SET account_name = '', updated_at = ?
+                WHERE platform_id = ?
+                  AND id != ?
+                  AND lower(trim(account_name)) = lower(trim(?))
+                """,
+                (now, pid, oid, name),
+            )
         conn.execute(
             "UPDATE oauth_accounts SET account_name = ?, updated_at = ? WHERE id = ?",
-            (name, datetime.now(timezone.utc).isoformat(), oid),
+            (name, now, oid),
         )
         conn.commit()
     finally:
@@ -5769,16 +5808,31 @@ def bind_oauth_account_name(oauth_account_id: str, account_name: str) -> None:
 
 
 def bind_tiktok_config_name(config_id: str, account_name: str) -> None:
-    """Renombra la config TikTok para que coincida con la cuenta lógica elegida."""
+    """Une TikTok a la cuenta lógica. Si ya había otra TikTok con ese nombre, la suelta."""
     cid = (config_id or "").strip()
     name = (account_name or "").strip()
     if not cid or not name:
         return
+    now = datetime.now(timezone.utc).isoformat()
     conn = _connect()
     try:
+        others = conn.execute(
+            """
+            SELECT id, tiktok_username FROM tiktok_api_configs
+            WHERE id != ? AND lower(trim(name)) = lower(trim(?))
+            """,
+            (cid, name),
+        ).fetchall()
+        for other in others:
+            uname = str(other["tiktok_username"] or "").strip().lstrip("@")
+            restore = f"@{uname}" if uname else "TikTok"
+            conn.execute(
+                "UPDATE tiktok_api_configs SET name = ?, updated_at = ? WHERE id = ?",
+                (restore, now, other["id"]),
+            )
         conn.execute(
             "UPDATE tiktok_api_configs SET name = ?, updated_at = ? WHERE id = ?",
-            (name, datetime.now(timezone.utc).isoformat(), cid),
+            (name, now, cid),
         )
         conn.commit()
     finally:
@@ -5792,6 +5846,7 @@ def update_oauth_tokens(
     access_token: str,
     refresh_token: str | None,
     expires_in: int | None,
+    oauth_scopes: str | None = None,
 ) -> None:
     seed_admin_if_missing()
     cid = (account_id or "").strip()
@@ -5802,16 +5857,37 @@ def update_oauth_tokens(
     expires_at = None
     if expires_in and int(expires_in) > 0:
         expires_at = (now + timedelta(seconds=int(expires_in))).isoformat()
+    scopes = (oauth_scopes or "").strip() or None
     conn = _connect()
     try:
         if refresh_token:
+            if scopes:
+                conn.execute(
+                    """
+                    UPDATE oauth_accounts
+                    SET access_token = ?, refresh_token = ?, token_expires_at = ?,
+                        oauth_scopes = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (token, refresh_token, expires_at, scopes, now.isoformat(), cid),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE oauth_accounts
+                    SET access_token = ?, refresh_token = ?, token_expires_at = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (token, refresh_token, expires_at, now.isoformat(), cid),
+                )
+        elif scopes:
             conn.execute(
                 """
                 UPDATE oauth_accounts
-                SET access_token = ?, refresh_token = ?, token_expires_at = ?, updated_at = ?
+                SET access_token = ?, token_expires_at = ?, oauth_scopes = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (token, refresh_token, expires_at, now.isoformat(), cid),
+                (token, expires_at, scopes, now.isoformat(), cid),
             )
         else:
             conn.execute(
@@ -6002,10 +6078,11 @@ def upsert_platform_credentials(
         cred_name = name.strip()
 
     cid = existing.get("client_id") or ""
+    secret = existing.get("client_secret") or ""
     if client_id is not None:
         cid = client_id.strip()
-
-    secret = existing.get("client_secret") or ""
+        if not cid:
+            secret = ""
     if client_secret is not None and client_secret.strip() and client_secret.strip() != "unchanged":
         secret = client_secret.strip()
 
@@ -6068,6 +6145,35 @@ def upsert_platform_credentials(
     sync_server_accounts_from_links()
     if owner:
         attach_platform_account_to_user(pid, str(owner))
+    return get_platform_credentials_public(pid)
+
+
+def clear_platform_credentials(platform_id: str) -> dict[str, Any]:
+    """Borra Key/Secret/token de esa API para que deje de contar como vinculada."""
+    seed_admin_if_missing()
+    pid = (platform_id or "").strip()
+    if not pid:
+        raise ValueError("not_found")
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            UPDATE platform_credentials
+            SET name = '', client_id = '', client_secret = '', access_token = '', extra = '',
+                last_test_ok = NULL, last_test_at = '', last_test_message = '', updated_at = ?
+            WHERE platform_id = ?
+            """,
+            (now, pid),
+        )
+        conn.execute(
+            "DELETE FROM server_accounts WHERE source_kind = 'platform' AND source_ref = ?",
+            (pid,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    sync_server_accounts_from_links()
     return get_platform_credentials_public(pid)
 
 
@@ -6422,6 +6528,57 @@ def _ensure_account_link(
     return lid
 
 
+def _release_other_links_for_platform(
+    conn: sqlite3.Connection,
+    *,
+    source_kind: str,
+    platform_id: str,
+    link_name: str,
+    keep_ref: str,
+) -> None:
+    """Si ya había otra cuenta de esa red en la misma ficha, la suelta (conectar otra reemplaza)."""
+    name = (link_name or "").strip()
+    ref_keep = (keep_ref or "").strip()
+    pid = (platform_id or "").strip()
+    kind = (source_kind or "").strip()
+    if not name or not ref_keep or not pid or not kind:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    rows = conn.execute(
+        """
+        SELECT id, source_ref FROM server_accounts
+        WHERE source_kind = ?
+          AND platform_id = ?
+          AND lower(trim(name)) = lower(trim(?))
+          AND source_ref != ?
+        """,
+        (kind, pid, name, ref_keep),
+    ).fetchall()
+    for row in rows:
+        ref = str(row["source_ref"] or "").strip()
+        suffix = (ref or str(row["id"]))[:8]
+        new_name = f"{name}-{suffix}"
+        conn.execute(
+            "UPDATE server_accounts SET name = ?, updated_at = ? WHERE id = ?",
+            (new_name, now, row["id"]),
+        )
+        if kind == "vmos" and ref:
+            conn.execute(
+                "UPDATE vmos_accounts SET name = ?, updated_at = ? WHERE id = ?",
+                (new_name, now, ref),
+            )
+        elif kind == "filehost" and ref:
+            conn.execute(
+                "UPDATE filehost_accounts SET name = ?, updated_at = ? WHERE id = ?",
+                (new_name, now, ref),
+            )
+        elif kind == "chain" and ref:
+            conn.execute(
+                "UPDATE chain_accounts SET name = ?, updated_at = ? WHERE id = ?",
+                (new_name, now, ref),
+            )
+
+
 def _upsert_linked_server_account(
     conn: sqlite3.Connection,
     *,
@@ -6502,7 +6659,6 @@ def sync_server_accounts_from_links() -> None:
             )
 
         live_oauth: set[str] = set()
-        oauth_platforms: set[str] = set()
         oauth_rows = conn.execute(
             """
             SELECT id, platform_id, username, display_name, active, account_name
@@ -6514,8 +6670,6 @@ def sync_server_accounts_from_links() -> None:
             oid = str(row["id"])
             pid = str(row["platform_id"] or "")
             live_oauth.add(oid)
-            if pid:
-                oauth_platforms.add(pid)
             uname = str(row["username"] or "").strip()
             alias = str(row["account_name"] or "").strip()
             label = (
@@ -6536,8 +6690,18 @@ def sync_server_accounts_from_links() -> None:
         import filehost as filehost_mod
         import chain as chain_mod
 
+        oauth_app_platforms = {
+            "tiktok",
+            "youtube",
+            "instagram",
+            "facebook",
+            "x",
+            "dailymotion",
+            "bilibili",
+            "snapchat",
+        }
         for pid in PLATFORM_IDS:
-            if pid in oauth_platforms:
+            if pid in oauth_app_platforms:
                 continue
             if pid in filehost_mod.PLATFORM_IDS:
                 continue

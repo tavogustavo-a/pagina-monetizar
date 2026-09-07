@@ -27,7 +27,7 @@ PLATFORMS: list[dict[str, Any]] = [
         "video": "yes",
         "photo": "no",
         "comment": "no",
-        "fields": ("client_id", "client_secret"),
+        "fields": ("client_id", "client_secret", "extra"),
     },
     {
         "id": "instagram",
@@ -38,7 +38,7 @@ PLATFORMS: list[dict[str, Any]] = [
         "video": "limited",
         "photo": "yes",
         "comment": "no",
-        "fields": ("client_id", "client_secret"),
+        "fields": ("client_id", "client_secret", "extra"),
     },
     {
         "id": "facebook",
@@ -49,7 +49,7 @@ PLATFORMS: list[dict[str, Any]] = [
         "video": "yes",
         "photo": "yes",
         "comment": "no",
-        "fields": ("client_id", "client_secret"),
+        "fields": ("client_id", "client_secret", "extra"),
     },
     {
         "id": "threads",
@@ -71,7 +71,7 @@ PLATFORMS: list[dict[str, Any]] = [
         "video": "limited",
         "photo": "yes",
         "comment": "no",
-        "fields": ("client_id", "client_secret"),
+        "fields": ("client_id", "client_secret", "extra"),
     },
     {
         "id": "dailymotion",
@@ -82,7 +82,7 @@ PLATFORMS: list[dict[str, Any]] = [
         "video": "yes",
         "photo": "no",
         "comment": "no",
-        "fields": ("client_id", "client_secret"),
+        "fields": ("client_id", "client_secret", "extra"),
     },
     {
         "id": "bilibili",
@@ -93,7 +93,7 @@ PLATFORMS: list[dict[str, Any]] = [
         "video": "yes",
         "photo": "no",
         "comment": "no",
-        "fields": ("client_id", "client_secret"),
+        "fields": ("client_id", "client_secret", "extra"),
     },
     {
         "id": "rumble",
@@ -115,7 +115,7 @@ PLATFORMS: list[dict[str, Any]] = [
         "video": "limited",
         "photo": "limited",
         "comment": "no",
-        "fields": ("client_id", "client_secret"),
+        "fields": ("client_id", "client_secret", "extra"),
     },
     {
         "id": "odysee",

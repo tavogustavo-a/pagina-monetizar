@@ -301,8 +301,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Cuentas vinculadas",
     },
     "servers.tiktok_redirect_hint": {
-        "en": "Redirect URI in the TikTok developer portal:",
-        "es": "Redirect URI en el portal de desarrolladores de TikTok:",
+        "en": "Paste this exact Redirect URI in the TikTok developer portal (SITE_URL/oauth/tiktok/callback).",
+        "es": "Pega esta Redirect URI exacta en el portal de desarrolladores de TikTok (SITE_URL/oauth/tiktok/callback).",
     },
     "servers.connect_with_tiktok": {"en": "Connect with TikTok", "es": "Conectar con TikTok"},
     "servers.connect_with_vmos": {
@@ -437,8 +437,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Guarda primero el Client ID y el Client secret de YouTube (cliente OAuth de tipo aplicación web en Google Cloud).",
     },
     "servers.youtube_redirect_hint": {
-        "en": "Authorized redirect URI in Google Cloud:",
-        "es": "URI de redirección autorizada en Google Cloud:",
+        "en": "Paste this exact URI in Google Cloud → Authorized redirect URIs (SITE_URL/oauth/youtube/callback).",
+        "es": "Pega esta URI exacta en Google Cloud → URIs de redirección autorizadas (SITE_URL/oauth/youtube/callback).",
     },
     "servers.youtube_connected": {
         "en": "Connected {name} successfully.",
@@ -461,8 +461,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Guarda primero el App ID y el App Secret de Instagram (Meta App Dashboard → Instagram → API con Instagram Login).",
     },
     "servers.instagram_redirect_hint": {
-        "en": "OAuth redirect URI in Meta App Dashboard:",
-        "es": "URI de redirección OAuth en Meta App Dashboard:",
+        "en": "Paste this exact URI in Meta App Dashboard (SITE_URL/oauth/instagram/callback).",
+        "es": "Pega esta URI exacta en Meta App Dashboard (SITE_URL/oauth/instagram/callback).",
     },
     "servers.instagram_connected": {
         "en": "Connected @{name} successfully.",
@@ -481,8 +481,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Guarda primero el App ID y el App Secret de Facebook (Meta App Dashboard → Facebook Login).",
     },
     "servers.facebook_redirect_hint": {
-        "en": "Valid OAuth redirect URI in Meta App Dashboard:",
-        "es": "URI de redirección OAuth válida en Meta App Dashboard:",
+        "en": "Paste this exact URI in Meta App Dashboard (SITE_URL/oauth/facebook/callback).",
+        "es": "Pega esta URI exacta en Meta App Dashboard (SITE_URL/oauth/facebook/callback).",
     },
     "servers.facebook_connected": {
         "en": "Connected {n} Facebook Page(s).",
@@ -505,8 +505,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Guarda primero el Client ID y el Client Secret de X (developer.x.com → cliente confidencial OAuth 2.0).",
     },
     "servers.x_redirect_hint": {
-        "en": "Callback URI / Redirect URL in the X developer portal:",
-        "es": "Callback URI / Redirect URL en el portal de desarrolladores de X:",
+        "en": "Paste this exact Callback URI in the X developer portal (SITE_URL/oauth/x/callback).",
+        "es": "Pega esta Callback URI exacta en el portal de X (SITE_URL/oauth/x/callback).",
     },
     "servers.x_connected": {
         "en": "Connected @{name} successfully.",
@@ -525,8 +525,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Guarda primero la API Key y el API Secret de Dailymotion (Dailymotion Studio → API keys).",
     },
     "servers.dailymotion_redirect_hint": {
-        "en": "Callback URL in Dailymotion Studio:",
-        "es": "Callback URL en Dailymotion Studio:",
+        "en": "Paste this exact Callback URL in Dailymotion Studio → API keys, then Connect with Dailymotion.",
+        "es": "Pega esta Callback URL exacta en Dailymotion Studio → API keys y luego pulsa Conectar con Dailymotion.",
+    },
+    "servers.oauth_save_then_connect": {
+        "en": "Saving API keys only stores the app. The server stays “Not linked” until you click Connect and sign in. Disconnect or Remove API unlinks it. Connecting another account on the same card replaces the previous one.",
+        "es": "Guardar las claves solo guarda la app. El servidor sigue «Sin vincular» hasta que pulses Conectar e inicies sesión. Desconectar o Quitar API lo desvincula. Si conectas otra cuenta en la misma ficha, reemplaza la anterior.",
+    },
+    "servers.oauth_saved_click_connect": {
+        "en": "API saved. Now click Connect so this account is linked.",
+        "es": "API guardada. Ahora pulsa Conectar para vincular esta cuenta.",
     },
     "servers.dailymotion_connected": {
         "en": "Connected {name} successfully.",
@@ -545,8 +553,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Guarda primero el Client ID y el Client Secret de Bilibili (open.bilibili.com).",
     },
     "servers.bilibili_redirect_hint": {
-        "en": "Callback URL in Bilibili Open Platform:",
-        "es": "Callback URL en Bilibili Open Platform:",
+        "en": "Paste this exact Callback URL in Bilibili Open Platform (SITE_URL/oauth/bilibili/callback).",
+        "es": "Pega esta Callback URL exacta en Bilibili Open Platform (SITE_URL/oauth/bilibili/callback).",
     },
     "servers.bilibili_connected": {
         "en": "Connected {name} successfully.",
@@ -577,8 +585,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Guarda primero el Client ID y el Client Secret de Snapchat (Snap Business Manager → Business Details → app OAuth).",
     },
     "servers.snapchat_redirect_hint": {
-        "en": "Redirect URI in Snap Business Manager:",
-        "es": "Redirect URI en Snap Business Manager:",
+        "en": "Paste this exact Redirect URI in Snap Business Manager (SITE_URL/oauth/snapchat/callback).",
+        "es": "Pega esta Redirect URI exacta en Snap Business Manager (SITE_URL/oauth/snapchat/callback).",
     },
     "servers.snapchat_connected": {
         "en": "Connected {name} successfully.",
@@ -756,10 +764,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Editar servidores",
     },
     "servers.accounts_edit_servers_hint": {
-        "en": "Pick a server to review credentials, test the API, and fix issues before publishing.",
-        "es": "Elige un servidor para revisar credenciales, probar la API y corregir errores antes de publicar.",
+        "en": "Pick a server to review credentials, test the API, and fix issues before publishing. For Dailymotion, YouTube, X and similar, “Linked” appears only after you click Connect and authorize the account — saving the API Key is not enough.",
+        "es": "Elige un servidor para revisar credenciales, probar la API y corregir errores antes de publicar. En Dailymotion, YouTube, X y similares, «Vinculado» aparece solo después de pulsar Conectar y autorizar la cuenta: guardar la API Key no basta.",
     },
     "servers.accounts_server_linked": {"en": "Linked", "es": "Vinculado"},
+    "servers.accounts_server_api_ready": {
+        "en": "API saved · connect",
+        "es": "API lista · conectar",
+    },
     "servers.accounts_server_not_linked": {"en": "Not linked", "es": "Sin vincular"},
     "servers.accounts_platform": {"en": "Server", "es": "Servidor"},
     "servers.accounts_edit": {"en": "Edit", "es": "Editar"},
@@ -897,6 +909,15 @@ MESSAGES: dict[str, dict[str, str]] = {
     "api.test_all": {"en": "Test all APIs", "es": "Probar todas las APIs"},
     "api.section": {"en": "API credentials", "es": "Credenciales de API"},
     "api.saved": {"en": "API credentials saved.", "es": "Credenciales de API guardadas."},
+    "api.clear": {"en": "Remove API", "es": "Quitar API"},
+    "api.cleared": {
+        "en": "API credentials removed. The server is unlinked.",
+        "es": "Credenciales de API eliminadas. El servidor quedó desvinculado.",
+    },
+    "api.clear_confirm": {
+        "en": "Remove the saved API keys? The server will show as not linked until you connect again.",
+        "es": "¿Quitar las claves de API guardadas? El servidor quedará sin vincular hasta que conectes de nuevo.",
+    },
     "api.keep_secret": {
         "en": "Leave blank to keep the current secret.",
         "es": "Déjalo vacío para mantener el secreto actual.",
@@ -915,9 +936,29 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "API key (optional, for tests only)",
         "es": "API key (opcional, solo para pruebas)",
     },
-    "api.field.extra.rumble": {
-        "en": "Channel ID (required to publish)",
-        "es": "Channel ID (obligatorio para publicar)",
+    "api.field.extra.instagram": {
+        "en": "Redirect URI registered in Meta (must match exactly)",
+        "es": "Redirect URI registrada en Meta (tiene que coincidir exacta)",
+    },
+    "api.field.extra.facebook": {
+        "en": "Redirect URI registered in Meta (must match exactly)",
+        "es": "Redirect URI registrada en Meta (tiene que coincidir exacta)",
+    },
+    "api.field.extra.x": {
+        "en": "Callback URI registered in the X portal (must match exactly)",
+        "es": "Callback URI registrada en el portal de X (tiene que coincidir exacta)",
+    },
+    "api.field.extra.dailymotion": {
+        "en": "Callback URL registered in Dailymotion Studio (must match exactly)",
+        "es": "Callback URL registrada en Dailymotion Studio (tiene que coincidir exacta)",
+    },
+    "api.field.extra.bilibili": {
+        "en": "Callback URL registered in Bilibili Open Platform (must match exactly)",
+        "es": "Callback URL registrada en Bilibili Open Platform (tiene que coincidir exacta)",
+    },
+    "api.field.extra.snapchat": {
+        "en": "Redirect URI registered in Snap (must match exactly)",
+        "es": "Redirect URI registrada en Snap (tiene que coincidir exacta)",
     },
     "api.never_tested": {"en": "Not tested yet", "es": "Aún no se ha probado"},
     "api.ok": {"en": "Working", "es": "Funciona"},
@@ -1482,6 +1523,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "YouTube upload failed: {error}",
         "es": "Falló la subida a YouTube: {error}",
     },
+    "pub.youtube.err_creds": {
+        "en": "YouTube rejected the credentials. Click Connect with YouTube again in Servers.",
+        "es": "YouTube rechazó las credenciales. Vuelve a pulsar Conectar con YouTube en Servidores.",
+    },
     "pub.youtube.no_token": {
         "en": "Connect a YouTube account from Servers (Connect with YouTube). An API key cannot upload videos.",
         "es": "Conecta una cuenta de YouTube en Servidores (Conectar con YouTube). La API key no sirve para subir.",
@@ -1601,6 +1646,26 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pub.dailymotion.upload_fail": {
         "en": "Dailymotion upload failed: {error}",
         "es": "Falló la subida a Dailymotion: {error}",
+    },
+    "pub.dailymotion.err_no_user": {
+        "en": "The API Key has no user session. The panel will publish to the Studio profile instead of /me.",
+        "es": "La API Key no tiene sesión de usuario. El panel publica en el perfil de Studio, no en /me.",
+    },
+    "pub.dailymotion.err_v2_auth": {
+        "en": "The token is not valid for Dailymotion API v2. Connect with Dailymotion again in Servers.",
+        "es": "El token no vale para la API v2 de Dailymotion. Vuelve a pulsar Conectar con Dailymotion en Servidores.",
+    },
+    "pub.dailymotion.err_no_profile": {
+        "en": "Dailymotion did not list a channel. Connect with Dailymotion in Servers so the panel can use that channel.",
+        "es": "Dailymotion no listó el canal. Pulsa Conectar con Dailymotion en Servidores para usar ese canal.",
+    },
+    "pub.dailymotion.err_generic": {
+        "en": "Check the API Key in Studio and click Connect with Dailymotion again.",
+        "es": "Revisa la API Key en Studio y vuelve a pulsar Conectar con Dailymotion.",
+    },
+    "pub.api_error_generic": {
+        "en": "The network rejected the request. Check the connection in Servers.",
+        "es": "La red rechazó la petición. Revisa la conexión en Servidores.",
     },
     "pub.dailymotion.no_token": {
         "en": "Connect a Dailymotion account from Servers (Connect with Dailymotion).",
@@ -2773,8 +2838,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Guarda Access Key, Secret y padCode en Servidores. Publicar por VMOS es el siguiente paso.",
     },
     "apidoc.intro": {
-        "en": "What each server needs so publishing works. Official OAuth (or Rumble’s partner API) is the default. VMOS Cloud is an alternative for TikTok, Instagram, Facebook, YouTube, X, Threads and Snapchat: connect from Servers without pasting social access tokens. Proven PPV hosts (DoodStream, StreamWish, FileMoon, MixDrop, Streamtape, VOE, Vidoza, LuluStream) use an API key from the host dashboard, not OAuth; video only. Names with (pago) — Loadvid, VidSonic, FlyFile, VenVo — are trial hosts to verify payouts. Odysee signs in with email/password (LBRY auth token, TUS). DTube uses Hive username + posting WIF and the IPFS cluster. Tokens marked Automatic are refreshed by the panel on OAuth accounts; VMOS, PPV hosts, Odysee and DTube do not use those tokens.",
-        "es": "Qué hay que hacer en cada servidor para que la publicación funcione. El camino por defecto es OAuth oficial (o la API de partners de Rumble). VMOS Cloud es una alternativa para TikTok, Instagram, Facebook, YouTube, X, Threads y Snapchat: se conecta desde Servidores sin pegar tokens de esas redes. Los hosts PPV contrastados (DoodStream, StreamWish, FileMoon, MixDrop, Streamtape, VOE, Vidoza, LuluStream) usan API key del panel del host, no OAuth; solo video. Los que llevan (pago) — Loadvid, VidSonic, FlyFile, VenVo — son de prueba para ver si pagan. Odysee entra con email/contraseña (auth token LBRY, TUS). DTube usa usuario Hive + posting WIF y el cluster IPFS. Si el token es Automático, el panel lo renueva en cuentas OAuth; VMOS, hosts PPV, Odysee y DTube no usan esos tokens.",
+        "en": "What each server needs so publishing works. Official OAuth (or Rumble’s partner API) is the default. Saving Client ID/Secret only stores the app: the server stays unlinked until you click Connect and sign in; Disconnect or Remove API unlinks it, and connecting another account on the same card replaces the previous one. Register SITE_URL/oauth/{platform}/callback in each developer console. VMOS Cloud is an alternative for TikTok, Instagram, Facebook, YouTube, X, Threads and Snapchat: connect from Servers without pasting social access tokens. Proven PPV hosts (DoodStream, StreamWish, FileMoon, MixDrop, Streamtape, VOE, Vidoza, LuluStream) use an API key from the host dashboard, not OAuth; video only. Names with (pago) — Loadvid, VidSonic, FlyFile, VenVo — are trial hosts to verify payouts. Odysee signs in with email/password (LBRY auth token, TUS). DTube uses Hive username + posting WIF and the IPFS cluster. Tokens marked Automatic are refreshed by the panel on OAuth accounts; VMOS, PPV hosts, Odysee and DTube do not use those tokens.",
+        "es": "Qué hay que hacer en cada servidor para que la publicación funcione. El camino por defecto es OAuth oficial (o la API de partners de Rumble). Guardar Client ID/Secret solo guarda la app: el servidor sigue sin vincular hasta que pulses Conectar e inicies sesión; Desconectar o Quitar API lo desvincula, y conectar otra cuenta en la misma ficha reemplaza la anterior. Registra SITE_URL/oauth/{plataforma}/callback en cada consola de desarrollador. VMOS Cloud es una alternativa para TikTok, Instagram, Facebook, YouTube, X, Threads y Snapchat: se conecta desde Servidores sin pegar tokens de esas redes. Los hosts PPV contrastados (DoodStream, StreamWish, FileMoon, MixDrop, Streamtape, VOE, Vidoza, LuluStream) usan API key del panel del host, no OAuth; solo video. Los que llevan (pago) — Loadvid, VidSonic, FlyFile, VenVo — son de prueba para ver si pagan. Odysee entra con email/contraseña (auth token LBRY, TUS). DTube usa usuario Hive + posting WIF y el cluster IPFS. Si el token es Automático, el panel lo renueva en cuentas OAuth; VMOS, hosts PPV, Odysee y DTube no usan esos tokens.",
     },
     "apidoc.col_server": {"en": "Server", "es": "Servidor"},
     "apidoc.col_api": {"en": "API", "es": "API"},
@@ -2964,20 +3029,20 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "En Servidores guarda Client ID y Client Secret y pulsa Conectar con X.",
     },
     "apidoc.x.extra": {
-        "en": "A paid X API plan with write access is required to publish. Photos, GIF and short video.",
-        "es": "Hace falta un plan de pago de la API de X con permiso de escritura para publicar. Fotos, GIF y video corto.",
+        "en": "A paid X API plan with write access is required to publish. Photos, GIF and short video. Config X (sidebar): pick one connected X account as the recharge account that pays the API. Recharge it, set the cost per post, and the panel tracks recharged / spent / available. When you publish to other X accounts with the checkbox on, the cost is deducted from that recharge account instead of spending on every account. Uncheck it to spend from the posting account itself (for accounts where you already pay). Every day at 4 AM (panel time) the panel queries X and marks which accounts already meet the follower threshold so you only pay the subscription on those. X does not expose your API bill or impressions; the balance is panel accounting, and impressions/Premium must still be checked on X before you pay.",
+        "es": "Hace falta un plan de pago de la API de X con permiso de escritura para publicar. Fotos, GIF y video corto. Config X (barra lateral): eliges una cuenta de X conectada como la que recarga y paga la API. La recargas, defines el costo por publicación y el panel muestra recargado / gastado / disponible. Al publicar en las demás cuentas de X con el checkbox activado, el costo se descuenta de esa cuenta de recarga y no de cada cuenta. Desmárcalo para gastar del saldo de la propia cuenta que publica (las que ya pagas). Todos los días a las 4 am (hora del panel) se consulta X y se marcan las cuentas que ya cumplen el mínimo de seguidores, para pagar la suscripción solo en esas. X no expone tu factura de API ni las impresiones; el saldo es contabilidad del panel, y las impresiones/Premium hay que verificarlas en X antes de pagar.",
     },
     "apidoc.dailymotion.step1": {
         "en": "Get an API Key and API Secret from Dailymotion (partner / developer app).",
         "es": "En Dailymotion obtén API Key y API Secret (app de partner / desarrollador).",
     },
     "apidoc.dailymotion.step2": {
-        "en": "Register the redirect URI: SITE_URL/oauth/dailymotion/callback.",
-        "es": "Registra la URI de redirección: SITE_URL/oauth/dailymotion/callback.",
+        "en": "In Dailymotion Studio → API keys, set Callback URL to SITE_URL/oauth/dailymotion/callback.",
+        "es": "En Dailymotion Studio → API keys pon Callback URL = SITE_URL/oauth/dailymotion/callback.",
     },
     "apidoc.dailymotion.step3": {
-        "en": "In Servers, save the keys, then Connect with Dailymotion.",
-        "es": "En Servidores guarda las claves y pulsa Conectar con Dailymotion.",
+        "en": "In Servers, save the keys, then Connect with Dailymotion and sign in.",
+        "es": "En Servidores guarda las claves y pulsa Conectar con Dailymotion e inicia sesión.",
     },
     "apidoc.dailymotion.extra": {
         "en": "Videos only. Uploads go to the connected channel.",
@@ -3797,6 +3862,37 @@ def resolve_lang(request: Request) -> str:
 def register_path(lang: str | None = None) -> str:
     code = lang if lang in LANGUAGES else DEFAULT_LANG
     return "/registro" if code == "es" else "/register"
+
+
+_PROVIDER_ERROR_HINTS: tuple[tuple[tuple[str, ...], tuple[str, ...], str], ...] = (
+    (
+        ("dailymotion",),
+        ("can't use 'me'", "no user authenticated"),
+        "pub.dailymotion.err_no_user",
+    ),
+    (("dailymotion",), ("missing_profile",), "pub.dailymotion.err_no_profile"),
+    (
+        ("dailymotion",),
+        ("v2 tokens require", "valid v2 authentication"),
+        "pub.dailymotion.err_v2_auth",
+    ),
+    (("youtube",), ("invalid credentials", "401"), "pub.youtube.err_creds"),
+)
+
+
+def explain_provider_error(platform: str, raw: str, lang: str | None = None) -> str:
+    """Traduce fallos conocidos de la API al idioma del panel (sin pegar el inglés)."""
+    blob = (raw or "").strip().lower()
+    pid = (platform or "").strip().lower()
+    for plats, needles, key in _PROVIDER_ERROR_HINTS:
+        if pid not in plats:
+            continue
+        if any(n in blob for n in needles):
+            return t(key, lang)
+    generic = t(f"pub.{pid}.err_generic", lang) if pid else ""
+    if generic and generic != f"pub.{pid}.err_generic":
+        return generic
+    return t("pub.api_error_generic", lang)
 
 
 def t(key: str, lang: str | None = None, **kwargs: object) -> str:
