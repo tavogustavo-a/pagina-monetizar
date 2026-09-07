@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from jinja2 import FileSystemBytecodeCache
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -211,6 +212,7 @@ async def _security_headers_middleware(request: Request, call_next):
     import time as _time
 
     t0 = _time.perf_counter()
+    db.reset_request_db_caches()
     response = await call_next(request)
     elapsed = _time.perf_counter() - t0
     response.headers["X-Response-Time"] = f"{elapsed:.3f}s"
@@ -224,6 +226,9 @@ async def _security_headers_middleware(request: Request, call_next):
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+_jinja_cache_dir = BASE_DIR / ".data" / "jinja_cache"
+_jinja_cache_dir.mkdir(parents=True, exist_ok=True)
+templates.env.bytecode_cache = FileSystemBytecodeCache(str(_jinja_cache_dir))
 templates.env.globals["user_can_access_publicaciones"] = db.user_can_access_publicaciones
 templates.env.globals["user_has_admin_privileges"] = db.user_has_admin_privileges
 templates.env.globals["user_is_site_admin"] = db.user_is_site_admin
@@ -2893,9 +2898,9 @@ def admin_servidores(request: Request):
                 "odysee": len(chain_grouped.get("odysee") or []),
                 "dtube": len(chain_grouped.get("dtube") or []),
             },
-            "platform_creds": db.list_platform_credentials_public(),
-            "group_account_choices": db.list_server_group_account_choices(lang),
-            "server_accounts": db.list_server_accounts(lang),
+            "platform_creds": {},
+            "group_account_choices": [],
+            "server_accounts": [],
             "oauth_configured": tiktok_oauth.oauth_configured(),
             "oauth_scopes": tiktok_oauth.oauth_scopes(),
             "tiktok_redirect_uri": tiktok_oauth.redirect_uri(request),

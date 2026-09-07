@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import random
 import sqlite3
+import threading
 import uuid
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
@@ -17,6 +18,16 @@ from db_engine import DATA_DIR, DB_PATH
 
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "tavo").strip()
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "104646")
+
+_db_init_lock = threading.Lock()
+_db_initialized = False
+_admin_seeded = False
+_sync_accounts_once: ContextVar[bool] = ContextVar("sync_accounts_once", default=False)
+
+
+def reset_request_db_caches() -> None:
+    """Evita repetir sync de cuentas en la misma petición HTTP."""
+    _sync_accounts_once.set(False)
 
 # Modos para usuarios con role='user'. El role='admin' de la cuenta maestra sigue aparte.
 REGULAR_USER_MODES = frozenset({
@@ -655,6 +666,17 @@ def _connect():
 
 
 def init_db() -> None:
+    global _db_initialized
+    if _db_initialized:
+        return
+    with _db_init_lock:
+        if _db_initialized:
+            return
+        _init_db_schema()
+        _db_initialized = True
+
+
+def _init_db_schema() -> None:
     conn = _connect()
     try:
         conn.execute(
@@ -1910,7 +1932,10 @@ def _verify_pw(pw: str, hashed: bytes | memoryview | bytearray | None) -> bool:
 
 
 def seed_admin_if_missing() -> None:
+    global _admin_seeded
     init_db()
+    if _admin_seeded:
+        return
     conn = _connect()
     try:
         row = conn.execute(
@@ -1918,12 +1943,14 @@ def seed_admin_if_missing() -> None:
             (ADMIN_USERNAME,),
         ).fetchone()
         if row:
+            _admin_seeded = True
             return
         exists_user = conn.execute(
             "SELECT id FROM users WHERE username = ? COLLATE NOCASE",
             (ADMIN_USERNAME,),
         ).fetchone()
         if exists_user:
+            _admin_seeded = True
             return
         uid = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
@@ -1939,6 +1966,7 @@ def seed_admin_if_missing() -> None:
             ),
         )
         conn.commit()
+        _admin_seeded = True
     finally:
         conn.close()
 
@@ -6999,6 +7027,9 @@ def _upsert_linked_server_account(
 
 def sync_server_accounts_from_links() -> None:
     """Refleja en server_accounts las cuentas vinculadas de cada servidor."""
+    if _sync_accounts_once.get():
+        return
+    _sync_accounts_once.set(True)
     from platforms import PLATFORM_IDS, platform_list
 
     seed_admin_if_missing()

@@ -412,8 +412,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "No accounts connected yet. Use the connect button above.",
         "es": "Aún no hay cuentas conectadas. Usa el botón de conectar arriba.",
     },
-    "servers.connected": {"en": "Connected", "es": "Conectada"},
-    "servers.team_user": {"en": "Team user:", "es": "Usuario del equipo:"},
+    "servers.connected": {"en": "Connected", "es": "Conectado"},
+    "servers.disconnected": {"en": "Disconnected", "es": "Desconectado"},
+    "servers.team_user": {"en": "team:", "es": "equipo:"},
     "servers.assign_team": {
         "en": "Assign this account to a team member in {team}.",
         "es": "Asigna esta cuenta a un miembro del equipo en {team}.",
@@ -527,10 +528,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "servers.dailymotion_oauth_missing": {
         "en": "Save the Dailymotion API Key and API Secret first, then connect an account.",
         "es": "Guarda primero la API Key y el API Secret de Dailymotion, luego conecta una cuenta.",
-    },
-    "servers.dailymotion_google_login_hint": {
-        "en": "If you signed up with Google, that OAuth screen often has no Google button. First open dailymotion.com in this browser and sign in with Google. Then click Connect again — you should only need to authorize the app. Or use “Forgot password” on Dailymotion to set a password for that Gmail and use it on the form.",
-        "es": "Si te registraste con Google, esa pantalla de Dailymotion casi nunca muestra el botón de Google. Abre dailymotion.com en este mismo navegador, entra con Google y luego pulsa otra vez Conectar: debería pedir solo autorizar la app. O usa «¿Olvidaste tu contraseña?» en Dailymotion para poner una clave a ese Gmail y entrar con correo y contraseña.",
     },
     "servers.dailymotion_redirect_hint": {
         "en": "Paste this exact Callback URL in Dailymotion Studio → API keys, then Connect with Dailymotion.",
@@ -779,12 +776,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Pick a server to review credentials, test the API, and fix issues before publishing. For Dailymotion, YouTube, X and similar, “Linked” appears only after you click Connect and authorize the account — saving the API Key is not enough.",
         "es": "Elige un servidor para revisar credenciales, probar la API y corregir errores antes de publicar. En Dailymotion, YouTube, X y similares, «Vinculado» aparece solo después de pulsar Conectar y autorizar la cuenta: guardar la API Key no basta.",
     },
-    "servers.accounts_server_linked": {"en": "Linked", "es": "Vinculado"},
+    "servers.accounts_server_linked": {"en": "Connected", "es": "Conectado"},
     "servers.accounts_server_api_ready": {
         "en": "API saved · connect",
         "es": "API lista · conectar",
     },
-    "servers.accounts_server_not_linked": {"en": "Not linked", "es": "Sin vincular"},
+    "servers.accounts_server_not_linked": {"en": "Disconnected", "es": "Desconectado"},
     "servers.accounts_platform": {"en": "Server", "es": "Servidor"},
     "servers.accounts_edit": {"en": "Edit", "es": "Editar"},
     "servers.accounts_delete": {"en": "Delete account", "es": "Eliminar cuenta"},

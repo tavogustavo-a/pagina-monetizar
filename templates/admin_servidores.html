@@ -685,7 +685,6 @@
       <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title">{% if c.account_name %}{{ c.account_name }}{% else %}{{ c.name }}{% endif %}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
           {% if c.internal_username %}
@@ -719,7 +718,6 @@
       <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title">{% if c.account_name %}{{ c.account_name }}{% else %}{{ c.name }}{% endif %}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
           {% if c.internal_username %}
@@ -751,7 +749,6 @@
       <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title">{% if c.account_name %}{{ c.account_name }}{% else %}{{ c.name }}{% endif %}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
           {% if c.internal_username %}
@@ -783,7 +780,6 @@
       <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title">{% if c.account_name %}{{ c.account_name }}{% else %}{{ c.name }}{% endif %}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
           {% if c.internal_username %}
@@ -815,7 +811,6 @@
       <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title">{% if c.account_name %}{{ c.account_name }}{% else %}{{ c.name }}{% endif %}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
           {% if c.internal_username %}
@@ -847,7 +842,6 @@
       <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title">{% if c.account_name %}{{ c.account_name }}{% else %}{{ c.name }}{% endif %}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
           {% if c.internal_username %}
@@ -870,10 +864,9 @@
       <li class="tiktok-config-card tiktok-config-card--linked">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title js-rumble-channel">{{ t('platform.rumble') }}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
-          <p class="tiktok-config-card__meta sub js-rumble-meta">{{ t('servers.rumble_token_only') }}</p>
+          <p class="tiktok-config-card__meta sub js-rumble-channel">{{ t('servers.rumble_token_only') }}</p>
         </div>
       </li>
     </ul>
@@ -894,7 +887,6 @@
       <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title">{% if c.account_name %}{{ c.account_name }}{% else %}{{ c.name }}{% endif %}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
           {% if c.internal_username %}
@@ -920,14 +912,12 @@
       {{ t('servers.connect_with_dailymotion') }}
     </a>
     <p class="sub js-oauth-missing">{{ t('servers.dailymotion_oauth_missing') }}</p>
-    <p class="sub">{{ t('servers.dailymotion_google_login_hint') }}</p>
     </div>
     <ul class="tiktok-config-list">
       {% for c in dailymotion_linked %}
       <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
           <div class="tiktok-config-card__head">
-            <strong class="tiktok-config-card__title">{% if c.account_name %}{{ c.account_name }}{% else %}{{ c.name }}{% endif %}</strong>
             <span class="badge badge-active">{{ t('servers.connected') }}</span>
           </div>
           {% if c.internal_username %}
@@ -999,15 +989,15 @@
         editServersTitle: "Editar servidores de",
         editServersInfoTitle: "Editar servidores",
         editServersHint: "Elige un servidor para revisar credenciales, probar la API y corregir errores antes de publicar. En Dailymotion, YouTube, X y similares, «Vinculado» aparece solo después de pulsar Conectar y autorizar la cuenta: guardar la API Key no basta.",
-        serverLinked: "Vinculado",
-        serverNotLinked: "Sin vincular"
+        serverLinked: "Conectado",
+        serverNotLinked: "Desconectado"
       },
       en: {
         editServersTitle: "Edit servers for",
         editServersInfoTitle: "Edit servers",
         editServersHint: "Pick a server to review credentials, test the API, and fix issues before publishing. For Dailymotion, YouTube, X and similar, “Linked” appears only after you click Connect and authorize the account — saving the API Key is not enough.",
-        serverLinked: "Linked",
-        serverNotLinked: "Not linked"
+        serverLinked: "Connected",
+        serverNotLinked: "Disconnected"
       }
     };
     function resolvePickerI18n(key, value) {
@@ -1045,19 +1035,7 @@
     var secretShowLabel = {{ t('login.show_password') | tojson }};
     var secretHideLabel = {{ t('login.hide_password') | tojson }};
     var SECRET_MASK = "xxxxxxxxxxxxxxxxxxx";
-    var accountsCache = [
-      {% for acc in server_accounts %}
-      {
-        id: {{ acc.id | tojson }},
-        name: {{ acc.name | tojson }},
-        platform_id: {{ acc.platform_id | tojson }},
-        platform: {{ acc.platform | tojson }},
-        active: {{ acc.active | tojson }},
-        source_kind: {{ acc.source_kind | default('manual') | tojson }},
-        source_ref: {{ acc.source_ref | default('') | tojson }}
-      }{% if not loop.last %},{% endif %}
-      {% endfor %}
-    ];
+    var accountsCache = [];
     var groupI18n = {
       edit: {{ t('servers.groups_edit') | tojson }},
       deleteGroup: {{ t('servers.groups_delete') | tojson }},
@@ -1078,22 +1056,7 @@
       noResults: {{ t('team.no_results') | tojson }},
       searchPlaceholder: {{ t('servers.groups_list_search') | tojson }}
     };
-    var groupCredOptions = [
-      {% for acc in group_account_choices %}
-      {
-        key: {{ acc.key | tojson }},
-        id: {{ acc.key | tojson }},
-        platform_id: {{ acc.platform_id | tojson }},
-        platform_ids: {{ acc.platform_ids | tojson }},
-        account_id: {{ acc.account_id | tojson }},
-        account_ids: {{ acc.account_ids | tojson }},
-        platform: {{ acc.platform | tojson }},
-        platforms: {{ acc.platforms | tojson }},
-        name: {{ acc.name | tojson }},
-        selectable: {{ acc.selectable | default(true) | tojson }}
-      }{% if not loop.last %},{% endif %}
-      {% endfor %}
-    ];
+    var groupCredOptions = [];
     var titlePrefix = {{ t('servers.modal_accounts_prefix', platform='__NAME__') | tojson }};
     var titleCredentials = {{ t('servers.modal_api_credentials') | tojson }};
     var accountTitleLabel = {{ t('servers.modal_account_name') | tojson }};
@@ -3702,21 +3665,23 @@
       });
     }
 
-    loadAccountGroups(1, "");
+    var restorePicker = null;
     try {
       var restoreRaw = sessionStorage.getItem("tuyahoRestoreAccountPicker");
       if (restoreRaw) {
         sessionStorage.removeItem("tuyahoRestoreAccountPicker");
         var restore = JSON.parse(restoreRaw);
-        if (restore && restore.name) {
-          openAccountGroupModal({
-            key: restore.key || "",
-            name: restore.name,
-            link_id: restore.link_id || restore.linkId || "",
-          }, null);
-        }
+        if (restore && restore.name) restorePicker = restore;
       }
     } catch (err) {}
+    Promise.resolve(reloadServerAccounts()).then(function () {
+      if (!restorePicker) return;
+      openAccountGroupModal({
+        key: restorePicker.key || "",
+        name: restorePicker.name,
+        link_id: restorePicker.link_id || restorePicker.linkId || "",
+      }, null);
+    });
   })();
 </script>
 {% endblock %}
