@@ -2470,7 +2470,7 @@ input:focus {
 }
 
 .panel-info-modal__panel {
-  max-width: min(28rem, calc(100vw - 2rem));
+  max-width: min(36rem, calc(100vw - 2rem));
 }
 
 .panel-info-modal__text {
@@ -5316,8 +5316,23 @@ form.server-modal__body.api-form .panel-api-test-msg {
   margin: 0;
 }
 
-.server-modal__linked .server-modal__sub--row {
-  justify-content: center;
+.server-modal__linked--vmos,
+.server-modal__linked--filehost,
+.server-modal__linked--chain {
+  margin-top: 1.15rem;
+  padding-top: 0.95rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  width: 100%;
+  align-items: stretch;
+  text-align: left;
+}
+
+.server-modal__vmos-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-align: center;
+  color: #ffffff;
 }
 
 .server-modal__info-btn {
@@ -10200,6 +10215,14 @@ ul.proxys-list .proxys-row__actions {
   font-size: 0.92rem;
   font-weight: 600;
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.panel-account-card__title .panel-info-btn {
+  width: 1.45rem;
+  height: 1.45rem;
+  flex: 0 0 auto;
 }
 .panel-account-card__actions {
   display: flex;
@@ -10215,7 +10238,8 @@ ul.proxys-list .proxys-row__actions {
 .panel-account-card__actions .btn-instagram,
 .panel-account-card__actions .btn-facebook,
 .panel-account-card__actions .btn-x,
-.panel-account-card__actions .btn-dailymotion {
+.panel-account-card__actions .btn-dailymotion,
+.panel-account-card__actions .btn-bilibili {
   padding: 0.28rem 0.55rem;
   font-size: 0.72rem;
   font-weight: 600;
@@ -10230,7 +10254,8 @@ ul.proxys-list .proxys-row__actions {
 .panel-account-card__actions .btn-instagram__icon,
 .panel-account-card__actions .btn-facebook__icon,
 .panel-account-card__actions .btn-x__icon,
-.panel-account-card__actions .btn-dailymotion__icon {
+.panel-account-card__actions .btn-dailymotion__icon,
+.panel-account-card__actions .btn-bilibili__icon {
   font-size: 0.78rem;
 }
 .panel-account-card__api-btn {

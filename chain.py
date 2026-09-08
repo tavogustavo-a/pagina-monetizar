@@ -26,16 +26,22 @@ def probe_account(platform_id: str, login: str, secret: str, extra: str = "") ->
 
 
 def persist_secret(platform_id: str, login: str, secret: str, previous: str = "") -> str:
-    """Odysee guarda auth_token, no la contraseña. DTube guarda el posting WIF."""
-    pid = (platform_id or "").strip()
+    """Odysee guarda la contraseña; el auth_token va en chain_accounts.auth_token."""
     incoming = (secret or "").strip()
     prev = (previous or "").strip()
-    if pid == "odysee":
-        if incoming and "@" in (login or "") and len(incoming) < 40:
-            token, _ = odysee.signin(login, incoming)
-            return token
-        return incoming or prev
     return incoming or prev
+
+
+def odysee_auth_token_for_save(login: str, secret: str, previous_token: str = "") -> str:
+    em = (login or "").strip()
+    pw = (secret or "").strip()
+    prev = (previous_token or "").strip()
+    if em and pw and "@" in em and len(pw) < 40:
+        token, _ = odysee.signin(em, pw)
+        return token
+    if len(pw) >= 40:
+        return pw
+    return prev
 
 
 def publish_video(

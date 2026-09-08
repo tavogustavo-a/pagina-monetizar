@@ -38,7 +38,7 @@
             </div>
           </div>
         </div>
-        {% if user_has_admin_privileges(user) %}
+        {% if user_can_access_servers(user) %}
         <div class="log-purge">
           <label class="log-purge__field">
             <span>{{ t('log.purge_from') }}</span>

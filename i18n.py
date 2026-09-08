@@ -328,6 +328,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "VMOS Cloud · {platform}",
         "es": "VMOS Cloud · {platform}",
     },
+    "servers.vmos_section_title": {
+        "en": "VMOS {platform}",
+        "es": "VMOS {platform}",
+    },
     "servers.vmos_save": {"en": "Save VMOS", "es": "Guardar VMOS"},
     "servers.vmos_saved": {"en": "VMOS account saved.", "es": "Cuenta VMOS guardada."},
     "servers.vmos_missing": {
@@ -382,8 +386,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Conectar {platform}",
     },
     "servers.chain_hint_odysee": {
-        "en": "Odysee has no public OAuth for third-party apps. Sign in with the email and password of the Odysee account. The panel keeps the auth token, not the password. Channel claim ID is optional.",
-        "es": "Odysee no ofrece OAuth público para apps de terceros. Entra con el email y la contraseña de la cuenta de Odysee. El panel guarda el auth token, no la contraseña. El claim ID del canal es opcional.",
+        "en": "Sign in with your Odysee email and password. The panel stores them and renews the auth token automatically when it expires. Channel claim ID is optional.",
+        "es": "Entra con el email y la contraseña de Odysee. El panel los guarda y renueva el auth token automáticamente cuando caduca. El claim ID del canal es opcional.",
     },
     "servers.chain_hint_dtube": {
         "en": "",
@@ -1336,6 +1340,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pub.platforms_support_info_hint": {
         "en": "What this panel can publish on each platform (official APIs).",
         "es": "Lo que este panel puede publicar en cada plataforma (APIs oficiales).",
+    },
+    "pub.platform_limits_btn": {
+        "en": "Limits for {platform}",
+        "es": "Límites de {platform}",
+    },
+    "pub.platform_limits_body": {
+        "en": "{safe} Do not exceed that volume: extra uploads can be rejected or throttled. {detail}",
+        "es": "{safe} No superes ese volumen: las subidas extra pueden rechazarse o frenarse. {detail}",
     },
     "pub.failure_log": {"en": "Publication log", "es": "Registro de publicaciones"},
     "pub.log_col_platform": {"en": "Platform", "es": "Plataforma"},

@@ -3,7 +3,7 @@
   <input type="hidden" name="id" value="" />
   <input type="hidden" name="platform_id" value="{{ platform.id }}" />
   <input type="hidden" name="link_name" class="js-vmos-link-name" value="" />
-  <p class="sub">{{ t('servers.vmos_hint') }}</p>
+  <h3 class="server-modal__vmos-title">{{ t('servers.vmos_section_title', platform=platform.name) }}</h3>
   <label class="field js-account-name-field" hidden>
     <span>{{ t('api.field.name') }}</span>
     <input type="text" name="name" autocomplete="off" />

@@ -2297,7 +2297,7 @@ def _log_purge_bounds(date_from: str, date_to: str, lang: str) -> tuple[str, str
 
 @app.get("/admin/api/publicaciones/logs/count")
 def api_publication_logs_count(request: Request, date_from: str = "", date_to: str = ""):
-    guard = _require_admin_json(request)
+    guard = _require_server_admin_json(request)
     if guard:
         return guard
     lang = i18n.resolve_lang(request)
@@ -2320,7 +2320,7 @@ def api_publication_logs(request: Request):
 
 @app.delete("/admin/api/publicaciones/logs")
 def api_publication_logs_purge(request: Request, body: LogPurgeBody):
-    guard = _require_admin_json(request)
+    guard = _require_server_admin_json(request)
     if guard:
         return guard
     lang = i18n.resolve_lang(request)
@@ -3920,8 +3920,17 @@ def _oauth_redirect(request: Request, user: db.User) -> RedirectResponse:
     return RedirectResponse(url=_oauth_return_path(user), status_code=303)
 
 
-PANEL_API_PLATFORM_IDS = frozenset({"dailymotion", "facebook", "x", "youtube", "instagram"})
-TIKTOK_USER_PANEL_PLATFORM_ORDER = ("youtube", "dailymotion", "facebook", "x", "instagram")
+PANEL_API_PLATFORM_IDS = frozenset(
+    {"dailymotion", "facebook", "x", "youtube", "instagram", "bilibili"}
+)
+TIKTOK_USER_PANEL_PLATFORM_ORDER = (
+    "youtube",
+    "dailymotion",
+    "facebook",
+    "x",
+    "instagram",
+    "bilibili",
+)
 
 _PANEL_OAUTH_REDIRECT_MODS = {
     "facebook": facebook_oauth,
@@ -3929,6 +3938,7 @@ _PANEL_OAUTH_REDIRECT_MODS = {
     "dailymotion": dailymotion_oauth,
     "youtube": youtube_oauth,
     "instagram": instagram_oauth,
+    "bilibili": bilibili_oauth,
 }
 
 _PANEL_OAUTH_REDIRECT_HINT_KEYS: dict[str, str] = {
@@ -3937,13 +3947,14 @@ _PANEL_OAUTH_REDIRECT_HINT_KEYS: dict[str, str] = {
     "dailymotion": "servers.dailymotion_redirect_hint",
     "youtube": "servers.youtube_redirect_hint",
     "instagram": "servers.instagram_redirect_hint",
+    "bilibili": "servers.bilibili_redirect_hint",
 }
 
 
 def _tiktok_user_panel_platforms(
     lang: str, user: db.User | None = None
 ) -> list[dict[str, Any]]:
-    """Las 5 plataformas de Panel → Cuenta para usuarios modo TikTok."""
+    """Las plataformas de Panel → Cuenta para usuarios modo TikTok."""
     by_id = {p["id"]: dict(p) for p in platforms.platform_list(lang)}
     linked_ids: set[str] = set()
     vmos_ids: set[str] = set()
@@ -4037,6 +4048,15 @@ def _build_panel_account_platforms(
             "◎",
             "oauth",
         ),
+        (
+            "bilibili",
+            bilibili_oauth,
+            "servers.connect_with_bilibili",
+            "servers.bilibili_oauth_missing",
+            "btn-bilibili",
+            "▶",
+            "oauth",
+        ),
     )
     out: list[dict[str, Any]] = []
     for pid, oauth_mod, connect_key, missing_key, btn_class, icon, kind in defs:
@@ -4059,6 +4079,7 @@ def _build_panel_account_platforms(
             "kind": kind,
             "accounts": accounts,
             "api_modal": pid in PANEL_API_PLATFORM_IDS,
+            "limits_info": platforms.platform_limits_info(pid, lang),
         }
         if pid in PANEL_API_PLATFORM_IDS:
             item["creds"] = creds

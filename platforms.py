@@ -442,6 +442,23 @@ def _field_label(lang: str, prefix: str, platform_id: str, fallback_key: str) ->
     return t(fallback_key, lang)
 
 
+def platform_limits_info(platform_id: str, lang: str) -> str:
+    """Texto de cupo diario y separación entre subidas (EN/ES)."""
+    from i18n import MESSAGES, t
+
+    pid = (platform_id or "").strip()
+    safe_key = f"cond.{pid}.safe"
+    detail_key = f"cond.{pid}.detail"
+    if safe_key not in MESSAGES:
+        return t(f"limits.note.{pid}", lang)
+    return t(
+        "pub.platform_limits_body",
+        lang,
+        safe=t(safe_key, lang),
+        detail=t(detail_key, lang) if detail_key in MESSAGES else "",
+    )
+
+
 def platform_list(lang: str, *, include_hidden: bool = False) -> list[dict[str, Any]]:
     from i18n import t
 
@@ -465,6 +482,7 @@ def platform_list(lang: str, *, include_hidden: bool = False) -> list[dict[str, 
                 "publish_enabled": bool(p.get("publish_enabled", True)),
                 "ui_visible": ui_visible,
                 "note": t(f"limits.note.{pid}", lang),
+                "limits_info": platform_limits_info(pid, lang),
                 "token_renewal": str(p.get("token_renewal") or "manual"),
                 "api_kind": kind,
                 "api_label": t(f"apidoc.api.{kind}", lang),

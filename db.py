@@ -318,6 +318,7 @@ def _ensure_chain_accounts_table() -> None:
         conn.commit()
     finally:
         conn.close()
+    _ensure_column("chain_accounts", "auth_token", "TEXT NOT NULL DEFAULT ''")
 
 
 def _ensure_x_funding_tables() -> None:
@@ -5632,6 +5633,7 @@ def upsert_chain_account(
                 raise ValueError("not_found")
         login_val = (existing["login"] if existing else "") or ""
         secret_val = (existing["secret"] if existing else "") or ""
+        auth_token_val = (existing["auth_token"] if existing else "") or ""
         extra_val = (existing["extra"] if existing else "") or ""
         if login is not None and str(login).strip():
             login_val = str(login).strip()
@@ -5649,23 +5651,29 @@ def upsert_chain_account(
         secret_val = chain_mod.persist_secret(pid, login_val, incoming_secret, secret_val)
         if not secret_val:
             raise ValueError("missing_fields")
+        if pid == "odysee":
+            auth_token_val = chain_mod.odysee_auth_token_for_save(
+                login_val, secret_val, auth_token_val
+            )
         label = (name or "").strip() or (link_name or "").strip() or login_val or pid
         account_label = (link_name or "").strip() or label
         created = existing["created_at"] if existing else now
         conn.execute(
             """
             INSERT INTO chain_accounts (
-                id, platform_id, name, login, secret, extra, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                id, platform_id, name, login, secret, extra, auth_token,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 platform_id = excluded.platform_id,
                 name = excluded.name,
                 login = excluded.login,
                 secret = excluded.secret,
                 extra = excluded.extra,
+                auth_token = excluded.auth_token,
                 updated_at = excluded.updated_at
             """,
-            (oid, pid, label, login_val, secret_val, extra_val, created, now),
+            (oid, pid, label, login_val, secret_val, extra_val, auth_token_val, created, now),
         )
         try:
             _release_other_links_for_platform(
@@ -5693,6 +5701,23 @@ def upsert_chain_account(
     if not row:
         raise ValueError("not_found")
     return row
+
+
+def update_chain_auth_token(account_id: str, auth_token: str) -> None:
+    oid = (account_id or "").strip()
+    token = (auth_token or "").strip()
+    if not oid or not token:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            "UPDATE chain_accounts SET auth_token = ?, updated_at = ? WHERE id = ?",
+            (token, now, oid),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def delete_chain_account(account_id: str) -> None:

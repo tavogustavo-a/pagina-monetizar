@@ -251,7 +251,6 @@
       <input type="hidden" name="id" value="" />
       <input type="hidden" name="platform_id" id="vmos-platform-id" value="" />
       <input type="hidden" name="link_name" id="vmos-link-name" value="" />
-      <p class="sub" id="vmos-form-hint">{{ t('servers.vmos_hint') }}</p>
       <label class="field js-account-name-field" hidden>
         <span>{{ t('api.field.name') }}</span>
         <input type="text" name="name" autocomplete="off" />
@@ -529,33 +528,14 @@
     </form>
     {% endif %}
 
-    {% if platform.id in vmos_platform_ids %}
-    <div class="server-modal__linked server-modal__linked--vmos">
-      {% include "_servers_vmos_connect.html" %}
-    </div>
-    {% endif %}
-
-    {% if platform.id in filehost_platform_ids %}
-    <div class="server-modal__linked server-modal__linked--filehost">
-      {% include "_servers_filehost_connect.html" %}
-    </div>
-    {% endif %}
-
-    {% if platform.id in chain_platform_ids %}
-    <div class="server-modal__linked server-modal__linked--chain">
-      {% include "_servers_chain_connect.html" %}
-    </div>
-    {% endif %}
-
     {% if platform.id == 'tiktok' %}
     <p class="sub servers-oauth-copy">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.tiktok_redirect_hint') }} <code>{{ tiktok_redirect_uri }}</code></p>
     <div class="server-modal__linked">
-    <a href="/oauth/tiktok/connect" class="btn btn-tiktok js-oauth-connect" hidden>
+    <a href="/oauth/tiktok/connect" class="btn btn-tiktok js-oauth-connect">
       <span class="btn-tiktok__icon" aria-hidden="true">♪</span>
       {{ t('servers.connect_with_tiktok') }}
     </a>
-    <p class="sub js-oauth-missing">{{ t('servers.oauth_missing') }}</p>
     </div>
     <ul class="tiktok-config-list">
       {% for c in linked_accounts %}
@@ -582,11 +562,10 @@
     <p class="sub servers-oauth-copy">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.youtube_redirect_hint') }} <code>{{ youtube_redirect_uri }}</code></p>
     <div class="server-modal__linked">
-    <a href="/oauth/youtube/connect" class="btn btn-youtube js-oauth-connect" hidden>
+    <a href="/oauth/youtube/connect" class="btn btn-youtube js-oauth-connect">
       <span class="btn-youtube__icon" aria-hidden="true">▶</span>
       {{ t('servers.connect_with_youtube') }}
     </a>
-    <p class="sub js-oauth-missing">{{ t('servers.youtube_oauth_missing') }}</p>
     </div>
     <ul class="tiktok-config-list">
       {% for c in youtube_linked %}
@@ -609,11 +588,10 @@
     <p class="sub servers-oauth-copy">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.instagram_redirect_hint') }} <code>{{ instagram_redirect_uri }}</code></p>
     <div class="server-modal__linked">
-    <a href="/oauth/instagram/connect" class="btn btn-instagram js-oauth-connect" hidden>
+    <a href="/oauth/instagram/connect" class="btn btn-instagram js-oauth-connect">
       <span class="btn-instagram__icon" aria-hidden="true">◎</span>
       {{ t('servers.connect_with_instagram') }}
     </a>
-    <p class="sub js-oauth-missing">{{ t('servers.instagram_oauth_missing') }}</p>
     </div>
     <ul class="tiktok-config-list">
       {% for c in instagram_linked %}
@@ -636,11 +614,10 @@
     <p class="sub servers-oauth-copy">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.facebook_redirect_hint') }} <code>{{ facebook_redirect_uri }}</code></p>
     <div class="server-modal__linked">
-    <a href="/oauth/facebook/connect" class="btn btn-facebook js-oauth-connect" hidden>
+    <a href="/oauth/facebook/connect" class="btn btn-facebook js-oauth-connect">
       <span class="btn-facebook__icon" aria-hidden="true">f</span>
       {{ t('servers.connect_with_facebook') }}
     </a>
-    <p class="sub js-oauth-missing">{{ t('servers.facebook_oauth_missing') }}</p>
     </div>
     <ul class="tiktok-config-list">
       {% for c in facebook_linked %}
@@ -663,11 +640,10 @@
     <p class="sub">{{ t('servers.x_api_inherit_hint') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.x_redirect_hint') }} <code>{{ x_redirect_uri }}</code></p>
     <div class="server-modal__linked">
-    <a href="/oauth/x/connect" class="btn btn-x js-oauth-connect" hidden>
+    <a href="/oauth/x/connect" class="btn btn-x js-oauth-connect">
       <span class="btn-x__icon" aria-hidden="true">𝕏</span>
       {{ t('servers.connect_with_x') }}
     </a>
-    <p class="sub js-oauth-missing">{{ t('servers.x_oauth_missing') }}</p>
     </div>
     <ul class="tiktok-config-list">
       {% for c in x_linked %}
@@ -690,11 +666,10 @@
     <p class="sub servers-oauth-copy">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.bilibili_redirect_hint') }} <code>{{ bilibili_redirect_uri }}</code></p>
     <div class="server-modal__linked">
-    <a href="/oauth/bilibili/connect" class="btn btn-bilibili js-oauth-connect" hidden>
+    <a href="/oauth/bilibili/connect" class="btn btn-bilibili js-oauth-connect">
       <span class="btn-bilibili__icon" aria-hidden="true">▶</span>
       {{ t('servers.connect_with_bilibili') }}
     </a>
-    <p class="sub js-oauth-missing">{{ t('servers.bilibili_oauth_missing') }}</p>
     </div>
     <ul class="tiktok-config-list">
       {% for c in bilibili_linked %}
@@ -731,11 +706,10 @@
     <p class="sub servers-oauth-copy">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.snapchat_redirect_hint') }} <code>{{ snapchat_redirect_uri }}</code></p>
     <div class="server-modal__linked">
-    <a href="/oauth/snapchat/connect" class="btn btn-snapchat js-oauth-connect" hidden>
+    <a href="/oauth/snapchat/connect" class="btn btn-snapchat js-oauth-connect">
       <span class="btn-snapchat__icon" aria-hidden="true">👻</span>
       {{ t('servers.connect_with_snapchat') }}
     </a>
-    <p class="sub js-oauth-missing">{{ t('servers.snapchat_oauth_missing') }}</p>
     </div>
     <ul class="tiktok-config-list">
       {% for c in snapchat_linked %}
@@ -758,11 +732,10 @@
     <p class="sub servers-oauth-copy">{{ t('servers.oauth_save_then_connect') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.dailymotion_redirect_hint') }} <code>{{ dailymotion_redirect_uri }}</code></p>
     <div class="server-modal__linked">
-    <a href="/oauth/dailymotion/connect" class="btn btn-dailymotion js-oauth-connect" hidden>
+    <a href="/oauth/dailymotion/connect" class="btn btn-dailymotion js-oauth-connect">
       <span class="btn-dailymotion__icon" aria-hidden="true">▶</span>
       {{ t('servers.connect_with_dailymotion') }}
     </a>
-    <p class="sub js-oauth-missing">{{ t('servers.dailymotion_oauth_missing') }}</p>
     </div>
     <ul class="tiktok-config-list">
       {% for c in dailymotion_linked %}
@@ -779,6 +752,21 @@
       </li>
       {% endfor %}
     </ul>
+    {% endif %}
+    {% if platform.id in vmos_platform_ids %}
+    <div class="server-modal__linked server-modal__linked--vmos">
+      {% include "_servers_vmos_connect.html" %}
+    </div>
+    {% endif %}
+    {% if platform.id in filehost_platform_ids %}
+    <div class="server-modal__linked server-modal__linked--filehost">
+      {% include "_servers_filehost_connect.html" %}
+    </div>
+    {% endif %}
+    {% if platform.id in chain_platform_ids %}
+    <div class="server-modal__linked server-modal__linked--chain">
+      {% include "_servers_chain_connect.html" %}
+    </div>
     {% endif %}
     {% include "_servers_vmos_block.html" %}
     {% include "_servers_filehost_block.html" %}
@@ -1731,7 +1719,7 @@
         if (connect && (connect.getAttribute("href") || "").indexOf("/oauth/x/") !== -1) {
           ready = ready || !!creds.x_inherit_funding;
         }
-        if (connect) connect.hidden = !ready;
+        if (connect) connect.hidden = false;
         if (missing) missing.hidden = ready;
       }
       var rumble = host.querySelector(".js-rumble-linked");

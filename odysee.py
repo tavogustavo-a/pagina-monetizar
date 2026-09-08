@@ -146,20 +146,35 @@ def user_me(auth_token: str) -> dict[str, Any]:
     return inner
 
 
+def _looks_like_password(login: str, secret: str) -> bool:
+    return bool(login and "@" in login and secret and len(secret) < 40)
+
+
+def _try_cached_token(token: str) -> str | None:
+    tok = (token or "").strip()
+    if not tok:
+        return None
+    try:
+        user_me(tok)
+        return tok
+    except OdyseeError:
+        return None
+
+
 def probe_account(email: str, secret: str, extra: str = "") -> tuple[bool, str]:
-    """secret = contraseña (conectar) o auth_token ya guardado."""
+    """secret = contraseña al conectar; también acepta auth_token legado en secret."""
     login = (email or "").strip()
     sec = (secret or "").strip()
     if not login or not sec:
         return False, "missing_fields"
     try:
-        if "@" in login and len(sec) < 40:
+        if _looks_like_password(login, sec):
             token, name = signin(login, sec)
-            me = user_me(token)
-            shown = str(me.get("name") or me.get("primary_email") or name or login).strip()
-            return True, shown
-        me = user_me(sec)
-        shown = str(me.get("name") or me.get("primary_email") or login).strip()
+        else:
+            token = sec
+            name = login
+        me = user_me(token)
+        shown = str(me.get("name") or me.get("primary_email") or name or login).strip()
         return True, shown
     except OdyseeError as e:
         return False, str(e)
@@ -167,15 +182,30 @@ def probe_account(email: str, secret: str, extra: str = "") -> tuple[bool, str]:
         return False, str(e)[:280]
 
 
-def resolve_auth_token(email: str, secret: str) -> str:
-    login = (email or "").strip()
-    sec = (secret or "").strip()
-    if not sec:
-        raise OdyseeError("missing_token")
-    if "@" in login and len(sec) < 40:
-        token, _ = signin(login, sec)
+def resolve_account_auth_token(account: dict[str, Any]) -> str:
+    """Usa auth_token en caché; si caducó, hace signin con email/contraseña guardados."""
+    import db
+
+    account_id = str(account.get("id") or "").strip()
+    login = str(account.get("login") or "").strip()
+    secret = str(account.get("secret") or "").strip()
+    cached = str(account.get("auth_token") or "").strip()
+
+    hit = _try_cached_token(cached)
+    if hit:
+        return hit
+
+    if _looks_like_password(login, secret):
+        token, _ = signin(login, secret)
+        if account_id:
+            db.update_chain_auth_token(account_id, token)
         return token
-    return sec
+
+    hit = _try_cached_token(secret)
+    if hit:
+        return hit
+
+    raise OdyseeError("session_expired_reconnect")
 
 
 def _claim_name(title: str) -> str:
@@ -398,13 +428,11 @@ def publish_video(
         return False, t("pub.odysee.file_missing", lang)
     if path.suffix.lower() not in VIDEO_EXT:
         return False, t("pub.odysee.bad_video", lang)
-    login = str(account.get("login") or "").strip()
-    secret = str(account.get("secret") or "").strip()
     channel = str(account.get("extra") or "").strip()
-    if not secret:
+    if not str(account.get("secret") or "").strip() and not str(account.get("auth_token") or "").strip():
         return False, t("pub.odysee.no_account", lang)
     try:
-        token = resolve_auth_token(login, secret)
+        token = resolve_account_auth_token(account)
         upload_token, location = _create_upload(token)
         if not FILE_PATH_RE.match(location):
             raise OdyseeError("upload location is not a TUS URL")
