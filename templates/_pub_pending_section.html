@@ -1,0 +1,48 @@
+{% if can_manage_publish_retry and pending_retry_publications | length > 0 %}
+      <section class="section dashboard-section pub-pending-section">
+        <h2>{{ t('pub.pending_section') }}</h2>
+        <p class="sub pub-pending-section__hint">{{ t('pub.pending_hint') }}</p>
+        <div class="pub-log-wrap">
+          <table class="pub-log-table pub-scheduled-table">
+            <thead>
+              <tr>
+                <th>{{ t('pub.scheduled_col_title') }}</th>
+                <th>{{ t('pub.scheduled_col_platforms') }}</th>
+                <th>{{ t('pub.pending_col_actions') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in pending_retry_publications %}
+              <tr>
+                <td>{{ row.video_title or '—' }}</td>
+                <td>
+                  {% for pid in row.platforms_json | fromjson %}
+                  <span class="cap cap--yes">{{ t('platform.' ~ pid) }}</span>
+                  {% endfor %}
+                </td>
+                <td class="pub-pending-actions">
+                  <form method="post" action="{{ url_for('admin_retry_pending_publish', sched_id=row.id) }}" class="pub-pending-form">
+                    {% if pub_retry_next %}
+                    <input type="hidden" name="next" value="{{ pub_retry_next }}" />
+                    {% endif %}
+                    <button type="submit" class="btn btn-accent btn-sm">{{ t('pub.retry_btn') }}</button>
+                  </form>
+                  <form
+                    method="post"
+                    action="{{ url_for('admin_cancel_pending_publish', sched_id=row.id) }}"
+                    class="pub-pending-form"
+                    onsubmit="return confirm({{ t('pub.cancel_pending_confirm') | tojson }});"
+                  >
+                    {% if pub_retry_next %}
+                    <input type="hidden" name="next" value="{{ pub_retry_next }}" />
+                    {% endif %}
+                    <button type="submit" class="btn btn-ghost btn-sm btn-user-delete">{{ t('pub.cancel_pending_btn') }}</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+{% endif %}

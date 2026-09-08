@@ -9109,6 +9109,29 @@ def count_extractor_source_videos(
         conn.close()
 
 
+def list_extractor_source_videos(
+    account_link_id: str, source_platform_id: str
+) -> list[Video]:
+    """Videos publicados OK en el servidor origen (más antiguos primero)."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT v.* FROM videos v
+            WHERE v.id IN (
+                SELECT DISTINCT pl.video_id FROM publication_log pl
+                WHERE pl.account_link_id = ? AND pl.platform_id = ?
+                  AND pl.status = 'ok' AND pl.video_id IS NOT NULL
+            )
+            ORDER BY v.created_at ASC
+            """,
+            (account_link_id, source_platform_id),
+        ).fetchall()
+        return [_row_to_video(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def count_extractor_pending(
     account_link_id: str, source_platform_id: str, target_platform_id: str
 ) -> int:
@@ -9173,6 +9196,33 @@ def list_extractor_pending_videos(
             ),
         ).fetchall()
         return [_row_to_video(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def extractor_video_targets_resolved(
+    account_link_id: str, video_id: str, target_platform_ids: list[str]
+) -> bool:
+    """True si el video ya tiene ok u omitido en todos los destinos indicados."""
+    targets = [str(pid).strip() for pid in (target_platform_ids or []) if str(pid).strip()]
+    vid = (video_id or "").strip()
+    lid = (account_link_id or "").strip()
+    if not targets or not vid or not lid:
+        return False
+    conn = _connect()
+    try:
+        ph, vals = _sql_in(targets)
+        rows = conn.execute(
+            f"""
+            SELECT DISTINCT platform_id FROM publication_log
+            WHERE account_link_id = ? AND video_id = ?
+              AND platform_id IN ({ph})
+              AND status IN ('ok', 'skipped')
+            """,
+            (lid, vid, *vals),
+        ).fetchall()
+        done = {str(r["platform_id"]) for r in rows}
+        return all(pid in done for pid in targets)
     finally:
         conn.close()
 

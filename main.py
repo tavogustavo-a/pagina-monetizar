@@ -78,6 +78,7 @@ import proxy_util  # noqa: E402
 import membership  # noqa: E402
 import video_temp_util  # noqa: E402
 import video_probe  # noqa: E402
+import video_compress  # noqa: E402
 import security_headers  # noqa: E402
 
 SECRET_KEY = os.environ.get("SESSION_SECRET", "dev-cambiar-en-produccion")
@@ -406,9 +407,9 @@ class ExtractorJobBody(BaseModel):
     account_link_id: str = ""
     source_platform_id: str = ""
     target_platform_ids: list[str] = []
-    batch_size: int = 1
-    interval_minutes: int = 60
-    rest_seconds: int = 0
+    batch_size: int = 5
+    interval_minutes: int = 30
+    rest_seconds: int = 45
 
 
 class LogPurgeBody(BaseModel):
@@ -2900,8 +2901,19 @@ def _require_publish_retry_admin(request: Request) -> db.User:
     return u
 
 
+def _redirect_after_pending_retry(request: Request, next_path: str = "") -> RedirectResponse:
+    nxt = (next_path or "").strip()
+    if nxt.startswith("/admin/extractor"):
+        return RedirectResponse(url="/admin/extractor", status_code=303)
+    return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+
+
 @app.post("/admin/publicaciones/pending/{sched_id}/retry", name="admin_retry_pending_publish")
-def admin_retry_pending_publish(request: Request, sched_id: str):
+def admin_retry_pending_publish(
+    request: Request,
+    sched_id: str,
+    next: Annotated[str, Form()] = "",
+):
     try:
         u = _require_publish_retry_admin(request)
     except PermissionError as e:
@@ -2909,18 +2921,22 @@ def admin_retry_pending_publish(request: Request, sched_id: str):
             return _publicaciones_redirect_login()
         return HTMLResponse("Permission denied.", status_code=403)
     lang = i18n.resolve_lang(request)
+
+    def done() -> RedirectResponse:
+        return _redirect_after_pending_retry(request, next)
+
     row = db.get_scheduled_publication(sched_id)
     if not row or str(row.get("status") or "") != "awaiting_retry":
         request.session["admin_error"] = _msg(request, "pub.flash.pending_gone")
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+        return done()
     if not db.mark_scheduled_retry_processing(sched_id):
         request.session["admin_error"] = _msg(request, "pub.flash.pending_gone")
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+        return done()
     video = db.get_video_by_id(row["video_id"])
     if not video:
         db.complete_scheduled_publication(sched_id, "failed", "Video not found")
         request.session["admin_error"] = _msg(request, "pub.flash.pending_no_video")
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+        return done()
     path = UPLOAD_DIR / video.file_name
     if not path.is_file():
         try:
@@ -2929,7 +2945,7 @@ def admin_retry_pending_publish(request: Request, sched_id: str):
             leftover = []
         db.set_scheduled_awaiting_retry(sched_id, leftover, "Video file missing")
         request.session["admin_error"] = _msg(request, "pub.flash.pending_no_file")
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+        return done()
     try:
         platforms_list = json.loads(row.get("platforms_json") or "[]")
     except (TypeError, ValueError):
@@ -2940,7 +2956,7 @@ def admin_retry_pending_publish(request: Request, sched_id: str):
             row["user_id"], getattr(video, "file_hash", "") or ""
         )
         request.session["admin_error"] = _msg(request, "pub.flash.no_platforms")
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+        return done()
     ok_n, fail_n, _ = publish_schedule.execute_video_publish(
         upload_dir=UPLOAD_DIR,
         user_id=row["user_id"],
@@ -2966,11 +2982,15 @@ def admin_retry_pending_publish(request: Request, sched_id: str):
         )
     else:
         request.session["admin_ok"] = _msg(request, "pub.flash.retry_all_ok", n=ok_n)
-    return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+    return done()
 
 
 @app.post("/admin/publicaciones/pending/{sched_id}/cancel", name="admin_cancel_pending_publish")
-def admin_cancel_pending_publish(request: Request, sched_id: str):
+def admin_cancel_pending_publish(
+    request: Request,
+    sched_id: str,
+    next: Annotated[str, Form()] = "",
+):
     try:
         u = _require_publish_retry_admin(request)
     except PermissionError as e:
@@ -2984,7 +3004,7 @@ def admin_cancel_pending_publish(request: Request, sched_id: str):
         request.session["admin_ok"] = _msg(request, "pub.flash.pending_cancelled")
     else:
         request.session["admin_error"] = _msg(request, "pub.flash.pending_gone")
-    return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+    return _redirect_after_pending_retry(request, next)
 
 
 @app.post("/admin/comments/reply", name="admin_reply_comment")
@@ -3099,6 +3119,8 @@ def admin_servidores(request: Request):
         {
             "user": admin,
             "nav_active": "servidores",
+            "ffmpeg_ok": video_compress.ffmpeg_available(),
+            "api_docs": platforms.api_document_rows(lang),
             "platforms": platforms.platform_list(lang),
             "platforms_all": platforms.platform_list(lang, include_hidden=True),
             "linked_accounts": tiktok_linked,
@@ -3154,20 +3176,10 @@ def admin_servidores(request: Request):
 @app.get("/admin/api-documento", response_class=HTMLResponse, name="admin_api_documento")
 def admin_api_documento(request: Request):
     try:
-        admin = require_server_admin(request)
+        require_server_admin(request)
     except PermissionError:
         return _admin_privileges_redirect_login(request)
-    lang = i18n.resolve_lang(request)
-    return _render(
-        request,
-        "admin_api_documento.html",
-        {
-            "user": admin,
-            "nav_active": "api_docs",
-            "api_docs": platforms.api_document_rows(lang),
-            "daily_limits": platforms.daily_video_limit_rows(lang),
-        },
-    )
+    return RedirectResponse(url="/admin/servidores#api-webs", status_code=303)
 
 
 @app.get("/admin/condiciones-servidores", response_class=HTMLResponse, name="admin_server_conditions")
@@ -3176,7 +3188,7 @@ def admin_server_conditions(request: Request):
         require_server_admin(request)
     except PermissionError:
         return _admin_privileges_redirect_login(request)
-    return RedirectResponse(url=request.url_for("admin_api_documento"), status_code=303)
+    return RedirectResponse(url="/admin/servidores#api-webs", status_code=303)
 
 
 @app.get("/admin/extractor", response_class=HTMLResponse, name="admin_extractor")
@@ -3192,16 +3204,18 @@ def admin_extractor_page(request: Request):
         {
             "user": admin,
             "nav_active": "extractor",
-            "platform_choices": [
-                p for p in platforms.platform_list(lang) if p.get("publish_enabled", True)
-            ],
+            "platform_choices": extractor.extractor_source_platforms(lang),
             "extractor_limits": {
                 "batch_min": extractor.MIN_BATCH,
                 "batch_max": extractor.MAX_BATCH,
+                "batch_default": extractor.DEFAULT_BATCH,
                 "interval_min": extractor.MIN_INTERVAL_MINUTES,
                 "interval_max": extractor.MAX_INTERVAL_MINUTES,
+                "interval_default": extractor.DEFAULT_INTERVAL_MIN,
+                "interval_jitter_max": extractor.DEFAULT_INTERVAL_MAX,
                 "rest_min": extractor.MIN_REST_SECONDS,
                 "rest_max": extractor.MAX_REST_SECONDS,
+                "rest_default": extractor.DEFAULT_REST_SECONDS,
             },
         },
     )
@@ -3374,7 +3388,7 @@ def api_extractor_scan(request: Request, platform: str = "", account: str = ""):
     user = _session_user(request)
     lang = i18n.resolve_lang(request)
     pid = (platform or "").strip()
-    if pid not in platforms.PLATFORM_IDS:
+    if not extractor.is_extractor_source(pid):
         return JSONResponse(
             {"ok": False, "error": i18n.t("extractor.err_platform", lang)},
             status_code=400,
@@ -3393,8 +3407,14 @@ def api_extractor_scan(request: Request, platform: str = "", account: str = ""):
     api_block = _extractor_require_source_api(pid, choice["id"], lang)
     if api_block:
         return api_block
-    target_ids = [t for t in (choice.get("platform_ids") or []) if t != pid]
-    summary = extractor.scan_summary(choice["id"], pid, target_ids)
+    target_ids = [
+        t
+        for t in (choice.get("platform_ids") or [])
+        if t != pid and platforms.is_publish_enabled(t)
+    ]
+    summary = extractor.scan_summary(
+        choice["id"], pid, target_ids, upload_dir=UPLOAD_DIR
+    )
     names = _extractor_platform_meta(lang)
     sources = choice.get("platform_sources") or {}
     targets = []
@@ -3448,7 +3468,7 @@ def api_extractor_create_job(request: Request, body: ExtractorJobBody):
     lang = i18n.resolve_lang(request)
 
     pid = (body.source_platform_id or "").strip()
-    if pid not in platforms.PLATFORM_IDS:
+    if not extractor.is_extractor_source(pid):
         return JSONResponse(
             {"ok": False, "error": i18n.t("extractor.err_platform", lang)},
             status_code=400,
@@ -3484,59 +3504,15 @@ def api_extractor_create_job(request: Request, body: ExtractorJobBody):
             status_code=400,
         )
 
-    if not (extractor.MIN_BATCH <= body.batch_size <= extractor.MAX_BATCH):
-        return JSONResponse(
-            {
-                "ok": False,
-                "error": i18n.t(
-                    "extractor.err_batch",
-                    lang,
-                    min=extractor.MIN_BATCH,
-                    max=extractor.MAX_BATCH,
-                ),
-            },
-            status_code=400,
-        )
-    if not (
-        extractor.MIN_INTERVAL_MINUTES
-        <= body.interval_minutes
-        <= extractor.MAX_INTERVAL_MINUTES
-    ):
-        return JSONResponse(
-            {
-                "ok": False,
-                "error": i18n.t(
-                    "extractor.err_interval",
-                    lang,
-                    min=extractor.MIN_INTERVAL_MINUTES,
-                    max=extractor.MAX_INTERVAL_MINUTES,
-                ),
-            },
-            status_code=400,
-        )
-    if not (
-        extractor.MIN_REST_SECONDS <= body.rest_seconds <= extractor.MAX_REST_SECONDS
-    ):
-        return JSONResponse(
-            {
-                "ok": False,
-                "error": i18n.t(
-                    "extractor.err_rest",
-                    lang,
-                    min=extractor.MIN_REST_SECONDS,
-                    max=extractor.MAX_REST_SECONDS,
-                ),
-            },
-            status_code=400,
-        )
-
     if db.extractor_job_conflict_exists(choice["id"], pid):
         return JSONResponse(
             {"ok": False, "error": i18n.t("extractor.err_duplicate", lang)},
             status_code=409,
         )
 
-    total = db.count_extractor_source_videos(choice["id"], pid)
+    total = extractor.scan_summary(
+        choice["id"], pid, targets, upload_dir=UPLOAD_DIR
+    )["total"]
     if total <= 0:
         return JSONResponse(
             {"ok": False, "error": i18n.t("extractor.err_no_videos", lang)},
@@ -3550,9 +3526,9 @@ def api_extractor_create_job(request: Request, body: ExtractorJobBody):
         source_platform_id=pid,
         target_platform_ids=targets,
         total_videos=total,
-        batch_size=body.batch_size,
-        interval_minutes=body.interval_minutes,
-        rest_seconds=body.rest_seconds,
+        batch_size=extractor.DEFAULT_BATCH,
+        interval_minutes=extractor.DEFAULT_INTERVAL_MIN,
+        rest_seconds=extractor.DEFAULT_REST_SECONDS,
         lang=lang,
     )
     names = _extractor_platform_meta(lang)

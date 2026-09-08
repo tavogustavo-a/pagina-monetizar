@@ -255,13 +255,21 @@ def publish_to_platform(
     tiktok_config_id: str | None = None,
     account_link_id: str | None = None,
     x_use_funding: bool = False,
-) -> tuple[bool, str]:
+) -> tuple[str, str]:
     import proxy_util
     from i18n import t
 
     pid = (platform_id or "").strip()
     if not platforms.is_publish_enabled(pid):
-        return False, t("pub.platform_paused", lang, platform=t(f"platform.{pid}", lang))
+        return "fail", t("pub.platform_paused", lang, platform=t(f"platform.{pid}", lang))
+    if not platforms.supports_content(pid, content_type):
+        kind = "photo" if (content_type or "").strip().lower() == "photo" else "video"
+        return "skipped", t(
+            "pub.skipped_unsupported",
+            lang,
+            platform=t(f"platform.{pid}", lang),
+            kind=t(f"pub.kind.{kind}", lang),
+        )
 
     kwargs = dict(
         platform_id=platform_id,
@@ -280,17 +288,19 @@ def publish_to_platform(
         if x_mode == "funding" and not db.resolve_active_x_funding_source():
             from i18n import t as _t
 
-            return False, _t("pub.x.need_funding_api", lang)
+            return "fail", _t("pub.x.need_funding_api", lang)
     with db.using_credentials_account(name):
         with db.using_x_app_mode(x_mode):
             if pid in vmos.PLATFORM_IDS and db.resolve_vmos_account_for_publish(
                 pid, account_link_id
             ):
-                return _publish_to_platform(**kwargs)
+                ok, message = _publish_to_platform(**kwargs)
+                return ("ok" if ok else "fail"), message
 
             proxy_url = db.get_active_proxy_url_for_account(account_link_id)
             with proxy_util.using_proxy(proxy_url):
-                return _publish_to_platform(**kwargs)
+                ok, message = _publish_to_platform(**kwargs)
+                return ("ok" if ok else "fail"), message
 
 
 def _publish_to_platform(
@@ -304,12 +314,70 @@ def _publish_to_platform(
     tiktok_config_id: str | None = None,
     account_link_id: str | None = None,
 ) -> tuple[bool, str]:
+    from i18n import t
+
     pid = (platform_id or "").strip()
     if pid not in platforms.PLATFORM_IDS:
-        from i18n import t
-
         return False, t("api.unknown_platform", lang)
 
+    send_path = Path(file_path)
+    temps: list[Path] = []
+    try:
+        if pid == "snapchat" and content_type != "photo":
+            import snapchat_publish
+
+            try:
+                send_path, snap_tmp = snapchat_publish.clip_for_snapchat(
+                    send_path, content_type
+                )
+            except ValueError:
+                return False, t("pub.snapchat.trim_fail", lang)
+            if snap_tmp:
+                temps.append(snap_tmp)
+
+        import video_compress
+
+        kind = "photo" if content_type == "photo" else "video"
+        try:
+            send_path, size_tmp = video_compress.ensure_under_bytes(
+                send_path,
+                video_compress.max_bytes_for(pid, content_type),
+                kind=kind,
+            )
+        except ValueError:
+            return False, t("pub.flash.compress_fail", lang)
+        if size_tmp:
+            temps.append(size_tmp)
+
+        return _dispatch_platform(
+            pid,
+            file_path=send_path,
+            content_type=content_type,
+            title=title,
+            description=description,
+            lang=lang,
+            tiktok_config_id=tiktok_config_id,
+            account_link_id=account_link_id,
+        )
+    finally:
+        for tmp in temps:
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def _dispatch_platform(
+    pid: str,
+    *,
+    file_path: Path,
+    content_type: str,
+    title: str,
+    description: str,
+    lang: str,
+    tiktok_config_id: str | None,
+    account_link_id: str | None,
+) -> tuple[bool, str]:
     if pid in vmos.PLATFORM_IDS:
         vmos_row = db.resolve_vmos_account_for_publish(pid, account_link_id)
         if vmos_row:

@@ -702,8 +702,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "No se pudo guardar la cuenta.",
     },
     "servers.limits_title": {
-        "en": "What each platform allows",
-        "es": "Qué permite cada plataforma",
+        "en": "File compression",
+        "es": "Compresión de archivos",
     },
     "servers.limits_hint": {
         "en": "What this panel can publish with the official APIs. Comments from each network are not synced yet.",
@@ -754,8 +754,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Sin OAuth público. Upload API de partners: access token y Channel ID. Solo video.",
     },
     "limits.note.snapchat": {
-        "en": "Public Profile: photos as 24h Stories; MP4 5–60 s (Spotlight 6–60 s, min. 540×960). Needs OpenSSL.",
-        "es": "Perfil público: fotos como Stories de 24 h; MP4 5–60 s (Spotlight 6–60 s, mín. 540×960). Hace falta OpenSSL.",
+        "en": "Public Profile: photos as 24h Stories; MP4 min. 5 s (Spotlight 6–55 s, min. 540×960). Videos over 55 s are trimmed to the first 55 s. Needs OpenSSL.",
+        "es": "Perfil público: fotos como Stories de 24 h; MP4 mín. 5 s (Spotlight 6–55 s, mín. 540×960). Si pasa de 55 s se recorta a los primeros 55 s. Hace falta OpenSSL.",
     },
     "limits.note.doodstream": {
         "en": "Video only. API key from DoodStream dashboard. Payout is on the host (PPV ads), not in this panel.",
@@ -1207,6 +1207,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Your account cannot upload videos.",
         "es": "Tu cuenta no puede subir videos.",
     },
+    "pub.flash.compress_fail": {
+        "en": "Could not compress the file under the platform size limit. Install ffmpeg.",
+        "es": "No se pudo comprimir el archivo por debajo del tope de la red. Instala ffmpeg.",
+    },
     "pub.flash.file_too_large": {
         "en": "File exceeds the maximum size ({max_mb} MB).",
         "es": "El archivo supera el tamaño máximo ({max_mb} MB).",
@@ -1448,6 +1452,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "No TikTok account connected with a valid token.",
         "es": "No hay cuenta TikTok conectada con token válido.",
     },
+    "pub.skipped_unsupported": {
+        "en": "Omitted: {platform} does not accept {kind}.",
+        "es": "Omitido: {platform} no admite {kind}.",
+    },
+    "pub.kind.photo": {"en": "photos", "es": "fotos"},
+    "pub.kind.video": {"en": "video", "es": "video"},
     "pub.fail_no_photo": {
         "en": "TikTok does not support still photos via this API.",
         "es": "TikTok no admite fotos fijas con esta API.",
@@ -1833,9 +1843,13 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Snapchat videos must be MP4.",
         "es": "Los videos de Snapchat deben ser MP4.",
     },
+    "pub.snapchat.trim_fail": {
+        "en": "Could not trim the video to 55 seconds for Snapchat. Install ffmpeg.",
+        "es": "No se pudo recortar el video a 55 segundos para Snapchat. Instala ffmpeg.",
+    },
     "pub.snapchat.bad_duration": {
-        "en": "Snapchat videos must be 5–60 seconds (Spotlight needs 6–60).",
-        "es": "Los videos de Snapchat deben durar 5–60 segundos (Spotlight exige 6–60).",
+        "en": "Snapchat videos must be at least 5 seconds. Longer than 55 s is trimmed to the first 55 s.",
+        "es": "Los videos de Snapchat deben durar al menos 5 segundos. Si pasan de 55 s se recortan a los primeros 55 s.",
     },
     "pub.snapchat.bad_size": {
         "en": "Snapchat video must be at least 540×960 px.",
@@ -2757,8 +2771,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Sin OAuth público. El token y el Channel ID los da Rumble como partner. Si tras una ráfaga empiezan los errores, para varias horas. Solo video.",
     },
     "cond.snapchat.cap": {
-        "en": "Public Profile API. No simple public “X videos/day” number. Stories last 24 hours. Spotlight videos must be 6–60 s (this panel: MP4 5–60 s, min. 540×960).",
-        "es": "API de perfil público. No hay un “X videos/día” público simple. Las Stories duran 24 horas. Spotlight: 6–60 s (este panel: MP4 5–60 s, mín. 540×960).",
+        "en": "Public Profile API. No simple public “X videos/day” number. Stories last 24 hours. This panel trims Snapchat video to the first 55 s (min. 540×960).",
+        "es": "API de perfil público. No hay un “X videos/día” público simple. Las Stories duran 24 horas. Este panel recorta el video de Snapchat a los primeros 55 s (mín. 540×960).",
     },
     "cond.snapchat.window": {
         "en": "Stories expire after 24 h. API rate limits are per app/profile (429 if you burst).",
@@ -2845,16 +2859,28 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "No hay cupo diario público. Uso seguro: 8–10/día, una subida a la vez.",
     },
     "apidoc.limits.snapchat": {
-        "en": "No simple public X videos/day number. Spotlight 6–60 s. Safe: 8–10 posts/day. Wait on HTTP 429.",
-        "es": "No hay un X videos/día público simple. Spotlight 6–60 s. Uso seguro: 8–10 posts/día. Si sale 429, espera.",
+        "en": "No simple public X videos/day number. This panel sends max 55 s. Safe: 8–10 posts/day. Wait on HTTP 429.",
+        "es": "No hay un X videos/día público simple. Este panel envía como máximo 55 s. Uso seguro: 8–10 posts/día. Si sale 429, espera.",
     },
     "apidoc.limits.odysee": {
         "en": "No social-network quota. Limited by LBC bid, wallet and pipeline. Safe: few videos/day, one upload at a time.",
         "es": "Sin cuota de red social. Limitan el bid LBC, el saldo y el pipeline. Uso seguro: pocos videos al día, una subida a la vez.",
     },
+    "apidoc.limits.vmos": {
+        "en": "No OAuth quota. Safe: one RPA task at a time per pad; space posts like a real phone.",
+        "es": "Sin cuota OAuth. Uso seguro: una tarea RPA a la vez por pad; separa los posts como un móvil real.",
+    },
+    "apidoc.ffmpeg_ok": {
+        "en": "ffmpeg is bundled with the app (imageio-ffmpeg). Heavy files are compressed per network (Instagram 290 MB, others 450 MB, photos 7.8 MB).",
+        "es": "ffmpeg viene con la app (imageio-ffmpeg). Los archivos pesados se comprimen por red (Instagram 290 MB, el resto 450 MB, fotos 7,8 MB).",
+    },
+    "apidoc.ffmpeg_missing": {
+        "en": "ffmpeg could not start. Run pip install -r requirements.txt (includes imageio-ffmpeg).",
+        "es": "No se pudo arrancar ffmpeg. Ejecuta pip install -r requirements.txt (incluye imageio-ffmpeg).",
+    },
     "apidoc.intro": {
-        "en": "What each server needs so publishing works. Official OAuth (or Rumble’s partner API) is the default. Saving Client ID/Secret only stores the app: the server stays unlinked until you click Connect and sign in; Disconnect or Remove API unlinks it, and connecting another account on the same card replaces the previous one. Register SITE_URL/oauth/{platform}/callback in each developer console. VMOS Cloud is an alternative for TikTok, Instagram, Facebook, YouTube, X and Snapchat: connect from Servers without pasting social access tokens. Dailymotion, Bilibili and Rumble stay on their APIs. Odysee signs in with email/password (LBRY auth token, TUS). Tokens marked Automatic are refreshed by the panel on OAuth accounts; VMOS and Odysee do not use those tokens.",
-        "es": "Qué hay que hacer en cada servidor para que la publicación funcione. El camino por defecto es OAuth oficial (o la API de partners de Rumble). Guardar Client ID/Secret solo guarda la app: el servidor sigue sin vincular hasta que pulses Conectar e inicies sesión; Desconectar o Quitar API lo desvincula, y conectar otra cuenta en la misma ficha reemplaza la anterior. Registra SITE_URL/oauth/{plataforma}/callback en cada consola de desarrollador. VMOS Cloud es una alternativa para TikTok, Instagram, Facebook, YouTube, X y Snapchat: se conecta desde Servidores sin pegar tokens de esas redes. Dailymotion, Bilibili y Rumble siguen por su API. Odysee entra con email/contraseña (auth token LBRY, TUS). Si el token es Automático, el panel lo renueva en cuentas OAuth; VMOS y Odysee no usan esos tokens.",
+        "en": "What each server needs so publishing works. Official OAuth (or Rumble’s partner API) is the default. Saving Client ID/Secret only stores the app: the server stays unlinked until you click Connect and sign in; Disconnect or Remove API unlinks it, and connecting another account on the same card replaces the previous one. Register SITE_URL/oauth/{platform}/callback in each developer console. VMOS Cloud is an alternative for TikTok, Instagram, Facebook, YouTube, X and Snapchat: connect from Servers without pasting social access tokens. Dailymotion, Bilibili and Rumble stay on their APIs. Odysee signs in with email/password (LBRY auth token, TUS). API type, video, photo and token renewal are on Servers.",
+        "es": "Qué hay que hacer en cada servidor para que la publicación funcione. El camino por defecto es OAuth oficial (o la API de partners de Rumble). Guardar Client ID/Secret solo guarda la app: el servidor sigue sin vincular hasta que pulses Conectar e inicies sesión; Desconectar o Quitar API lo desvincula, y conectar otra cuenta en la misma ficha reemplaza la anterior. Registra SITE_URL/oauth/{plataforma}/callback en cada consola de desarrollador. VMOS Cloud es una alternativa para TikTok, Instagram, Facebook, YouTube, X y Snapchat: se conecta desde Servidores sin pegar tokens de esas redes. Dailymotion, Bilibili y Rumble siguen por su API. Odysee entra con email/contraseña (auth token LBRY, TUS). El tipo de API, video, foto y renovación de token se ven en Servidores.",
     },
     "apidoc.col_server": {"en": "Server", "es": "Servidor"},
     "apidoc.col_api": {"en": "API", "es": "API"},
@@ -2873,243 +2899,243 @@ MESSAGES: dict[str, dict[str, str]] = {
     "apidoc.token.auto": {"en": "Automatic", "es": "Automático"},
     "apidoc.token.manual": {"en": "Manual", "es": "Manual"},
     "apidoc.token.none": {"en": "Not used", "es": "No aplica"},
-    "apidoc.vmos.name": {"en": "VMOS Cloud (alternative)", "es": "VMOS Cloud (alternativa)"},
+    "apidoc.vmos.name": {"en": "VMOS Cloud", "es": "VMOS Cloud"},
     "apidoc.vmos.step1": {
-        "en": "In VMOS Cloud (vmoscloud.com), open Developer → API and copy Access Key ID and Secret Access Key.",
-        "es": "En VMOS Cloud (vmoscloud.com) abre Developer → API y copia Access Key ID y Secret Access Key.",
+        "en": "vmoscloud.com → Developer → API: copy Access Key ID and Secret.",
+        "es": "vmoscloud.com → Developer → API: copia Access Key ID y Secret.",
     },
     "apidoc.vmos.step2": {
-        "en": "Create a cloud phone, install the social app, sign in, and copy the padCode.",
-        "es": "Crea un móvil en la nube, instala la app de la red, inicia sesión y copia el padCode.",
+        "en": "Create a cloud phone, install the app, sign in, copy padCode.",
+        "es": "Crea un móvil en la nube, instala la app, inicia sesión y copia el padCode.",
     },
     "apidoc.vmos.step3": {
-        "en": "Create an RPA template that posts from a file/path or URL, and copy its template/scriptId.",
-        "es": "Crea una plantilla RPA que publique desde un archivo/ruta o URL y copia su template/scriptId.",
+        "en": "Create an RPA template that posts from a file or URL; copy template/scriptId.",
+        "es": "Crea una plantilla RPA que publique desde archivo o URL y copia el template/scriptId.",
     },
     "apidoc.vmos.step4": {
-        "en": "In Servers, open that network’s accounts and Connect with VMOS. Save Access Key, Secret, padCode and the template. Test VMOS before publishing.",
-        "es": "En Servidores abre las cuentas de esa red y pulsa Conectar con VMOS. Guarda Access Key, Secret, padCode y la plantilla. Prueba VMOS antes de publicar.",
+        "en": "Servers → Connect with VMOS. Save keys, padCode and template. Test before posting.",
+        "es": "Servidores → Conectar con VMOS. Guarda keys, padCode y plantilla. Prueba antes de publicar.",
     },
     "apidoc.vmos.extra": {
-        "en": "Covers TikTok, Instagram, Facebook, YouTube, X and Snapchat. The panel picks VMOS or OAuth from how that account+network is linked. Without a template the post is not marked sent. Dailymotion, Bilibili and Rumble stay on their APIs. Panel proxies are not used. Stats/comments stay local to this panel.",
-        "es": "Cubre TikTok, Instagram, Facebook, YouTube, X y Snapchat. El panel elige VMOS u OAuth según cómo esté unida esa cuenta+red. Sin plantilla no se marca como enviado. Dailymotion, Bilibili y Rumble siguen por su API. No se usa el proxy del panel. Estadísticas y comentarios siguen siendo locales de este panel.",
+        "en": "TikTok, Instagram, Facebook, YouTube, X, Snapchat. No template = not sent. Not for Dailymotion, Bilibili or Rumble.",
+        "es": "TikTok, Instagram, Facebook, YouTube, X y Snapchat. Sin plantilla no se envía. No aplica a Dailymotion, Bilibili ni Rumble.",
     },
     "apidoc.vmos_alt": {
-        "en": "Alternative: in Servers, Connect with VMOS for this network (Access Key, Secret, padCode and template) instead of official OAuth.",
-        "es": "Alternativa: en Servidores, Conectar con VMOS en esta red (Access Key, Secret, padCode y plantilla) en lugar del OAuth oficial.",
+        "en": "Optional: Connect with VMOS instead of OAuth (Access Key, Secret, padCode, template).",
+        "es": "Opcional: Conectar con VMOS en lugar de OAuth (Access Key, Secret, padCode, plantilla).",
     },
     "apidoc.filehost.step1": {
-        "en": "Create an account on {name} and open Settings / API in its dashboard. Copy the API key (MixDrop also copies the account email; Streamtape the API login).",
-        "es": "Crea una cuenta en {name} y abre Settings / API en su panel. Copia la API key (MixDrop también el email de la cuenta; Streamtape el API login).",
+        "en": "On {name}: Settings / API. Copy the API key (MixDrop: also email; Streamtape: API login).",
+        "es": "En {name}: Settings / API. Copia la API key (MixDrop: también el email; Streamtape: API login).",
     },
     "apidoc.filehost.step2": {
-        "en": "In Servers, open {name} accounts and Connect. Paste the key (and extra field if asked). Test the API before publishing.",
-        "es": "En Servidores abre las cuentas de {name} y pulsa Conectar. Pega la key (y el campo extra si lo pide). Prueba la API antes de publicar.",
+        "en": "Servers → Connect. Paste the key (and extra field if asked). Test the API.",
+        "es": "Servidores → Conectar. Pega la key (y el extra si lo pide). Prueba la API.",
     },
     "apidoc.filehost.step3": {
-        "en": "Publish a video from this panel. The host returns a watch URL. Ads and payouts stay on {name}; this panel does not pay PPV.",
-        "es": "Publica un video desde este panel. El host devuelve una URL. Anuncios y pagos siguen en {name}; este panel no paga PPV.",
+        "en": "Publish a video; the host returns the watch URL. Payouts stay on {name}.",
+        "es": "Publica un video; el host devuelve la URL. Los pagos siguen en {name}.",
     },
     "apidoc.filehost.extra": {
-        "en": "No OAuth. Video only. You send viewers; unique views, country rates, AdBlock/VPN and fake traffic follow the host’s rules. Linked proxies are used. Stats/comments in this panel stay local.",
-        "es": "Sin OAuth. Solo video. Tú mandas el tráfico; vistas únicas, tarifas por país, AdBlock/VPN y tráfico falso siguen las reglas del host. Se usa el proxy vinculado. Estadísticas y comentarios de este panel siguen siendo locales.",
+        "en": "No OAuth. Video only. Linked proxy is used.",
+        "es": "Sin OAuth. Solo video. Se usa el proxy vinculado.",
     },
     "apidoc.filehost.trial": {
-        "en": "(pago) = trial host: newer / less proven. Use it to check whether they actually pay. Do not rely on them like DoodStream or MixDrop yet.",
-        "es": "(pago) = host de prueba: más nuevo o menos contrastado. Sirve para ver si realmente pagan. Aún no los trates como DoodStream o MixDrop.",
+        "en": "(pago) = trial host. Check if they pay before relying on them.",
+        "es": "(pago) = host de prueba. Comprueba si pagan antes de depender de él.",
     },
     "apidoc.odysee.step1": {
-        "en": "Create an Odysee account (odysee.com). There is no public OAuth for third-party apps.",
-        "es": "Crea una cuenta en Odysee (odysee.com). No hay OAuth público para apps de terceros.",
+        "en": "Create an account on odysee.com (no public OAuth).",
+        "es": "Crea una cuenta en odysee.com (no hay OAuth público).",
     },
     "apidoc.odysee.step2": {
-        "en": "In Servers, open Odysee accounts and Connect. Sign in with email and password. The panel stores the auth token, not the password. Channel claim ID is optional.",
-        "es": "En Servidores abre las cuentas de Odysee y pulsa Conectar. Entra con email y contraseña. El panel guarda el auth token, no la contraseña. El claim ID del canal es opcional.",
+        "en": "Servers → Connect with email/password. The panel stores the auth token. Channel claim ID is optional.",
+        "es": "Servidores → Conectar con email y contraseña. El panel guarda el auth token. El claim ID del canal es opcional.",
     },
     "apidoc.odysee.step3": {
-        "en": "Publish a video. The panel requests a TUS upload, sends the file in 50 MB chunks, then stream_create via asynqueries. Do not mark sent unless Odysee returns a claim URL.",
-        "es": "Publica un video. El panel pide una subida TUS, envía el archivo en trozos de 50 MB y luego stream_create por asynqueries. No marques enviado si Odysee no devuelve una URL de claim.",
+        "en": "Publish: TUS upload (50 MB chunks) then stream_create. Needs LBC in the wallet for the bid.",
+        "es": "Publica: subida TUS (trozos de 50 MB) y luego stream_create. Hace falta LBC en el monedero para el bid.",
     },
     "apidoc.odysee.extra": {
-        "en": "Needs LBC in the Odysee wallet for the bid. Video only. Linked proxies are used. Stats/comments in this panel stay local.",
-        "es": "Hace falta LBC en el monedero de Odysee para el bid. Solo video. Se usa el proxy vinculado. Estadísticas y comentarios de este panel siguen siendo locales.",
+        "en": "Video only. Linked proxy is used.",
+        "es": "Solo video. Se usa el proxy vinculado.",
     },
     "apidoc.dtube.step1": {
-        "en": "Use a Hive account (not a PPV API key). Export the posting WIF from a Hive wallet. Never use the owner key.",
-        "es": "Usa una cuenta Hive (no una API key PPV). Exporta el posting WIF desde un monedero Hive. Nunca uses la owner key.",
+        "en": "Hive account: export posting WIF (never the owner key).",
+        "es": "Cuenta Hive: exporta el posting WIF (nunca la owner key).",
     },
     "apidoc.dtube.step2": {
-        "en": "In Servers, open DTube accounts and Connect. Save Hive username and posting WIF. Test before publishing.",
-        "es": "En Servidores abre las cuentas de DTube y pulsa Conectar. Guarda el usuario Hive y el posting WIF. Prueba antes de publicar.",
+        "en": "Servers → Connect. Save Hive username and posting WIF. Test.",
+        "es": "Servidores → Conectar. Guarda usuario Hive y posting WIF. Prueba.",
     },
     "apidoc.dtube.step3": {
-        "en": "Publishing is paused while cluster.d.tube has no DNS. When it returns, the file will go to the IPFS cluster and a Hive comment with DTube json_metadata will be broadcast. Do not mark sent unless Hive accepted the transaction.",
-        "es": "La publicación está pausada mientras cluster.d.tube no tenga DNS. Cuando vuelva, el archivo irá al cluster IPFS y se emitirá un comentario Hive con json_metadata de DTube. No marques enviado si Hive no aceptó la transacción.",
+        "en": "Publishing is paused: cluster.d.tube has no DNS. Hive credentials stay saved.",
+        "es": "Publicación pausada: cluster.d.tube no tiene DNS. Las credenciales Hive se quedan guardadas.",
     },
     "apidoc.dtube.extra": {
-        "en": "Publishing paused: IPFS cluster DNS is gone. Hive credentials remain. Stats/comments stay local.",
-        "es": "Publicación pausada: el cluster IPFS no tiene DNS. Las credenciales Hive se quedan. Estadísticas y comentarios siguen locales.",
+        "en": "",
+        "es": "",
     },
     "apidoc.extra_none": {"en": "None", "es": "Ninguno"},
     "apidoc.tiktok.step1": {
-        "en": "Create an app in TikTok for Developers (developers.tiktok.com).",
-        "es": "Crea una app en TikTok for Developers (developers.tiktok.com).",
+        "en": "Create an app on developers.tiktok.com.",
+        "es": "Crea una app en developers.tiktok.com.",
     },
     "apidoc.tiktok.step2": {
-        "en": "Enable Login Kit and Content Posting API (user.info.basic, video.upload).",
-        "es": "Activa Login Kit y Content Posting API (user.info.basic, video.upload).",
+        "en": "Enable Login Kit + Content Posting (user.info.basic, video.upload).",
+        "es": "Activa Login Kit y Content Posting (user.info.basic, video.upload).",
     },
     "apidoc.tiktok.step3": {
-        "en": "Register the redirect URI: SITE_URL/oauth/tiktok/callback.",
-        "es": "Registra la URI de redirección: SITE_URL/oauth/tiktok/callback.",
+        "en": "Redirect URI: SITE_URL/oauth/tiktok/callback.",
+        "es": "URI de redirección: SITE_URL/oauth/tiktok/callback.",
     },
     "apidoc.tiktok.step4": {
-        "en": "In Servers, save the Client Key and Client Secret, then Connect with TikTok.",
-        "es": "En Servidores guarda el Client Key y el Client Secret y pulsa Conectar con TikTok.",
+        "en": "Servers: save Client Key/Secret → Connect with TikTok.",
+        "es": "Servidores: guarda Client Key/Secret → Conectar con TikTok.",
     },
     "apidoc.tiktok.extra": {
-        "en": "TikTok must approve Content Posting before Direct Post. Videos only; no photos.",
-        "es": "TikTok tiene que aprobar Content Posting para el envío directo. Solo video; no fotos.",
+        "en": "Wait for TikTok to approve Content Posting before Direct Post.",
+        "es": "Espera a que TikTok apruebe Content Posting para el envío directo.",
     },
     "apidoc.youtube.step1": {
-        "en": "In Google Cloud, create a Web OAuth client and enable YouTube Data API v3.",
-        "es": "En Google Cloud crea un cliente OAuth web y activa YouTube Data API v3.",
+        "en": "Google Cloud: web OAuth client + YouTube Data API v3.",
+        "es": "Google Cloud: cliente OAuth web + YouTube Data API v3.",
     },
     "apidoc.youtube.step2": {
-        "en": "Add the redirect URI: SITE_URL/oauth/youtube/callback.",
-        "es": "Añade la URI de redirección: SITE_URL/oauth/youtube/callback.",
+        "en": "Redirect URI: SITE_URL/oauth/youtube/callback.",
+        "es": "URI de redirección: SITE_URL/oauth/youtube/callback.",
     },
     "apidoc.youtube.step3": {
-        "en": "In Servers, save Client ID and Client Secret, then Connect with YouTube.",
-        "es": "En Servidores guarda Client ID y Client Secret y pulsa Conectar con YouTube.",
+        "en": "Servers: save Client ID/Secret → Connect with YouTube.",
+        "es": "Servidores: guarda Client ID/Secret → Conectar con YouTube.",
     },
     "apidoc.youtube.extra": {
-        "en": "Videos only. Clips of 3 minutes or less upload as Shorts. Google may show an unverified-app warning until the OAuth consent screen is verified.",
-        "es": "Solo video. Los de 3 minutos o menos se suben como Shorts. Google puede mostrar aviso de app no verificada hasta verificar la pantalla de consentimiento.",
+        "en": "Google may warn until the OAuth consent screen is verified. Clips ≤ 3 min go up as Shorts.",
+        "es": "Google puede avisar hasta verificar la pantalla de consentimiento. Clips ≤ 3 min se suben como Shorts.",
     },
     "apidoc.instagram.step1": {
-        "en": "In Meta for Developers, add Instagram and use Business Login.",
-        "es": "En Meta for Developers añade Instagram y usa Business Login.",
+        "en": "Meta for Developers: Instagram + Business Login.",
+        "es": "Meta for Developers: Instagram + Business Login.",
     },
     "apidoc.instagram.step2": {
-        "en": "Register the redirect URI: SITE_URL/oauth/instagram/callback.",
-        "es": "Registra la URI de redirección: SITE_URL/oauth/instagram/callback.",
+        "en": "Redirect URI: SITE_URL/oauth/instagram/callback.",
+        "es": "URI de redirección: SITE_URL/oauth/instagram/callback.",
     },
     "apidoc.instagram.step3": {
-        "en": "Connect a professional Instagram account (Business or Creator), not a personal one.",
-        "es": "La cuenta de Instagram debe ser profesional (Business o Creador), no personal.",
+        "en": "Use a professional account (Business or Creator), not personal.",
+        "es": "Usa una cuenta profesional (Business o Creador), no personal.",
     },
     "apidoc.instagram.step4": {
-        "en": "In Servers, save App ID and App Secret, then Connect with Instagram.",
-        "es": "En Servidores guarda App ID y App Secret y pulsa Conectar con Instagram.",
+        "en": "Servers: save App ID/Secret → Connect with Instagram.",
+        "es": "Servidores: guarda App ID/Secret → Conectar con Instagram.",
     },
     "apidoc.instagram.extra": {
-        "en": "Photos need a public https SITE_URL (not localhost): Instagram downloads the file from that URL. Video = Reels.",
-        "es": "Las fotos necesitan un SITE_URL público https (no localhost): Instagram descarga el archivo desde esa URL. El video se publica como Reels.",
+        "en": "Photos need a public https SITE_URL (not localhost). Video = Reels.",
+        "es": "Fotos: SITE_URL público https (no localhost). Video = Reels.",
     },
     "apidoc.facebook.step1": {
-        "en": "In Meta for Developers, add Facebook Login with pages_show_list and pages_manage_posts.",
-        "es": "En Meta for Developers añade Facebook Login con pages_show_list y pages_manage_posts.",
+        "en": "Meta: Facebook Login with pages_show_list and pages_manage_posts.",
+        "es": "Meta: Facebook Login con pages_show_list y pages_manage_posts.",
     },
     "apidoc.facebook.step2": {
-        "en": "Register the redirect URI: SITE_URL/oauth/facebook/callback.",
-        "es": "Registra la URI de redirección: SITE_URL/oauth/facebook/callback.",
+        "en": "Redirect URI: SITE_URL/oauth/facebook/callback.",
+        "es": "URI de redirección: SITE_URL/oauth/facebook/callback.",
     },
     "apidoc.facebook.step3": {
-        "en": "In Servers, save App ID and App Secret, then Connect with Facebook and choose Pages.",
-        "es": "En Servidores guarda App ID y App Secret, pulsa Conectar con Facebook y elige las Páginas.",
+        "en": "Servers: save App ID/Secret → Connect with Facebook → pick Pages.",
+        "es": "Servidores: guarda App ID/Secret → Conectar con Facebook → elige Páginas.",
     },
     "apidoc.facebook.extra": {
-        "en": "Pages only (not personal profiles). Photos and videos.",
-        "es": "Solo Páginas (no perfiles personales). Fotos y videos.",
+        "en": "Pages only, not personal profiles.",
+        "es": "Solo Páginas, no perfiles personales.",
     },
     "apidoc.threads.step1": {
-        "en": "In VMOS Cloud, create a cloud phone, install Threads, sign in, then copy Access Key, Secret and padCode from Developer → API.",
-        "es": "En VMOS Cloud crea un móvil, instala Threads, inicia sesión y copia Access Key, Secret y padCode en Developer → API.",
+        "en": "VMOS: cloud phone, install Threads, copy Access Key, Secret and padCode.",
+        "es": "VMOS: móvil en la nube, instala Threads y copia Access Key, Secret y padCode.",
     },
     "apidoc.threads.step2": {
-        "en": "In Servers, open Threads accounts and Connect with VMOS Threads.",
-        "es": "En Servidores abre Cuentas de Threads y pulsa Conectar con VMOS Threads.",
+        "en": "Servers → Connect with VMOS Threads.",
+        "es": "Servidores → Conectar con VMOS Threads.",
     },
     "apidoc.x.step1": {
-        "en": "In the X Developer Portal, create an OAuth 2.0 app with PKCE.",
-        "es": "En el portal de desarrolladores de X crea una app OAuth 2.0 con PKCE.",
+        "en": "X Developer Portal: OAuth 2.0 app with PKCE.",
+        "es": "Portal de X: app OAuth 2.0 con PKCE.",
     },
     "apidoc.x.step2": {
-        "en": "Register the redirect URI: SITE_URL/oauth/x/callback.",
-        "es": "Registra la URI de redirección: SITE_URL/oauth/x/callback.",
+        "en": "Redirect URI: SITE_URL/oauth/x/callback.",
+        "es": "URI de redirección: SITE_URL/oauth/x/callback.",
     },
     "apidoc.x.step3": {
-        "en": "In Servers, save Client ID and Client Secret, then Connect with X.",
-        "es": "En Servidores guarda Client ID y Client Secret y pulsa Conectar con X.",
+        "en": "Servers: save Client ID/Secret → Connect with X.",
+        "es": "Servidores: guarda Client ID/Secret → Conectar con X.",
     },
     "apidoc.x.extra": {
-        "en": "A paid X API plan with write access is required to publish. Photos, GIF and short video. Config X (sidebar): pick one connected X account as the recharge account that pays the API. Recharge it, set the cost per post, and the panel tracks recharged / spent / available. When you publish to other X accounts with the checkbox on, the cost is deducted from that recharge account instead of spending on every account. Uncheck it to spend from the posting account itself (for accounts where you already pay). Every day at 4 AM (panel time) the panel queries X and marks which accounts already meet the follower threshold so you only pay the subscription on those. X does not expose your API bill or impressions; the balance is panel accounting, and impressions/Premium must still be checked on X before you pay.",
-        "es": "Hace falta un plan de pago de la API de X con permiso de escritura para publicar. Fotos, GIF y video corto. Config X (barra lateral): eliges una cuenta de X conectada como la que recarga y paga la API. La recargas, defines el costo por publicación y el panel muestra recargado / gastado / disponible. Al publicar en las demás cuentas de X con el checkbox activado, el costo se descuenta de esa cuenta de recarga y no de cada cuenta. Desmárcalo para gastar del saldo de la propia cuenta que publica (las que ya pagas). Todos los días a las 4 am (hora del panel) se consulta X y se marcan las cuentas que ya cumplen el mínimo de seguidores, para pagar la suscripción solo en esas. X no expone tu factura de API ni las impresiones; el saldo es contabilidad del panel, y las impresiones/Premium hay que verificarlas en X antes de pagar.",
+        "en": "Needs a paid write API plan. Config X: one recharge account, cost per post; daily 4 AM check for follower threshold.",
+        "es": "Hace falta plan de pago con escritura. Config X: una cuenta de recarga y costo por post; a las 4 am se marcan las que ya cumplen seguidores.",
     },
     "apidoc.dailymotion.step1": {
-        "en": "Get an API Key and API Secret from Dailymotion (partner / developer app).",
-        "es": "En Dailymotion obtén API Key y API Secret (app de partner / desarrollador).",
+        "en": "Get API Key and Secret from Dailymotion (partner / developer app).",
+        "es": "Obtén API Key y Secret en Dailymotion (app de partner / desarrollador).",
     },
     "apidoc.dailymotion.step2": {
-        "en": "In Dailymotion Studio → API keys, set Callback URL to SITE_URL/oauth/dailymotion/callback.",
-        "es": "En Dailymotion Studio → API keys pon Callback URL = SITE_URL/oauth/dailymotion/callback.",
+        "en": "Studio → API keys: Callback URL = SITE_URL/oauth/dailymotion/callback.",
+        "es": "Studio → API keys: Callback URL = SITE_URL/oauth/dailymotion/callback.",
     },
     "apidoc.dailymotion.step3": {
-        "en": "In Servers, save the keys, then Connect with Dailymotion and sign in.",
-        "es": "En Servidores guarda las claves y pulsa Conectar con Dailymotion e inicia sesión.",
+        "en": "Servers: save keys → Connect with Dailymotion and sign in.",
+        "es": "Servidores: guarda las claves → Conectar con Dailymotion e inicia sesión.",
     },
     "apidoc.dailymotion.extra": {
-        "en": "Videos only. Uploads go to the connected channel.",
-        "es": "Solo video. Las subidas van al canal conectado.",
+        "en": "Uploads go to the connected channel.",
+        "es": "Las subidas van al canal conectado.",
     },
     "apidoc.bilibili.step1": {
         "en": "Create an app on Bilibili Open Platform (投稿).",
         "es": "Crea una app en Bilibili Open Platform (投稿).",
     },
     "apidoc.bilibili.step2": {
-        "en": "Register the redirect URI: SITE_URL/oauth/bilibili/callback.",
-        "es": "Registra la URI de redirección: SITE_URL/oauth/bilibili/callback.",
+        "en": "Redirect URI: SITE_URL/oauth/bilibili/callback.",
+        "es": "URI de redirección: SITE_URL/oauth/bilibili/callback.",
     },
     "apidoc.bilibili.step3": {
-        "en": "In Servers, save Client ID and Client Secret, then Connect with Bilibili.",
-        "es": "En Servidores guarda Client ID y Client Secret y pulsa Conectar con Bilibili.",
+        "en": "Servers: save Client ID/Secret → Connect with Bilibili.",
+        "es": "Servidores: guarda Client ID/Secret → Conectar con Bilibili.",
     },
     "apidoc.bilibili.extra": {
-        "en": "Install ffmpeg on the server (needed for the cover). Optional: BILIBILI_TID and BILIBILI_TAG in .env. Videos only.",
-        "es": "Instala ffmpeg en el servidor (hace falta para la portada). Opcional: BILIBILI_TID y BILIBILI_TAG en .env. Solo video.",
+        "en": "ffmpeg is required for the cover. Optional: BILIBILI_TID and BILIBILI_TAG in .env.",
+        "es": "ffmpeg hace falta para la portada. Opcional: BILIBILI_TID y BILIBILI_TAG en .env.",
     },
     "apidoc.rumble.step1": {
-        "en": "Rumble has no public OAuth. Apply to their partner Upload API.",
-        "es": "Rumble no tiene OAuth público. Hay que entrar en su Upload API de partners.",
+        "en": "No public OAuth. Apply for the partner Upload API.",
+        "es": "No hay OAuth público. Pide la Upload API de partners.",
     },
     "apidoc.rumble.step2": {
-        "en": "Rumble issues an access token and a Channel ID (not a livestream chat URL).",
-        "es": "Rumble te da un access token y un Channel ID (no la URL de chat en vivo).",
+        "en": "Rumble gives an access token and a Channel ID (not the livestream chat URL).",
+        "es": "Rumble da un access token y un Channel ID (no la URL de chat en vivo).",
     },
     "apidoc.rumble.step3": {
-        "en": "In Servers, save the token and Channel ID. There is no Connect with Rumble button.",
-        "es": "En Servidores guarda el token y el Channel ID. No hay botón Conectar con Rumble.",
+        "en": "Servers: save token and Channel ID. There is no Connect with Rumble button.",
+        "es": "Servidores: guarda token y Channel ID. No hay botón Conectar con Rumble.",
     },
     "apidoc.rumble.extra": {
-        "en": "If Rumble revokes the token, paste a new one. Videos only.",
-        "es": "Si Rumble revoca el token, pega uno nuevo. Solo video.",
+        "en": "If the token is revoked, paste a new one.",
+        "es": "Si revocan el token, pega uno nuevo.",
     },
     "apidoc.snapchat.step1": {
-        "en": "In Snap Business Manager, create an app with Public Profile API (Stories / Spotlight).",
-        "es": "En Snap Business Manager crea una app con Public Profile API (Stories / Spotlight).",
+        "en": "Snap Business Manager: app with Public Profile API (Stories / Spotlight).",
+        "es": "Snap Business Manager: app con Public Profile API (Stories / Spotlight).",
     },
     "apidoc.snapchat.step2": {
-        "en": "Register the redirect URI: SITE_URL/oauth/snapchat/callback.",
-        "es": "Registra la URI de redirección: SITE_URL/oauth/snapchat/callback.",
+        "en": "Redirect URI: SITE_URL/oauth/snapchat/callback.",
+        "es": "URI de redirección: SITE_URL/oauth/snapchat/callback.",
     },
     "apidoc.snapchat.step3": {
-        "en": "In Servers, save Client ID and Client Secret, then Connect with Snapchat.",
-        "es": "En Servidores guarda Client ID y Client Secret y pulsa Conectar con Snapchat.",
+        "en": "Servers: save Client ID/Secret → Connect with Snapchat.",
+        "es": "Servidores: guarda Client ID/Secret → Conectar con Snapchat.",
     },
     "apidoc.snapchat.extra": {
-        "en": "OpenSSL must be installed (AES-256-CBC). Photos = Stories (24 h). Video: MP4 5–60 s (Spotlight 6–60 s, min. 540×960).",
-        "es": "Hace falta OpenSSL instalado (AES-256-CBC). Fotos = Stories (24 h). Video: MP4 5–60 s (Spotlight 6–60 s, mín. 540×960).",
+        "en": "Needs OpenSSL (AES-256-CBC). Photos = Stories 24 h. Video > 55 s is trimmed to 55 s (Spotlight 6–55 s, min. 540×960).",
+        "es": "Hace falta OpenSSL (AES-256-CBC). Fotos = Stories 24 h. Video > 55 s se recorta a 55 s (Spotlight 6–55 s, mín. 540×960).",
     },
     # ------------------------------------------------------------------
     # Proxys
@@ -3623,8 +3649,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "nav.pagos": {"en": "Payments", "es": "Pagos"},
     "extractor.title": {"en": "Video extractor", "es": "Extractor de videos"},
     "extractor.subtitle": {
-        "en": "Pull the videos from one server and spread them to the account's other servers, at your own pace.",
-        "es": "Toma los videos de un servidor y repártelos a los demás servidores de la cuenta, al ritmo que definas.",
+        "en": "Take videos from one server and spread them to the account's other servers. Default pace: 5 per cycle, every 30–40 minutes (it varies). Snapchat is clipped to 55 s; other servers only get videos longer than 1 minute. Large files are compressed. When a video has been sent or skipped on every destination, its file is deleted from this server so nothing is left behind.",
+        "es": "Toma los videos de un servidor y repártelos a los demás de la cuenta. Ritmo: 5 por ciclo, cada 30–40 minutos (varía). Snapchat se recorta a 55 s; en el resto solo se toman videos de más de 1 minuto. Los archivos pesados se comprimen. Cuando un video ya se envió u omitió en todos los destinos, su archivo se borra de este servidor para no dejar nada huérfano.",
     },
     "extractor.info_btn": {
         "en": "What is the extractor?",
@@ -3639,8 +3665,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Cómo elegir el origen",
     },
     "extractor.step1_hint": {
-        "en": "Pick the server and the account to extract from. \"All\" is not allowed here.",
-        "es": "Elige el servidor y la cuenta de donde se extrae. Aquí no se permite \"Todos\".",
+        "en": "Pick the server and the account to extract from. Snapchat is not listed here: its clips are 55 s and the other servers need more than 1 minute.",
+        "es": "Elige el servidor y la cuenta de donde se extrae. Snapchat no aparece: sus clips son de 55 s y los demás servidores piden más de 1 minuto.",
     },
     "extractor.step2_title": {
         "en": "Scan server",
@@ -3663,8 +3689,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Cómo configurar el reparto",
     },
     "extractor.step3_hint": {
-        "en": "Set how many videos per cycle, how often, and the rest between videos. If the server runs low on resources the batch lowers automatically and goes back up when it recovers.",
-        "es": "Define cuántos videos por ciclo, cada cuánto, y el descanso entre videos. Si el servidor se queda sin recursos, el lote baja automáticamente y vuelve a subir cuando se recupera.",
+        "en": "Comes preset: 5 videos per cycle. The wait between cycles varies from 30 to 40 minutes (plus extra seconds). Between videos the pause also varies, from seconds up to a couple of minutes. Snapchat is clipped to 55 s; other servers skip anything under 60 s. Heavy files are compressed (Instagram 290 MB, others 450 MB).",
+        "es": "Viene predeterminado: 5 videos por ciclo. La espera entre ciclos varía de 30 a 40 minutos (con segundos sueltos). Entre videos la pausa también varía, de segundos a un par de minutos. Snapchat se recorta a 55 s; en los demás no se coge nada de menos de 1 minuto. Los archivos pesados se comprimen (Instagram 290 MB, el resto 450 MB).",
     },
     "extractor.platform_label": {"en": "Source server", "es": "Servidor origen"},
     "extractor.platform_pick": {"en": "Choose server", "es": "Elegir servidor"},
@@ -3711,16 +3737,28 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Videos por ciclo",
     },
     "extractor.interval_label": {
-        "en": "Every how many minutes",
-        "es": "Cada cuántos minutos",
+        "en": "Every how many minutes (varies 30–40)",
+        "es": "Cada cuántos minutos (varía 30–40)",
     },
     "extractor.rest_label": {
-        "en": "Rest between videos (seconds)",
-        "es": "Descanso entre videos (segundos)",
+        "en": "Rest between videos (seconds, varies)",
+        "es": "Descanso entre videos (segundos, varía)",
     },
     "extractor.start_btn": {"en": "Start extraction", "es": "Iniciar extracción"},
     "extractor.starting": {"en": "Starting...", "es": "Iniciando..."},
     "extractor.jobs_title": {"en": "Extractions", "es": "Extracciones"},
+    "extractor.jobs_search": {
+        "en": "Search by account, server or status…",
+        "es": "Buscar por cuenta, servidor o estado…",
+    },
+    "extractor.jobs_no_results": {
+        "en": "No extractions match that search.",
+        "es": "Ninguna extracción coincide con esa búsqueda.",
+    },
+    "extractor.jobs_pagination": {
+        "en": "Extractions pagination",
+        "es": "Paginación de extracciones",
+    },
     "extractor.status_running": {"en": "Running", "es": "En curso"},
     "extractor.status_paused": {"en": "Paused", "es": "Pausada"},
     "extractor.status_done": {"en": "Completed", "es": "Completada"},
@@ -3730,8 +3768,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "{done} de {total} envíos",
     },
     "extractor.job_config": {
-        "en": "{batch} per cycle · every {interval} min · rest {rest}s",
-        "es": "{batch} por ciclo · cada {interval} min · descanso {rest}s",
+        "en": "{batch} per cycle · every {interval} min (varies) · rest varies",
+        "es": "{batch} por ciclo · cada {interval} min (varía) · descanso variable",
     },
     "extractor.job_effective": {
         "en": "current batch: {count}",
@@ -3885,6 +3923,18 @@ MESSAGES: dict[str, dict[str, str]] = {
     "extractor.log_skipped": {
         "en": "Skipped: this server does not support this content type.",
         "es": "Omitido: este servidor no soporta este tipo de contenido.",
+    },
+    "extractor.skip_photo": {
+        "en": "Skipped: the extractor only takes videos.",
+        "es": "Omitido: el extractor solo toma videos.",
+    },
+    "extractor.skip_short": {
+        "en": "Skipped: shorter than 1 minute.",
+        "es": "Omitido: dura menos de 1 minuto.",
+    },
+    "extractor.skip_snapchat_short": {
+        "en": "Skipped: Snapchat needs at least 5 seconds.",
+        "es": "Omitido: Snapchat pide al menos 5 segundos.",
     },
 }
 

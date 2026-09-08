@@ -13,6 +13,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+import ffmpeg_bin
+
 UA = "Tuyaho/1.0 (DTube Hive publish)"
 HIVE_NODES = (
     "https://api.hive.blog",
@@ -301,7 +303,7 @@ def _snap_bytes(video_path: Path) -> bytes:
         tmp = video_path.with_suffix(".dtube-snap.jpg")
         subprocess.run(
             [
-                "ffmpeg",
+                ffmpeg_bin.ffmpeg_exe(),
                 "-y",
                 "-ss",
                 "1",

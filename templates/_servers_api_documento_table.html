@@ -1,0 +1,33 @@
+<div class="limits-table-wrap apidoc-table-wrap servers-api-docs-table-wrap">
+  <table class="limits-table apidoc-table servers-api-docs-table">
+    <thead>
+      <tr>
+        <th>{{ t('apidoc.col_server') }}</th>
+        <th>{{ t('apidoc.col_setup') }}</th>
+        <th>{{ t('apidoc.limits_col_cap') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in api_docs %}
+      <tr id="apidoc-{{ row.id }}">
+        <td data-label="{{ t('apidoc.col_server') }}">
+          <span class="apidoc-server">
+            <span class="apidoc-server__icon" aria-hidden="true">{{ row.icon }}</span>
+            <span>{{ row.name }}</span>
+          </span>
+        </td>
+        <td data-label="{{ t('apidoc.col_setup') }}" class="apidoc-cell--stack">
+          <ol class="apidoc-steps">
+            {% for step in row.setup_steps %}
+            <li>{{ step }}</li>
+            {% endfor %}
+          </ol>
+        </td>
+        <td data-label="{{ t('apidoc.limits_col_cap') }}" class="apidoc-cell--stack cond-cell">
+          {{ row.cap }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

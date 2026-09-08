@@ -4,7 +4,8 @@ from __future__ import annotations
 import struct
 import subprocess
 from pathlib import Path
-from typing import Any
+
+import ffmpeg_bin
 
 
 def probe_video(path: Path) -> dict[str, Any]:
@@ -44,7 +45,7 @@ def _probe_ffprobe(path: Path) -> dict[str, Any]:
     try:
         proc = subprocess.run(
             [
-                "ffprobe",
+                ffmpeg_bin.ffprobe_exe(),
                 "-v",
                 "error",
                 "-select_streams",

@@ -11,19 +11,14 @@
           <header class="admin-head admin-head--title">
             <h1>{{ t('nav.api_docs') }}</h1>
           </header>
-          <p class="sub apidoc__intro">{{ t('apidoc.intro') }}</p>
 
           <div class="limits-table-wrap apidoc-table-wrap">
             <table class="limits-table apidoc-table">
               <thead>
                 <tr>
                   <th>{{ t('apidoc.col_server') }}</th>
-                  <th>{{ t('apidoc.col_api') }}</th>
-                  <th>{{ t('apidoc.col_video') }}</th>
-                  <th>{{ t('apidoc.col_photo') }}</th>
-                  <th>{{ t('apidoc.col_token') }}</th>
                   <th>{{ t('apidoc.col_setup') }}</th>
-                  <th>{{ t('apidoc.col_extra') }}</th>
+                  <th>{{ t('apidoc.limits_col_cap') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -35,18 +30,6 @@
                       <span>{{ row.name }}</span>
                     </span>
                   </td>
-                  <td data-label="{{ t('apidoc.col_api') }}">
-                    <span class="cap {% if row.api_kind == 'oauth' %}cap--yes{% elif row.api_kind in ['partner', 'vmos', 'filehost', 'lbry', 'hive'] %}cap--limited{% else %}cap--no{% endif %}">{{ row.api_label }}</span>
-                  </td>
-                  <td data-label="{{ t('apidoc.col_video') }}">
-                    <span class="cap cap--{{ row.video }}">{{ t('cap.' ~ row.video) }}</span>
-                  </td>
-                  <td data-label="{{ t('apidoc.col_photo') }}">
-                    <span class="cap cap--{{ row.photo }}">{{ t('cap.' ~ row.photo) }}</span>
-                  </td>
-                  <td data-label="{{ t('apidoc.col_token') }}">
-                    <span class="cap {% if row.token == 'auto' %}cap--yes{% elif row.token == 'none' %}cap--no{% else %}cap--limited{% endif %}">{{ row.token_label }}</span>
-                  </td>
                   <td data-label="{{ t('apidoc.col_setup') }}" class="apidoc-cell--stack">
                     <ol class="apidoc-steps">
                       {% for step in row.setup_steps %}
@@ -54,43 +37,9 @@
                       {% endfor %}
                     </ol>
                   </td>
-                  <td data-label="{{ t('apidoc.col_extra') }}" class="apidoc-cell--stack">
-                    {% if row.extra %}{{ row.extra }}{% else %}{{ t('apidoc.extra_none') }}{% endif %}
+                  <td data-label="{{ t('apidoc.limits_col_cap') }}" class="apidoc-cell--stack cond-cell">
+                    {{ row.cap }}
                   </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section class="section dashboard-section apidoc apidoc-limits">
-          <header class="admin-head admin-head--title">
-            <h2>{{ t('apidoc.limits_title') }}</h2>
-          </header>
-          <p class="sub apidoc__intro">{{ t('apidoc.limits_intro') }}</p>
-          <div class="limits-table-wrap apidoc-table-wrap">
-            <table class="limits-table apidoc-table apidoc-limits-table">
-              <thead>
-                <tr>
-                  <th>{{ t('apidoc.limits_col_server') }}</th>
-                  <th>{{ t('apidoc.limits_col_unlimited') }}</th>
-                  <th>{{ t('apidoc.limits_col_cap') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in daily_limits %}
-                <tr id="apidoc-limit-{{ row.id }}">
-                  <td data-label="{{ t('apidoc.limits_col_server') }}">
-                    <span class="apidoc-server">
-                      <span class="apidoc-server__icon" aria-hidden="true">{{ row.icon }}</span>
-                      <span>{{ row.name }}</span>
-                    </span>
-                  </td>
-                  <td data-label="{{ t('apidoc.limits_col_unlimited') }}">
-                    <span class="cap {% if row.unlimited_kind == 'no_public' %}cap--limited{% else %}cap--no{% endif %}">{{ row.unlimited_label }}</span>
-                  </td>
-                  <td data-label="{{ t('apidoc.limits_col_cap') }}" class="cond-cell">{{ row.cap }}</td>
                 </tr>
                 {% endfor %}
               </tbody>

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import db
+import ffmpeg_bin
 
 UPLOAD_URL = "https://rumble.com/api/simple-upload.php"
 UA = "CreatorHub/1.0 (Rumble Upload API)"
@@ -187,7 +188,7 @@ def probe_token(token: str | None = None, channel: str | None = None) -> tuple[b
 def _extract_thumb(path: Path) -> Path | None:
     tmp = Path(tempfile.gettempdir()) / f"rumble_thumb_{uuid.uuid4().hex}.jpg"
     cmd = [
-        "ffmpeg",
+        ffmpeg_bin.ffmpeg_exe(),
         "-y",
         "-ss",
         "1",

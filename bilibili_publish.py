@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import db
+import ffmpeg_bin
 import bilibili_oauth
 
 INIT_URL = "https://member.bilibili.com/arcopen/fn/archive/video/init"
@@ -158,7 +159,7 @@ def _data(resp: dict[str, Any]) -> dict[str, Any]:
 def _extract_cover(path: Path) -> Path | None:
     tmp = Path(tempfile.gettempdir()) / f"bili_cover_{uuid.uuid4().hex}.jpg"
     cmd = [
-        "ffmpeg",
+        ffmpeg_bin.ffmpeg_exe(),
         "-y",
         "-ss",
         "1",
@@ -269,10 +270,18 @@ def _archive_add(token: str, u_token: str, title: str, desc: str, cover_url: str
         "tag": _tag(),
         "copyright": 1,
         "desc": desc[:250],
+        # Igual que en el panel web: open 0 = permitir subtítulos en el video.
+        "subtitle": {"open": 0, "lan": ""},
+        "open_subtitle": True,
     }
     if cover_url:
         payload["cover"] = cover_url
-    data = _json_post(f"{ADD_URL}?{q}", payload)
+    try:
+        data = _json_post(f"{ADD_URL}?{q}", payload)
+    except ValueError:
+        payload.pop("subtitle", None)
+        payload.pop("open_subtitle", None)
+        data = _json_post(f"{ADD_URL}?{q}", payload)
     inner = _data(data)
     rid = str(inner.get("resource_id") or inner.get("aid") or inner.get("bvid") or "").strip()
     if not rid:

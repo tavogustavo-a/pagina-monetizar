@@ -122,69 +122,7 @@
           </div>
         </div>
 
-        <div class="extractor-step extractor-step--last" id="extractor-step-3">
-          <div class="extractor-step__head">
-            <span class="extractor-step__num" aria-hidden="true">3</span>
-            <h3 class="extractor-step__title">
-              <span>{{ t('extractor.step3_title') }}</span>
-              <button
-                type="button"
-                class="servers-info-btn extractor-step__info"
-                id="extractor-step3-info-open"
-                aria-haspopup="dialog"
-                aria-controls="extractor-step3-info-modal"
-                aria-expanded="false"
-                aria-label="{{ t('extractor.step3_info_btn') }}"
-                title="{{ t('extractor.step3_info_btn') }}"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h.008v.008H11.25v-.008zM12 17.25h.01M12 21a9 9 0 100-18 9 9 0 000 18z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v.008M12 11.25V16.5" />
-                </svg>
-              </button>
-            </h3>
-          </div>
-          <div class="extractor-params">
-            <label class="extractor-param">
-              <span class="extractor-param__label">{{ t('extractor.batch_label') }}</span>
-              <input
-                type="number"
-                id="extractor-batch"
-                class="extractor-param__input"
-                min="{{ extractor_limits.batch_min }}"
-                max="{{ extractor_limits.batch_max }}"
-                step="1"
-                value="1"
-                inputmode="numeric"
-              />
-            </label>
-            <label class="extractor-param">
-              <span class="extractor-param__label">{{ t('extractor.interval_label') }}</span>
-              <input
-                type="number"
-                id="extractor-interval"
-                class="extractor-param__input"
-                min="{{ extractor_limits.interval_min }}"
-                max="{{ extractor_limits.interval_max }}"
-                step="1"
-                value="60"
-                inputmode="numeric"
-              />
-            </label>
-            <label class="extractor-param">
-              <span class="extractor-param__label">{{ t('extractor.rest_label') }}</span>
-              <input
-                type="number"
-                id="extractor-rest"
-                class="extractor-param__input"
-                min="{{ extractor_limits.rest_min }}"
-                max="{{ extractor_limits.rest_max }}"
-                step="1"
-                value="0"
-                inputmode="numeric"
-              />
-            </label>
-          </div>
+        <div class="extractor-step extractor-step--start" id="extractor-step-3">
           <p class="extractor-msg" id="extractor-msg" hidden></p>
           <div class="extractor-start-row">
             <button type="button" class="btn btn-accent extractor-start-btn" id="extractor-start-btn" disabled>
@@ -201,7 +139,45 @@
       </div>
 
       <section class="section dashboard-section extractor-jobs-section">
-        <h2 class="extractor-jobs-title">{{ t('extractor.jobs_title') }}</h2>
+        <div class="equipo-members-head extractor-jobs-head">
+          <div class="equipo-members-head__title">
+            <h2 class="extractor-jobs-title">{{ t('extractor.jobs_title') }}</h2>
+            <div class="equipo-members-per-page">
+              <div class="equipo-members-per-page__field">
+                <span class="equipo-members-per-page__prefix">{{ t('team.show') }}</span>
+                <select id="extractor-jobs-per-page" aria-label="{{ t('team.per_page_label') }}">
+                  <option value="10" selected>10</option>
+                  <option value="20">20</option>
+                  <option value="30">30</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="200">200</option>
+                  <option value="all">{{ t('team.per_page_all') }}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="equipo-members-toolbar">
+            <div class="equipo-search-wrap panel-search-wrap--highlight">
+              <input
+                type="search"
+                id="extractor-jobs-search"
+                class="equipo-search-input panel-search-input--highlight"
+                placeholder="{{ t('extractor.jobs_search') }}"
+                aria-label="{{ t('extractor.jobs_search') }}"
+                autocomplete="off"
+              />
+              <button
+                type="button"
+                id="extractor-jobs-search-clear"
+                class="equipo-search-clear"
+                aria-label="{{ t('team.search_clear') }}"
+                title="{{ t('team.search_clear') }}"
+                hidden
+              >×</button>
+            </div>
+          </div>
+        </div>
         <div class="log-purge">
           <label class="log-purge__field">
             <span>{{ t('log.purge_from') }}</span>
@@ -214,7 +190,20 @@
           <button type="button" class="btn btn-ghost btn-sm log-purge__btn btn-user-delete" id="extractor-log-delete" aria-label="{{ t('log.purge_delete') }}" title="{{ t('log.purge_delete') }}">{% include '_icon_trash.html' %}</button>
         </div>
         <p class="log-purge__msg" id="extractor-log-msg" hidden></p>
+        <p class="sub extractor-jobs-empty" id="extractor-jobs-no-results" hidden>{{ t('extractor.jobs_no_results') }}</p>
         <div class="extractor-jobs" id="extractor-jobs"></div>
+        <nav
+          id="extractor-jobs-pagination"
+          class="comment-inbox-pagination equipo-members-pagination"
+          aria-label="{{ t('extractor.jobs_pagination') }}"
+          hidden
+        >
+          <div class="comment-inbox-pagination__inner">
+            <button type="button" id="extractor-jobs-prev" class="btn btn-ghost btn-sm">{{ t('team.previous') }}</button>
+            <span id="extractor-jobs-page-info" class="equipo-members-page-info"></span>
+            <button type="button" id="extractor-jobs-next" class="btn btn-ghost btn-sm">{{ t('team.next') }}</button>
+          </div>
+        </nav>
       </section>
     </div>
   </main>
@@ -264,22 +253,6 @@
     </div>
     <div class="server-modal__body">
       <p class="sub panel-info-modal__text">{{ t('extractor.step2_hint') }}</p>
-    </div>
-  </div>
-</div>
-
-<div id="extractor-step3-info-modal" class="equipo-modal extractor-info-modal" aria-hidden="true">
-  <div class="equipo-modal__backdrop" data-close-extractor-info tabindex="-1"></div>
-  <div class="equipo-modal__panel panel-info-modal__panel" role="dialog" aria-modal="true" aria-labelledby="extractor-step3-info-modal-title">
-    <div class="equipo-modal__accent" aria-hidden="true"></div>
-    <div class="equipo-modal__head">
-      <div>
-        <h2 id="extractor-step3-info-modal-title">{{ t('extractor.step3_title') }}</h2>
-      </div>
-      <button type="button" class="equipo-modal__close" data-close-extractor-info aria-label="{{ t('servers.modal_close') }}">×</button>
-    </div>
-    <div class="server-modal__body">
-      <p class="sub panel-info-modal__text">{{ t('extractor.step3_hint') }}</p>
     </div>
   </div>
 </div>
@@ -452,7 +425,10 @@
     logEmpty: {{ t('extractor.log_empty') | tojson }},
     confirmBody: {{ t('extractor.confirm_body') | tojson }},
     deleted: {{ t('extractor.deleted') | tojson }},
-    networkError: {{ t('extractor.network_error') | tojson }}
+    networkError: {{ t('extractor.network_error') | tojson }},
+    jobsNoResults: {{ t('extractor.jobs_no_results') | tojson }},
+    pageInfo: {{ t('team.page_info') | tojson }},
+    pageInfoCompact: {{ t('team.page_info_compact') | tojson }}
   };
 </script>
 <script>
@@ -684,9 +660,6 @@
     var scanWarn = document.getElementById("extractor-scan-warn");
     var startBtn = document.getElementById("extractor-start-btn");
     var msgEl = document.getElementById("extractor-msg");
-    var batchInput = document.getElementById("extractor-batch");
-    var intervalInput = document.getElementById("extractor-interval");
-    var restInput = document.getElementById("extractor-rest");
 
     function setMsg(text, kind) {
       if (!msgEl) return;
@@ -874,13 +847,7 @@
         });
     });
 
-    /* ---------- paso 3: iniciar ---------- */
-    function clampInt(input, min, max, fallback) {
-      var v = parseInt(input.value, 10);
-      if (isNaN(v)) v = fallback;
-      return Math.max(min, Math.min(max, v));
-    }
-
+    /* ---------- iniciar extracción ---------- */
     startBtn.addEventListener("click", function () {
       if (!selectedPlatform || !selectedAccount || !scanData) return;
       var targets = Array.prototype.slice
@@ -894,9 +861,9 @@
         account_link_id: selectedAccount.id,
         source_platform_id: selectedPlatform.id,
         target_platform_ids: targets,
-        batch_size: clampInt(batchInput, LIMITS.batch_min || 1, LIMITS.batch_max || 50, 1),
-        interval_minutes: clampInt(intervalInput, LIMITS.interval_min || 1, LIMITS.interval_max || 1440, 60),
-        rest_seconds: clampInt(restInput, LIMITS.rest_min || 0, LIMITS.rest_max || 3600, 0),
+        batch_size: LIMITS.batch_default || 5,
+        interval_minutes: LIMITS.interval_default || 30,
+        rest_seconds: LIMITS.rest_default || 45,
       };
       startBtn.disabled = true;
       startBtn.textContent = i18n.starting;
@@ -932,6 +899,27 @@
     var jobsEl = document.getElementById("extractor-jobs");
     var openLogs = {};
     var jobsCache = [];
+    var jobsState = { page: 1, q: "", perPage: "10" };
+    var jobsSearchTimer = null;
+
+    function jobHaystack(job) {
+      var parts = [
+        job.account_name,
+        job.source_name,
+        job.source_platform_id,
+        job.status,
+        statusLabel(job.status),
+        job.status_note,
+        String(job.batch_size || ""),
+      ];
+      (job.per_platform || []).forEach(function (p) {
+        parts.push(p.name, p.platform_id);
+      });
+      (job.events || []).forEach(function (ev) {
+        parts.push(ev.message);
+      });
+      return parts.join(" ").toLowerCase();
+    }
 
     function statusLabel(status) {
       if (status === "running") return i18n.statusRunning;
@@ -1045,7 +1033,37 @@
     }
 
     function renderJobs() {
-      jobsEl.innerHTML = jobsCache.length ? jobsCache.map(renderJob).join("") : "";
+      var noResultsEl = document.getElementById("extractor-jobs-no-results");
+      var paginationEl = document.getElementById("extractor-jobs-pagination");
+      var prevBtn = document.getElementById("extractor-jobs-prev");
+      var nextBtn = document.getElementById("extractor-jobs-next");
+      var pageInfoEl = document.getElementById("extractor-jobs-page-info");
+      var q = (jobsState.q || "").trim().toLowerCase();
+      var filtered = jobsCache.filter(function (job) {
+        if (!q) return true;
+        return jobHaystack(job).indexOf(q) !== -1;
+      });
+      var perPage =
+        jobsState.perPage === "all"
+          ? Math.max(filtered.length, 1)
+          : parseInt(jobsState.perPage, 10) || 10;
+      var totalPages = Math.max(1, Math.ceil((filtered.length || 0) / perPage) || 1);
+      if (jobsState.page > totalPages) jobsState.page = totalPages;
+      if (jobsState.page < 1) jobsState.page = 1;
+      var visible =
+        jobsState.perPage === "all"
+          ? filtered
+          : filtered.slice((jobsState.page - 1) * perPage, jobsState.page * perPage);
+      jobsEl.innerHTML = visible.map(renderJob).join("");
+      if (noResultsEl) noResultsEl.hidden = !(q && filtered.length === 0);
+      var showPager = filtered.length > 0 && jobsState.perPage !== "all" && totalPages > 1;
+      if (paginationEl) paginationEl.hidden = !showPager;
+      if (pageInfoEl) {
+        var tpl = (window.innerWidth || 0) < 640 ? i18n.pageInfoCompact : i18n.pageInfo;
+        pageInfoEl.textContent = fmt(tpl, { page: jobsState.page, total: totalPages });
+      }
+      if (prevBtn) prevBtn.disabled = jobsState.page <= 1;
+      if (nextBtn) nextBtn.disabled = jobsState.page >= totalPages;
     }
 
     function loadJobs() {
@@ -1168,6 +1186,54 @@
         openConfirm(job);
       }
     });
+
+    var jobsSearchEl = document.getElementById("extractor-jobs-search");
+    var jobsSearchClear = document.getElementById("extractor-jobs-search-clear");
+    var jobsPerPageEl = document.getElementById("extractor-jobs-per-page");
+    var jobsPrevBtn = document.getElementById("extractor-jobs-prev");
+    var jobsNextBtn = document.getElementById("extractor-jobs-next");
+    if (jobsSearchEl) {
+      jobsSearchEl.addEventListener("input", function () {
+        var q = jobsSearchEl.value || "";
+        if (jobsSearchClear) jobsSearchClear.hidden = !q.trim();
+        clearTimeout(jobsSearchTimer);
+        jobsSearchTimer = setTimeout(function () {
+          jobsState.q = q;
+          jobsState.page = 1;
+          renderJobs();
+        }, 120);
+      });
+    }
+    if (jobsSearchClear) {
+      jobsSearchClear.addEventListener("click", function () {
+        if (jobsSearchEl) jobsSearchEl.value = "";
+        jobsState.q = "";
+        jobsState.page = 1;
+        jobsSearchClear.hidden = true;
+        renderJobs();
+        if (jobsSearchEl) jobsSearchEl.focus();
+      });
+    }
+    if (jobsPerPageEl) {
+      jobsPerPageEl.addEventListener("change", function () {
+        jobsState.perPage = jobsPerPageEl.value || "10";
+        jobsState.page = 1;
+        renderJobs();
+      });
+    }
+    if (jobsPrevBtn) {
+      jobsPrevBtn.addEventListener("click", function () {
+        if (jobsState.page <= 1) return;
+        jobsState.page -= 1;
+        renderJobs();
+      });
+    }
+    if (jobsNextBtn) {
+      jobsNextBtn.addEventListener("click", function () {
+        jobsState.page += 1;
+        renderJobs();
+      });
+    }
 
     /* ---------- refresco automático ---------- */
     loadJobs();

@@ -398,6 +398,15 @@ def get_platform(pid: str) -> dict[str, Any] | None:
     return None
 
 
+def supports_content(platform_id: str, content_type: str) -> bool:
+    """True si este panel publica ese tipo (yes o limited)."""
+    p = get_platform(platform_id)
+    if not p:
+        return False
+    key = "photo" if (content_type or "").strip().lower() == "photo" else "video"
+    return str(p.get(key, "no")) in ("yes", "limited")
+
+
 def is_publish_enabled(platform_id: str) -> bool:
     """False = código montado pero no se publica (p. ej. uploader de DTube caído)."""
     p = get_platform(platform_id)
@@ -442,6 +451,7 @@ def platform_list(lang: str, *, include_hidden: bool = False) -> list[dict[str, 
         ui_visible = bool(p.get("ui_visible", True))
         if not include_hidden and not ui_visible:
             continue
+        kind = str(p.get("api_kind") or ("oauth" if p.get("has_api") else "none"))
         out.append(
             {
                 "id": pid,
@@ -455,6 +465,9 @@ def platform_list(lang: str, *, include_hidden: bool = False) -> list[dict[str, 
                 "publish_enabled": bool(p.get("publish_enabled", True)),
                 "ui_visible": ui_visible,
                 "note": t(f"limits.note.{pid}", lang),
+                "token_renewal": str(p.get("token_renewal") or "manual"),
+                "api_kind": kind,
+                "api_label": t(f"apidoc.api.{kind}", lang),
                 "label_client_id": _field_label(lang, "api.field.client_id", pid, "api.field.client_id"),
                 "label_client_secret": _field_label(
                     lang, "api.field.client_secret", pid, "api.field.client_secret"
@@ -478,6 +491,9 @@ def _vmos_apidoc_row(lang: str) -> dict[str, Any]:
     while f"apidoc.vmos.step{n}" in MESSAGES:
         steps.append(t(f"apidoc.vmos.step{n}", lang))
         n += 1
+    extra = t("apidoc.vmos.extra", lang)
+    if extra.strip():
+        steps.append(extra)
     return {
         "id": "vmos",
         "icon": "☁",
@@ -489,7 +505,8 @@ def _vmos_apidoc_row(lang: str) -> dict[str, Any]:
         "token": "none",
         "token_label": t("apidoc.token.none", lang),
         "setup_steps": steps,
-        "extra": t("apidoc.vmos.extra", lang),
+        "extra": "",
+        "cap": t("apidoc.limits.vmos", lang),
     }
 
 
@@ -511,7 +528,7 @@ def _vmos_conditions_row(lang: str) -> dict[str, Any]:
 
 
 def api_document_rows(lang: str) -> list[dict[str, Any]]:
-    """Filas de la página API Documento (pasos, media y renovación de token)."""
+    """Filas de la página API Documento (pasos y tipo de media)."""
     from i18n import MESSAGES, t
 
     vmos_ids = _vmos_platform_ids()
@@ -540,11 +557,16 @@ def api_document_rows(lang: str) -> list[dict[str, Any]]:
             import filehost as filehost_mod
 
             if pid in filehost_mod.TRIAL_PAYOUT_IDS:
-                trial = t("apidoc.filehost.trial", lang)
-                extra = f"{extra} {trial}".strip()
+                trial = t("apidoc.filehost.trial", lang).strip()
+                if trial:
+                    steps.append(trial)
+        extra = extra.strip()
+        if extra:
+            steps.append(extra)
         if pid in vmos_ids:
-            alt = t("apidoc.vmos_alt", lang)
-            extra = f"{extra} {alt}".strip() if extra else alt
+            alt = t("apidoc.vmos_alt", lang).strip()
+            if alt:
+                steps.append(alt)
         token = str(p.get("token_renewal") or "manual")
         rows.append(
             {
@@ -559,6 +581,7 @@ def api_document_rows(lang: str) -> list[dict[str, Any]]:
                 "token_label": t(f"apidoc.token.{token}", lang),
                 "setup_steps": steps,
                 "extra": extra,
+                "cap": t(f"apidoc.limits.{pid}", lang) if f"apidoc.limits.{pid}" in MESSAGES else "",
             }
         )
     return rows

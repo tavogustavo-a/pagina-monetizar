@@ -136,7 +136,7 @@ def execute_video_publish(
     for pid in selected_platforms:
         if not platforms.is_publish_enabled(pid):
             continue
-        ok, message = platform_publish.publish_to_platform(
+        status, message = platform_publish.publish_to_platform(
             pid,
             file_path=path,
             content_type=content_type,
@@ -147,8 +147,9 @@ def execute_video_publish(
             account_link_id=account_link_id,
             x_use_funding=bool(x_use_funding) if pid == "x" else False,
         )
-        status = "ok" if ok else "fail"
-        if ok:
+        if status not in ("ok", "fail", "skipped"):
+            status = "fail"
+        if status == "ok":
             ok_n += 1
             if pid == "x" and x_use_funding:
                 try:
@@ -158,7 +159,7 @@ def execute_video_publish(
                     )
                 except Exception:
                     pass
-        else:
+        elif status == "fail":
             fail_n += 1
             failures_for_email.append(
                 {

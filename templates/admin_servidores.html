@@ -43,23 +43,74 @@
             <div class="alert-error">{{ error }}</div>
             {% endif %}
 
-            <ul class="servers-list" role="list">
-          {% for platform in platforms %}
-          <li class="servers-list__row" id="server-{{ platform.id }}" data-platform-id="{{ platform.id }}">
-            <div class="servers-list__main">
-              <span class="servers-list__icon" aria-hidden="true">{{ platform.icon }}</span>
-              <div class="servers-list__info">
-                <span class="servers-list__name-row">
-                  <span class="servers-list__name">{{ platform.name }}</span>
-                  {% if not platform.publish_enabled %}
-                  <span class="api-status" data-ok="False">{{ t('servers.publish_paused') }}</span>
-                  {% endif %}
-                </span>
-              </div>
+            <div class="limits-table-wrap servers-platforms-table-wrap">
+              <table class="limits-table servers-platforms-table">
+                <thead>
+                  <tr>
+                    <th>{{ t('apidoc.col_server') }}</th>
+                    <th>{{ t('apidoc.col_api') }}</th>
+                    <th>{{ t('apidoc.col_video') }}</th>
+                    <th>{{ t('apidoc.col_photo') }}</th>
+                    <th>{{ t('apidoc.col_token') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for platform in platforms %}
+                  {% set tok = platform.token_renewal or 'manual' %}
+                  <tr id="server-{{ platform.id }}" data-platform-id="{{ platform.id }}">
+                    <td data-label="{{ t('apidoc.col_server') }}">
+                      <span class="servers-platforms-table__name">
+                        <span class="servers-list__icon" aria-hidden="true">{{ platform.icon }}</span>
+                        <span>{{ platform.name }}</span>
+                        {% if not platform.publish_enabled %}
+                        <span class="api-status" data-ok="False">{{ t('servers.publish_paused') }}</span>
+                        {% endif %}
+                      </span>
+                    </td>
+                    <td data-label="{{ t('apidoc.col_api') }}">
+                      {% set ak = platform.api_kind or 'none' %}
+                      <span class="cap {% if ak == 'oauth' %}cap--yes{% elif ak in ['partner', 'vmos', 'filehost', 'lbry', 'hive'] %}cap--limited{% else %}cap--no{% endif %}">{{ platform.api_label or t('apidoc.api.' ~ ak) }}</span>
+                    </td>
+                    <td data-label="{{ t('apidoc.col_video') }}">
+                      <span class="cap cap--{{ platform.video }}">{{ t('cap.' ~ platform.video) }}</span>
+                    </td>
+                    <td data-label="{{ t('apidoc.col_photo') }}">
+                      <span class="cap cap--{{ platform.photo }}">{{ t('cap.' ~ platform.photo) }}</span>
+                    </td>
+                    <td data-label="{{ t('apidoc.col_token') }}">
+                      <span class="cap {% if tok == 'auto' %}cap--yes{% elif tok == 'none' %}cap--no{% else %}cap--limited{% endif %}">{{ t('apidoc.token.' ~ tok) }}</span>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
             </div>
-          </li>
-          {% endfor %}
-            </ul>
+          </div>
+        </section>
+
+        <div class="servers-divider" role="separator" aria-hidden="true">
+          <span class="servers-divider__line"></span>
+          <span class="servers-divider__gem"></span>
+          <span class="servers-divider__line"></span>
+        </div>
+
+        <section class="servers-accordion pub-accordion pub-accordion--collapsed" id="api-webs">
+          <div class="servers-accordion__head admin-head admin-head--title">
+            <button
+              type="button"
+              class="pub-accordion__trigger servers-accordion__trigger"
+              id="servers-api-docs-trigger"
+              aria-expanded="false"
+              aria-controls="servers-api-docs-panel"
+            >
+              <span class="servers-accordion__title-slot">
+                <span class="pub-accordion__title">{{ t('nav.api_docs') }}</span>
+              </span>
+              <span class="pub-accordion__chevron" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="pub-accordion__panel" id="servers-api-docs-panel" hidden>
+            {% include "_servers_api_documento_table.html" %}
           </div>
         </section>
 
@@ -165,29 +216,11 @@
       <button type="button" class="equipo-modal__close" data-close-limits-modal aria-label="{{ t('servers.modal_close') }}">×</button>
     </div>
     <div class="server-modal__body">
-      <p class="sub limits-modal__hint">{{ t('servers.limits_hint') }}</p>
-      <div class="limits-table-wrap">
-        <table class="limits-table">
-          <thead>
-            <tr>
-              <th>{{ t('servers.col_platform') }}</th>
-              <th>{{ t('servers.col_video') }}</th>
-              <th>{{ t('servers.col_photo') }}</th>
-              <th>{{ t('servers.col_note') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for platform in platforms %}
-            <tr>
-              <td>{{ platform.name }}</td>
-              <td data-label="{{ t('servers.col_video') }}"><span class="cap cap--{{ platform.video }}">{{ t('cap.' ~ platform.video) }}</span></td>
-              <td data-label="{{ t('servers.col_photo') }}"><span class="cap cap--{{ platform.photo }}">{{ t('cap.' ~ platform.photo) }}</span></td>
-              <td data-label="{{ t('servers.col_note') }}">{{ platform.note }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+      {% if ffmpeg_ok %}
+      <p class="alert-ok">{{ t('apidoc.ffmpeg_ok') }}</p>
+      {% else %}
+      <p class="alert-error">{{ t('apidoc.ffmpeg_missing') }}</p>
+      {% endif %}
     </div>
   </div>
 </div>
@@ -757,11 +790,13 @@
 <script src="/static/js/ajax-search.js?v=1"></script>
 <script>
   (function initServersAccordions() {
-    function bindAccordion(accordionId, triggerId, panelId, storageKey) {
+    function bindAccordion(accordionId, triggerId, panelId, storageKey, defaultOpen) {
       var accordion = document.getElementById(accordionId);
       var trigger = document.getElementById(triggerId);
       var panel = document.getElementById(panelId);
       if (!accordion || !trigger || !panel) return;
+
+      var openDefault = defaultOpen !== false;
 
       function setOpen(open) {
         accordion.classList.toggle("pub-accordion--collapsed", !open);
@@ -776,7 +811,7 @@
       try {
         saved = localStorage.getItem(storageKey);
       } catch (err) {}
-      setOpen(saved !== "0");
+      setOpen(saved === null ? openDefault : saved !== "0");
 
       trigger.addEventListener("click", function () {
         setOpen(trigger.getAttribute("aria-expanded") !== "true");
@@ -789,6 +824,28 @@
       "servers-platforms-panel",
       "servers-platforms-accordion-open"
     );
+    bindAccordion(
+      "api-webs",
+      "servers-api-docs-trigger",
+      "servers-api-docs-panel",
+      "servers-api-docs-accordion-open",
+      false
+    );
+
+    if (window.location.hash === "#api-webs") {
+      var apiAccordion = document.getElementById("api-webs");
+      var apiTrigger = document.getElementById("servers-api-docs-trigger");
+      var apiPanel = document.getElementById("servers-api-docs-panel");
+      if (apiAccordion && apiTrigger && apiPanel) {
+        apiAccordion.classList.remove("pub-accordion--collapsed");
+        apiTrigger.setAttribute("aria-expanded", "true");
+        apiPanel.hidden = false;
+        try {
+          localStorage.setItem("servers-api-docs-accordion-open", "1");
+        } catch (err) {}
+        apiAccordion.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
   })();
 
   (function () {

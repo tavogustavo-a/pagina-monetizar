@@ -40,12 +40,6 @@
     >
     {% if user_can_access_servers(user) %}
     <a
-      href="/admin/api-documento"
-      class="nav-link {% if nav_active == 'api_docs' %}nav-link--active{% endif %}"
-      title="{{ t('nav.api_docs') }}"
-      ><span class="nav-ic">📄</span><span class="nav-label">{{ t('nav.api_docs') }}</span></a
-    >
-    <a
       href="/admin/servidores"
       class="nav-link {% if nav_active == 'servidores' %}nav-link--active{% endif %}"
       title="{{ t('nav.servers') }}"

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import db
+import ffmpeg_bin
 import snapchat_oauth
 import video_probe
 
@@ -24,7 +25,8 @@ VIDEO_EXT = {".mp4"}
 PHOTO_EXT = {".jpg", ".jpeg", ".png", ".webp"}
 STORY_MIN = 5.0
 SPOTLIGHT_MIN = 6.0
-MAX_SECONDS = 60.0
+MAX_SECONDS = 55.0
+TRIM_SECONDS = 55.0
 MIN_W = 540
 MIN_H = 960
 
@@ -291,6 +293,77 @@ def _post_spotlight(token: str, profile_id: str, media_id: str, description: str
     return sid
 
 
+def _trim_to_seconds(src: Path, seconds: float) -> Path | None:
+    """Corta los primeros `seconds` a un MP4 temporal. El original no se toca."""
+    tmp = Path(tempfile.gettempdir()) / f"snap_trim_{uuid.uuid4().hex}.mp4"
+    t_arg = f"{seconds:.3f}"
+    attempts = (
+        [
+            ffmpeg_bin.ffmpeg_exe(),
+            "-y",
+            "-i",
+            str(src),
+            "-t",
+            t_arg,
+            "-c",
+            "copy",
+            "-movflags",
+            "+faststart",
+            str(tmp),
+        ],
+        [
+            ffmpeg_bin.ffmpeg_exe(),
+            "-y",
+            "-i",
+            str(src),
+            "-t",
+            t_arg,
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "23",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            "-movflags",
+            "+faststart",
+            str(tmp),
+        ],
+    )
+    for cmd in attempts:
+        try:
+            subprocess.run(cmd, check=True, capture_output=True, timeout=180)
+        except (FileNotFoundError, subprocess.SubprocessError, OSError):
+            tmp.unlink(missing_ok=True)
+            continue
+        if tmp.is_file() and tmp.stat().st_size > 0:
+            return tmp
+        tmp.unlink(missing_ok=True)
+    return None
+
+
+def clip_for_snapchat(path: Path, content_type: str) -> tuple[Path, Path | None]:
+    """Si el video pasa de 55 s, recorta a los primeros 55 s. El original no se toca."""
+    src = Path(path)
+    if content_type == "photo" or src.suffix.lower() in PHOTO_EXT:
+        return src, None
+    meta = video_probe.probe_video(src)
+    duration = meta.get("duration_seconds")
+    try:
+        seconds = float(duration) if duration is not None else None
+    except (TypeError, ValueError):
+        seconds = None
+    if seconds is not None and seconds <= TRIM_SECONDS + 0.05:
+        return src, None
+    trimmed = _trim_to_seconds(src, TRIM_SECONDS)
+    if not trimmed:
+        raise ValueError("trim_failed")
+    return trimmed, trimmed
+
+
 def _send_file(
     token: str,
     profile_id: str,
@@ -342,6 +415,15 @@ def publish_video(
         if suffix not in VIDEO_EXT:
             return False, t("pub.snapchat.bad_video", lang)
         media_type = "VIDEO"
+        as_spotlight = True
+
+    caption = (description or title or "").strip()
+    trim_tmp: Path | None = None
+    if not is_photo:
+        try:
+            path, trim_tmp = clip_for_snapchat(path, content_type)
+        except ValueError:
+            return False, t("pub.snapchat.trim_fail", lang)
         meta = video_probe.probe_video(path)
         duration = meta.get("duration_seconds")
         width = meta.get("width")
@@ -353,6 +435,8 @@ def publish_video(
                 seconds = None
             else:
                 if seconds < STORY_MIN or seconds > MAX_SECONDS + 0.05:
+                    if trim_tmp:
+                        trim_tmp.unlink(missing_ok=True)
                     return False, t("pub.snapchat.bad_duration", lang)
                 as_spotlight = seconds >= SPOTLIGHT_MIN
         else:
@@ -360,18 +444,22 @@ def publish_video(
         if width and height:
             try:
                 if int(width) < MIN_W or int(height) < MIN_H:
+                    if trim_tmp:
+                        trim_tmp.unlink(missing_ok=True)
                     return False, t("pub.snapchat.bad_size", lang)
             except (TypeError, ValueError):
                 pass
 
-    caption = (description or title or "").strip()
-
     try:
         token, row = _token_row(account_link_id)
     except ValueError:
+        if trim_tmp:
+            trim_tmp.unlink(missing_ok=True)
         return False, t("pub.snapchat.no_token", lang)
     profile_id = _profile_id(row)
     if not profile_id:
+        if trim_tmp:
+            trim_tmp.unlink(missing_ok=True)
         return False, t("pub.snapchat.no_profile", lang)
 
     def _run(access: str) -> str:
@@ -401,3 +489,9 @@ def publish_video(
         return False, t("pub.snapchat.upload_fail", lang, error=str(e)[:180])
     except Exception as e:
         return False, t("pub.snapchat.upload_fail", lang, error=str(e)[:180])
+    finally:
+        if trim_tmp:
+            try:
+                trim_tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
