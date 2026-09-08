@@ -13,123 +13,13 @@ UA = "Tuyaho/1.0 (file host upload)"
 VIDEO_EXT = {".mp4", ".mov", ".avi", ".wmv", ".flv", ".mkv", ".webm", ".m4v"}
 PHOTO_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
-PLATFORM_IDS = frozenset(
-    {
-        "doodstream",
-        "streamwish",
-        "filemoon",
-        "mixdrop",
-        "streamtape",
-        "voe",
-        "vidoza",
-        "lulustream",
-        "loadvid",
-        "vidsonic",
-        "flyfile",
-        "venvo",
-    }
-)
+PLATFORM_IDS = frozenset()
 
 # Hosts más nuevos: en el panel salen como «(pago)» para probar si realmente pagan.
-TRIAL_PAYOUT_IDS = frozenset({"loadvid", "vidsonic", "flyfile", "venvo"})
+TRIAL_PAYOUT_IDS = frozenset()
 
 # extra_field: mixdrop=email, streamtape=login
-HOSTS: dict[str, dict[str, Any]] = {
-    "doodstream": {
-        "kind": "dood",
-        "info": "https://doodapi.co/api/account/info",
-        "upload_server": "https://doodapi.co/api/upload/server",
-        "form_key": "api_key",
-        "watch": "https://dood.watch/d/{code}",
-        "settings": "https://doodstream.com/settings",
-    },
-    "streamwish": {
-        "kind": "dood",
-        "info": "https://api.streamwish.com/api/account/info",
-        "upload_server": "https://api.streamwish.com/api/upload/server",
-        "form_key": "key",
-        "title_field": "file_title",
-        "descr_field": "file_descr",
-        "watch": "https://streamwish.to/{code}",
-    },
-    "filemoon": {
-        "kind": "dood",
-        "info": "https://filemoonapi.com/api/account/info",
-        "upload_server": "https://filemoonapi.com/api/upload/server",
-        "form_key": "key",
-        "watch": "https://filemoon.sx/e/{code}",
-    },
-    "voe": {
-        "kind": "dood",
-        "info": "https://voe.sx/api/account/info",
-        "upload_server": "https://voe.sx/api/upload/server",
-        "form_key": "key",
-        "watch": "https://voe.sx/{code}",
-    },
-    "vidoza": {
-        "kind": "dood",
-        "info": "https://api.vidoza.net/api/account/info",
-        "upload_server": "https://api.vidoza.net/api/upload/server",
-        "form_key": "key",
-        "title_field": "file_title",
-        "watch": "https://vidoza.net/{code}",
-    },
-    "lulustream": {
-        "kind": "dood",
-        "info": "https://api.lulustream.com/api/account/info",
-        "upload_server": "https://api.lulustream.com/api/upload/server",
-        "form_key": "key",
-        "title_field": "file_title",
-        "descr_field": "file_descr",
-        "watch": "https://lulustream.com/e/{code}",
-    },
-    "mixdrop": {
-        "kind": "mixdrop",
-        "info": "https://api.mixdrop.ag/accountinfo",
-        "upload": "https://ul.mixdrop.ag/api",
-        "extra_field": "email",
-        "watch": "https://mixdrop.ag/e/{code}",
-    },
-    "streamtape": {
-        "kind": "streamtape",
-        "info": "https://api.streamtape.com/account/info",
-        "upload_url": "https://api.streamtape.com/file/ul",
-        "extra_field": "login",
-        "watch": "https://streamtape.com/v/{code}",
-    },
-    "loadvid": {
-        "kind": "loadvid",
-        "info": "https://api.loadvid.com/v1/user/info",
-        "upload_server": "https://api.loadvid.com/v1/upload/server",
-        "form_key": "key",
-        "watch": "https://www.loadvid.com/{code}",
-    },
-    "vidsonic": {
-        "kind": "vidsonic",
-        "info": "https://vidsonic.net/api/v1/account",
-        "upload_server": "https://vidsonic.net/api/v1/getUploadSrv",
-        "form_key": "apiKey",
-        "file_field": "video",
-        "watch": "https://vidsonic.net/{code}",
-    },
-    "flyfile": {
-        "kind": "flyfile",
-        "info": "https://api.flyfile.app/api/v1/account",
-        "assign": "https://api.flyfile.app/api/v1/upload/assign",
-        "init": "https://api.flyfile.app/api/v1/upload/init",
-        "complete": "https://api.flyfile.app/api/v1/upload/complete",
-        "watch": "https://flyfile.app/v/{code}",
-    },
-    "venvo": {
-        "kind": "dood",
-        "info": "https://venvo.net/api/account/info",
-        "upload_server": "https://venvo.net/api/upload/server",
-        "form_key": "key",
-        "title_field": "file_title",
-        "descr_field": "file_descr",
-        "watch": "https://venvo.net/{code}",
-    },
-}
+HOSTS: dict[str, dict[str, Any]] = {}
 
 
 class FileHostError(ValueError):

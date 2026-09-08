@@ -63,6 +63,40 @@
             </table>
           </div>
         </section>
+
+        <section class="section dashboard-section apidoc apidoc-limits">
+          <header class="admin-head admin-head--title">
+            <h2>{{ t('apidoc.limits_title') }}</h2>
+          </header>
+          <p class="sub apidoc__intro">{{ t('apidoc.limits_intro') }}</p>
+          <div class="limits-table-wrap apidoc-table-wrap">
+            <table class="limits-table apidoc-table apidoc-limits-table">
+              <thead>
+                <tr>
+                  <th>{{ t('apidoc.limits_col_server') }}</th>
+                  <th>{{ t('apidoc.limits_col_unlimited') }}</th>
+                  <th>{{ t('apidoc.limits_col_cap') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in daily_limits %}
+                <tr id="apidoc-limit-{{ row.id }}">
+                  <td data-label="{{ t('apidoc.limits_col_server') }}">
+                    <span class="apidoc-server">
+                      <span class="apidoc-server__icon" aria-hidden="true">{{ row.icon }}</span>
+                      <span>{{ row.name }}</span>
+                    </span>
+                  </td>
+                  <td data-label="{{ t('apidoc.limits_col_unlimited') }}">
+                    <span class="cap {% if row.unlimited_kind == 'no_public' %}cap--limited{% else %}cap--no{% endif %}">{{ row.unlimited_label }}</span>
+                  </td>
+                  <td data-label="{{ t('apidoc.limits_col_cap') }}" class="cond-cell">{{ row.cap }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </div>
   </main>

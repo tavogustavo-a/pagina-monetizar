@@ -371,6 +371,11 @@ def _ensure_x_funding_tables() -> None:
     _ensure_column("scheduled_publications", "x_use_funding", "INTEGER NOT NULL DEFAULT 0")
 
 
+# Tope de la app de X: 10.000 posts/24 h. Cortamos en 9.900 para no rozar el techo.
+X_APP_DAILY_POST_CAP = 9900
+X_FUNDING_LOW_BALANCE_RATIO = 0.15
+
+
 def _ensure_filehost_accounts_table() -> None:
     conn = _connect()
     try:
@@ -3191,6 +3196,106 @@ def _ensure_publish_file_locks_table() -> None:
         conn.close()
 
 
+# Tope seguro por cuenta (YouTube y Bilibili son las más sensibles).
+ACCOUNT_DAILY_VIDEO_CAP = 5
+ACCOUNT_SPACING_MINUTES = 20
+
+
+def _parse_iso_utc(raw: str) -> datetime | None:
+    s = (raw or "").strip()
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def next_account_publish_slot(
+    account_link_id: str,
+    *,
+    requested_at: datetime | None = None,
+    exclude_sched_id: str = "",
+) -> tuple[datetime, str]:
+    """Devuelve cuándo puede salir el siguiente video de esa cuenta y el motivo.
+
+    reason: 'now' | 'spacing' | 'daily_cap'
+    """
+    lid = (account_link_id or "").strip()
+    wanted = (requested_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    if not lid:
+        return wanted, "now"
+    spacing = timedelta(minutes=ACCOUNT_SPACING_MINUTES)
+    window_start = wanted - timedelta(hours=24)
+    conn = _connect()
+    try:
+        pending_sql = """
+            SELECT scheduled_at
+            FROM scheduled_publications
+            WHERE account_link_id = ?
+              AND status IN ('pending', 'processing')
+            """
+        pending_params: list[Any] = [lid]
+        excl = (exclude_sched_id or "").strip()
+        if excl:
+            pending_sql += " AND id != ?"
+            pending_params.append(excl)
+        pending_sql += " ORDER BY scheduled_at ASC"
+        pending = conn.execute(pending_sql, pending_params).fetchall()
+        published = conn.execute(
+            """
+            SELECT created_at
+            FROM publication_log
+            WHERE account_link_id = ?
+              AND status = 'ok'
+              AND created_at >= ?
+            ORDER BY created_at ASC
+            """,
+            (lid, window_start.isoformat()),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    events: list[datetime] = []
+    for row in pending:
+        dt = _parse_iso_utc(str(row["scheduled_at"] or ""))
+        if dt:
+            events.append(dt)
+    for row in published:
+        dt = _parse_iso_utc(str(row["created_at"] or ""))
+        if dt:
+            events.append(dt)
+    events.sort()
+
+    slot = wanted
+    reason = "now"
+    if events:
+        last = events[-1]
+        min_after_last = last + spacing
+        if slot < min_after_last:
+            slot = min_after_last
+            reason = "spacing"
+
+    while True:
+        window = slot - timedelta(hours=24)
+        recent = [dt for dt in events if window <= dt <= slot]
+        if len(recent) < ACCOUNT_DAILY_VIDEO_CAP:
+            break
+        oldest = recent[0]
+        slot = oldest + timedelta(hours=24)
+        next_after = max((dt + spacing for dt in events), default=slot)
+        if next_after > slot:
+            slot = next_after
+        reason = "daily_cap"
+
+    if slot <= wanted:
+        return wanted, "now"
+    return slot, reason
+
+
 def file_sha256(path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as fh:
@@ -5626,6 +5731,16 @@ def _x_funding_source_row(conn: sqlite3.Connection, r: Any) -> dict[str, Any]:
             or (f"@{uname}" if uname else "")
         )
     recharged = int(r["recharged_cents"] or 0)
+    posts_24h = int(
+        conn.execute(
+            """
+            SELECT COUNT(*) AS n FROM x_funding_usage
+            WHERE source_id = ? AND created_at >= ?
+            """,
+            (r["id"], (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()),
+        ).fetchone()["n"]
+        or 0
+    )
     return {
         "id": r["id"],
         "oauth_account_id": r["oauth_account_id"],
@@ -5637,6 +5752,9 @@ def _x_funding_source_row(conn: sqlite3.Connection, r: Any) -> dict[str, Any]:
         "spent_cents": spent,
         "available_cents": recharged - spent,
         "active": bool(r["active"]),
+        "posts_24h": posts_24h,
+        "posts_cap": X_APP_DAILY_POST_CAP,
+        "posts_left": max(0, X_APP_DAILY_POST_CAP - posts_24h),
         "updated_at": r["updated_at"],
     }
 
@@ -5743,16 +5861,28 @@ def add_x_funding_recharge(source_id: str, amount_cents: int) -> dict[str, Any]:
         conn.close()
 
 
-def resolve_active_x_funding_source() -> dict[str, Any] | None:
-    """La fuente activa con saldo disponible (para el checkbox al publicar)."""
+def list_usable_x_funding_sources() -> list[dict[str, Any]]:
+    """Fuentes activas con saldo y hueco bajo el tope de 9.900 posts/24 h."""
+    out: list[dict[str, Any]] = []
     for src in list_x_funding_sources():
         if not src["active"] or not src["connected"]:
             continue
-        if src["available_cents"] >= max(1, src["cost_per_post_cents"]):
-            return src
-        if src["cost_per_post_cents"] == 0:
-            return src
-    return None
+        if int(src.get("posts_left") or 0) <= 0:
+            continue
+        cost = max(0, int(src["cost_per_post_cents"] or 0))
+        if cost > 0 and int(src["available_cents"] or 0) < cost:
+            continue
+        out.append(src)
+    return out
+
+
+def resolve_active_x_funding_source() -> dict[str, Any] | None:
+    """Elige la app con más hueco de posts (reparte solicitudes entre varias)."""
+    usable = list_usable_x_funding_sources()
+    if not usable:
+        return None
+    usable.sort(key=lambda s: (-int(s.get("posts_left") or 0), -int(s.get("available_cents") or 0)))
+    return usable[0]
 
 
 def record_x_funding_usage(
@@ -5786,7 +5916,45 @@ def record_x_funding_usage(
         conn.commit()
     finally:
         conn.close()
+    maybe_alert_x_funding_source(src["id"])
     return True
+
+
+def x_funding_source_is_low(src: dict[str, Any]) -> bool:
+    recharged = max(0, int(src.get("recharged_cents") or 0))
+    available = int(src.get("available_cents") or 0)
+    cost = max(0, int(src.get("cost_per_post_cents") or 0))
+    if recharged <= 0:
+        return False
+    if available <= 0:
+        return True
+    if cost > 0 and available < cost:
+        return True
+    return available <= int(recharged * X_FUNDING_LOW_BALANCE_RATIO)
+
+
+def maybe_alert_x_funding_source(source_id: str) -> None:
+    """Avisa a los admins si el saldo de esa app está bajo (una vez por umbral)."""
+    sid = (source_id or "").strip()
+    if not sid:
+        return
+    src = next((s for s in list_x_funding_sources() if s["id"] == sid), None)
+    if not src:
+        return
+    if not x_funding_source_is_low(src):
+        set_app_setting(f"x_funding_low_alert:{sid}", "")
+        return
+    key = f"x_funding_low_alert:{sid}"
+    if (get_app_setting(key) or "").strip() == "1":
+        return
+    try:
+        import notify
+        from i18n import t
+
+        notify.send_x_funding_low_alert(src, lang="es")
+    except Exception:
+        return
+    set_app_setting(key, "1")
 
 
 def list_x_funding_usage(limit: int = 30) -> list[dict[str, Any]]:
@@ -6398,10 +6566,10 @@ def using_x_app_mode(mode: str | None):
 
 
 def x_funding_app_account_name() -> str:
-    """Nombre de la cuenta X que paga la API (Config X), si hay una activa."""
-    for src in list_x_funding_sources():
-        if src.get("active") and src.get("connected"):
-            return str(src.get("name") or "").strip()
+    """Nombre de la cuenta X cuya app se usa ahora (Config X)."""
+    src = resolve_active_x_funding_source()
+    if src:
+        return str(src.get("name") or "").strip()
     return ""
 
 
@@ -7802,6 +7970,26 @@ def mark_scheduled_processing(sched_id: str) -> bool:
         )
         conn.commit()
         return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def reschedule_pending_publication(sched_id: str, scheduled_at_utc: datetime) -> None:
+    sid = (sched_id or "").strip()
+    if not sid:
+        return
+    sched = scheduled_at_utc.astimezone(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            UPDATE scheduled_publications
+            SET status = 'pending', scheduled_at = ?
+            WHERE id = ?
+            """,
+            (sched, sid),
+        )
+        conn.commit()
     finally:
         conn.close()
 

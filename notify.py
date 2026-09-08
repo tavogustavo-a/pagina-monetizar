@@ -163,6 +163,34 @@ def publish_failure_alert_jobs(
     return jobs
 
 
+def send_x_funding_low_alert(src: dict[str, Any], *, lang: str = "es") -> bool:
+    """Avisa a admins cuando el saldo de una app de Config X está bajo."""
+    if not smtp_configured():
+        return False
+    import db
+    from i18n import t
+
+    emails = db.list_admin_notification_emails()
+    if not emails:
+        return False
+    name = str(src.get("name") or "X")
+    available = int(src.get("available_cents") or 0)
+    recharged = int(src.get("recharged_cents") or 0)
+    subject = t("configx.low_balance_subject", lang, name=name)
+    body = t(
+        "configx.low_balance_body",
+        lang,
+        name=name,
+        available=f"${available / 100:,.2f}",
+        recharged=f"${recharged / 100:,.2f}",
+    )
+    sent_any = False
+    for to in emails:
+        if send_plain_email(to=to, subject=subject, body=body):
+            sent_any = True
+    return sent_any
+
+
 def send_publish_failure_alert(
     *,
     video_title: str,

@@ -3967,12 +3967,20 @@ input:focus {
 
 #pub-publish-section .dropzone__content {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 0.35rem 0.5rem;
   padding: 0.7rem 0.55rem;
   text-align: center;
+}
+
+#pub-publish-section .dropzone__hint {
+  flex: 1 0 100%;
+  margin: 0;
+  font-size: clamp(0.62rem, 2.6vw, 0.74rem);
+  line-height: 1.3;
+  color: rgba(180, 205, 220, 0.7);
 }
 
 #pub-publish-section .dropzone__text {
@@ -8856,6 +8864,19 @@ button.extractor-job__chip:hover {
 .cond-table th:nth-child(7),
 .cond-table td:nth-child(7) {
   min-width: 12rem;
+}
+
+.apidoc-limits {
+  margin-top: 1.25rem;
+}
+
+.apidoc-limits .admin-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.apidoc-limits-table {
+  min-width: 36rem;
 }
 
 @media (max-width: 767px) {

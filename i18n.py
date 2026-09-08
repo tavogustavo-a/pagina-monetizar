@@ -21,7 +21,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "nav.toggle_collapse": {"en": "Collapse menu", "es": "Contraer menú"},
     "nav.statistics": {"en": "Statistics", "es": "Estadísticas"},
     "nav.api_docs": {"en": "API webs", "es": "API webs"},
-    "nav.server_conditions": {"en": "Server conditions", "es": "Condiciones de servidores"},
     "nav.publications": {"en": "Publications", "es": "Publicaciones"},
     "nav.team": {"en": "Team", "es": "Equipo"},
     "nav.tiktok_accounts": {"en": "TikTok Accounts", "es": "Cuentas TikTok"},
@@ -1076,6 +1075,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Drag your video here",
         "es": "Arrastra tu video aquí",
     },
+    "pub.dropzone_publisher_hint": {
+        "en": "Videos of 60 seconds or more only. Photos are not allowed.",
+        "es": "Solo videos de 60 segundos o más. No se admiten fotos.",
+    },
     "pub.browse_files": {"en": "Browse files", "es": "Explorar archivos"},
     "pub.remove_file": {"en": "Remove file", "es": "Quitar archivo"},
     "pub.cancel_job": {"en": "Cancel this video", "es": "Cancelar este video"},
@@ -1127,6 +1130,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pub.flash.scheduled": {
         "en": "Publication scheduled for {when} (Chicago / Colombia time).",
         "es": "Publicación programada para {when} (hora Chicago / Colombia).",
+    },
+    "pub.flash.queued_spacing": {
+        "en": "Queued for this account. It will publish at {when} (at least 20 minutes after the previous video).",
+        "es": "En cola para esta cuenta. Se publicará a las {when} (mínimo 20 minutos después del video anterior).",
+    },
+    "pub.flash.queued_daily_cap": {
+        "en": "This account already has 5 videos in 24 hours. Queued until {when}.",
+        "es": "Esta cuenta ya tiene 5 videos en 24 horas. En cola hasta las {when}.",
     },
     "pub.flash.schedule_invalid": {
         "en": "Invalid date or time.",
@@ -1228,6 +1239,22 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pub.flash.missing_file": {
         "en": "Upload a photo or video before publishing.",
         "es": "Sube una foto o un video antes de publicar.",
+    },
+    "pub.flash.missing_file_publisher": {
+        "en": "Upload a video of 60 seconds or more before publishing.",
+        "es": "Sube un video de 60 segundos o más antes de publicar.",
+    },
+    "pub.flash.publisher_no_photos": {
+        "en": "Publisher accounts can only upload videos, not photos.",
+        "es": "Las cuentas de publicador solo pueden subir videos, no fotos.",
+    },
+    "pub.flash.publisher_min_duration": {
+        "en": "Publisher videos must last {seconds} seconds or more.",
+        "es": "Los videos de publicador deben durar {seconds} segundos o más.",
+    },
+    "pub.flash.publisher_duration_unknown": {
+        "en": "Could not read the video duration. Use an MP4 of 60 seconds or more.",
+        "es": "No se pudo leer la duración del video. Usa un MP4 de 60 segundos o más.",
     },
     "pub.flash.video_in_queue": {
         "en": "That video is already in the queue. Wait until it is published.",
@@ -1559,8 +1586,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Esta cuenta de X está marcada para gastar de su propia API. Guarda primero su Client ID y Secret en Servidores.",
     },
     "pub.x.need_funding_api": {
-        "en": "Config X has no API app keys. Save Client ID and Secret on the X account that pays for the API.",
-        "es": "Config X no tiene claves de API. Guarda el Client ID y el Secret en la cuenta de X que paga la API.",
+        "en": "No Config X app is available (no keys, no balance, or the 9,900 posts / 24 h cap was reached). Add another app or wait.",
+        "es": "No hay app de Config X disponible (sin claves, sin saldo o se llegó a 9.900 posts / 24 h). Añade otra app o espera.",
     },
     "pub.x.file_missing": {
         "en": "The media file was not found on the server.",
@@ -2471,8 +2498,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     # Condiciones de servidores (cuotas API)
     # ------------------------------------------------------------------
     "cond.intro": {
-        "en": "Official API limits for each connected account (YouTube is per Google Cloud project). Going over them can pause publishing or flag the account. The Safe column is a conservative pace so you do not abuse the API. Networks change these numbers; stay under Safe, not at the hard ceiling. VMOS Cloud is an alternative for TikTok, Instagram, Facebook, YouTube, X, Threads and Snapchat: those official caps do not apply; the cloud phone and the app’s own limits do. Panel proxies are not used on VMOS accounts. Proven PPV hosts (DoodStream, StreamWish, FileMoon, MixDrop, Streamtape, VOE, Vidoza, LuluStream) have no social quota: the host’s upload and unique-view rules apply, payouts stay on the host, and a linked proxy is used like OAuth. Names ending in (pago) — Loadvid, VidSonic, FlyFile, VenVo — are newer trial hosts to test whether they actually pay. Odysee uses LBRY (email/password, TUS upload). DTube uses Hive + IPFS (username + posting WIF). Neither is a PPV host.",
-        "es": "Límites oficiales de la API de cada cuenta conectada (YouTube es por proyecto de Google Cloud). Pasarse puede pausar la publicación o marcar la cuenta. La columna Uso seguro es un ritmo conservador para no abusar. Las redes cambian estas cifras; quédate en Uso seguro, no en el tope máximo. VMOS Cloud es una alternativa para TikTok, Instagram, Facebook, YouTube, X, Threads y Snapchat: esos topes oficiales no aplican; rigen el móvil en la nube y los límites de la app. Las cuentas VMOS no usan el proxy del panel. Los hosts PPV contrastados (DoodStream, StreamWish, FileMoon, MixDrop, Streamtape, VOE, Vidoza, LuluStream) no tienen cuota de red social: rigen subidas y vistas únicas del host, el cobro es en el host y el proxy vinculado se usa como en OAuth. Los que llevan (pago) — Loadvid, VidSonic, FlyFile, VenVo — son hosts más nuevos, de prueba, para ver si realmente pagan. Odysee usa LBRY (email/contraseña, subida TUS). DTube usa Hive + IPFS (usuario + posting WIF). Ninguna es un host PPV.",
+        "en": "Official API limits for each connected account (YouTube is per Google Cloud project). Going over them can pause publishing or flag the account. The Safe column is a conservative pace so you do not abuse the API. Networks change these numbers; stay under Safe, not at the hard ceiling. VMOS Cloud is an alternative for TikTok, Instagram, Facebook, YouTube, X and Snapchat: those official caps do not apply; the cloud phone and the app’s own limits do. Panel proxies are not used on VMOS accounts. Dailymotion, Bilibili and Rumble stay on their APIs. Odysee uses LBRY (email/password, TUS upload).",
+        "es": "Límites oficiales de la API de cada cuenta conectada (YouTube es por proyecto de Google Cloud). Pasarse puede pausar la publicación o marcar la cuenta. La columna Uso seguro es un ritmo conservador para no abusar. Las redes cambian estas cifras; quédate en Uso seguro, no en el tope máximo. VMOS Cloud es una alternativa para TikTok, Instagram, Facebook, YouTube, X y Snapchat: esos topes oficiales no aplican; rigen el móvil en la nube y los límites de la app. Las cuentas VMOS no usan el proxy del panel. Dailymotion, Bilibili y Rumble siguen por su API. Odysee usa LBRY (email/contraseña, subida TUS).",
     },
     "cond.col_server": {"en": "Server", "es": "Servidor"},
     "cond.col_api": {"en": "API", "es": "API"},
@@ -2498,8 +2525,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Pocas publicaciones al día por móvil hasta que la cuenta esté estable. No compartas un pad entre muchas cuentas a la vez.",
     },
     "cond.vmos.detail": {
-        "en": "Alternative to official OAuth for TikTok, Instagram, Facebook, YouTube, X, Threads and Snapchat. In Servers, Connect with VMOS: Access Key, Secret, padCode and template/scriptId. The panel uploads the file to the pad and runs the template. Dailymotion, Bilibili and Rumble stay on their APIs. Panel proxies are not used.",
-        "es": "Alternativa al OAuth oficial para TikTok, Instagram, Facebook, YouTube, X, Threads y Snapchat. En Servidores, Conectar con VMOS: Access Key, Secret, padCode y plantilla/scriptId. El panel sube el archivo al pad y lanza la plantilla. Dailymotion, Bilibili y Rumble siguen por su API. No se usa el proxy del panel.",
+        "en": "Alternative to official OAuth for TikTok, Instagram, Facebook, YouTube, X and Snapchat. In Servers, Connect with VMOS: Access Key, Secret, padCode and template/scriptId. The panel uploads the file to the pad and runs the template. Dailymotion, Bilibili and Rumble stay on their APIs. Panel proxies are not used.",
+        "es": "Alternativa al OAuth oficial para TikTok, Instagram, Facebook, YouTube, X y Snapchat. En Servidores, Conectar con VMOS: Access Key, Secret, padCode y plantilla/scriptId. El panel sube el archivo al pad y lanza la plantilla. Dailymotion, Bilibili y Rumble siguen por su API. No se usa el proxy del panel.",
     },
     "cond.vmos_alt": {
         "en": "If this account is linked with VMOS instead of OAuth, the official API caps in this row do not apply; see the VMOS Cloud row. Panel proxies are not used.",
@@ -2769,9 +2796,65 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Save Access Key, Secret and padCode in Servers. Publishing via VMOS is the next step.",
         "es": "Guarda Access Key, Secret y padCode en Servidores. Publicar por VMOS es el siguiente paso.",
     },
+    "apidoc.limits_title": {
+        "en": "Daily video limits",
+        "es": "Topes diarios de video",
+    },
+    "apidoc.limits_intro": {
+        "en": "None of these servers allows unlimited video posting. Stay under the safe daily pace so accounts are not flagged.",
+        "es": "Ninguno de estos servidores permite publicar videos sin límite. Quédate en el ritmo diario seguro para no marcar las cuentas.",
+    },
+    "apidoc.limits_col_server": {"en": "Server", "es": "Servidor"},
+    "apidoc.limits_col_unlimited": {"en": "Unlimited?", "es": "¿Ilimitado?"},
+    "apidoc.limits_col_cap": {"en": "Daily cap / safe pace", "es": "Tope / uso seguro"},
+    "apidoc.limits_no": {"en": "No", "es": "No"},
+    "apidoc.limits_no_public": {
+        "en": "No public daily quota",
+        "es": "No hay cupo diario público",
+    },
+    "apidoc.limits.tiktok": {
+        "en": "Daily cap exists (TikTok does not publish the number; integrators usually see 15–25/day). Safe: up to 10/day, 10–15 minutes apart.",
+        "es": "Hay tope diario (TikTok no publica el número; suele ser 15–25/día). Uso seguro: hasta 10/día, con 10–15 min de separación.",
+    },
+    "apidoc.limits.youtube": {
+        "en": "Google project quota: 10,000 units/day. videos.insert costs ~1,600 → about 6/day. Safe: 4–5/day. Shared by all channels on the same Client ID.",
+        "es": "Cuota del proyecto Google: 10.000 unidades/día. videos.insert gasta ~1.600 → unos 6/día. Uso seguro: 4–5/día. Varias cuentas con el mismo Client ID comparten esa cuota.",
+    },
+    "apidoc.limits.instagram": {
+        "en": "API publishing cap ~50 posts / rolling 24 h (Meta sometimes cites 100). Safe: 15–20 Reels/photos per 24 h.",
+        "es": "Tope API ~50 posts / 24 h corridas (Meta a veces cita 100). Uso seguro: 15–20 Reels/fotos cada 24 h.",
+    },
+    "apidoc.limits.facebook": {
+        "en": "API Reels: 30 per rolling 24 h. Safe: 10–12 videos/day per Page; if they are Reels, stay under ~25/24 h.",
+        "es": "Reels por API: 30 cada 24 h. Uso seguro: 10–12 videos/día por Página; si son Reels, no pases de ~25/24 h.",
+    },
+    "apidoc.limits.x": {
+        "en": "API: 100 posts / 15 min per user. Unverified accounts: ~50 original posts/day (API + manual). Safe: 10–15/day; unverified under 40/day.",
+        "es": "API: 100 posts / 15 min por usuario. Cuentas sin verificar: ~50 posts originales/día (API + a mano). Uso seguro: 10–15/día; sin verificar, menos de 40/día.",
+    },
+    "apidoc.limits.dailymotion": {
+        "en": "No public videos-per-day quota. ~60 API calls/minute and anti-spam still apply. Safe: 10–12/day.",
+        "es": "No hay cupo público de videos por día. Sí hay ~60 llamadas/minuto y anti-spam. Uso seguro: 10–12/día.",
+    },
+    "apidoc.limits.bilibili": {
+        "en": "Member level usually caps uploads (often ~5/day on lower levels). China calendar day. Safe: 3–5/day until that account’s level is confirmed.",
+        "es": "El nivel de miembro suele limitar (a menudo ~5/día en niveles bajos). Día natural de China. Uso seguro: 3–5/día hasta confirmar el nivel de esa cuenta.",
+    },
+    "apidoc.limits.rumble": {
+        "en": "No public daily video quota. Safe: 8–10/day, one upload at a time.",
+        "es": "No hay cupo diario público. Uso seguro: 8–10/día, una subida a la vez.",
+    },
+    "apidoc.limits.snapchat": {
+        "en": "No simple public X videos/day number. Spotlight 6–60 s. Safe: 8–10 posts/day. Wait on HTTP 429.",
+        "es": "No hay un X videos/día público simple. Spotlight 6–60 s. Uso seguro: 8–10 posts/día. Si sale 429, espera.",
+    },
+    "apidoc.limits.odysee": {
+        "en": "No social-network quota. Limited by LBC bid, wallet and pipeline. Safe: few videos/day, one upload at a time.",
+        "es": "Sin cuota de red social. Limitan el bid LBC, el saldo y el pipeline. Uso seguro: pocos videos al día, una subida a la vez.",
+    },
     "apidoc.intro": {
-        "en": "What each server needs so publishing works. Official OAuth (or Rumble’s partner API) is the default. Saving Client ID/Secret only stores the app: the server stays unlinked until you click Connect and sign in; Disconnect or Remove API unlinks it, and connecting another account on the same card replaces the previous one. Register SITE_URL/oauth/{platform}/callback in each developer console. VMOS Cloud is an alternative for TikTok, Instagram, Facebook, YouTube, X, Threads and Snapchat: connect from Servers without pasting social access tokens. Proven PPV hosts (DoodStream, StreamWish, FileMoon, MixDrop, Streamtape, VOE, Vidoza, LuluStream) use an API key from the host dashboard, not OAuth; video only. Names with (pago) — Loadvid, VidSonic, FlyFile, VenVo — are trial hosts to verify payouts. Odysee signs in with email/password (LBRY auth token, TUS). DTube uses Hive username + posting WIF and the IPFS cluster. Tokens marked Automatic are refreshed by the panel on OAuth accounts; VMOS, PPV hosts, Odysee and DTube do not use those tokens.",
-        "es": "Qué hay que hacer en cada servidor para que la publicación funcione. El camino por defecto es OAuth oficial (o la API de partners de Rumble). Guardar Client ID/Secret solo guarda la app: el servidor sigue sin vincular hasta que pulses Conectar e inicies sesión; Desconectar o Quitar API lo desvincula, y conectar otra cuenta en la misma ficha reemplaza la anterior. Registra SITE_URL/oauth/{plataforma}/callback en cada consola de desarrollador. VMOS Cloud es una alternativa para TikTok, Instagram, Facebook, YouTube, X, Threads y Snapchat: se conecta desde Servidores sin pegar tokens de esas redes. Los hosts PPV contrastados (DoodStream, StreamWish, FileMoon, MixDrop, Streamtape, VOE, Vidoza, LuluStream) usan API key del panel del host, no OAuth; solo video. Los que llevan (pago) — Loadvid, VidSonic, FlyFile, VenVo — son de prueba para ver si pagan. Odysee entra con email/contraseña (auth token LBRY, TUS). DTube usa usuario Hive + posting WIF y el cluster IPFS. Si el token es Automático, el panel lo renueva en cuentas OAuth; VMOS, hosts PPV, Odysee y DTube no usan esos tokens.",
+        "en": "What each server needs so publishing works. Official OAuth (or Rumble’s partner API) is the default. Saving Client ID/Secret only stores the app: the server stays unlinked until you click Connect and sign in; Disconnect or Remove API unlinks it, and connecting another account on the same card replaces the previous one. Register SITE_URL/oauth/{platform}/callback in each developer console. VMOS Cloud is an alternative for TikTok, Instagram, Facebook, YouTube, X and Snapchat: connect from Servers without pasting social access tokens. Dailymotion, Bilibili and Rumble stay on their APIs. Odysee signs in with email/password (LBRY auth token, TUS). Tokens marked Automatic are refreshed by the panel on OAuth accounts; VMOS and Odysee do not use those tokens.",
+        "es": "Qué hay que hacer en cada servidor para que la publicación funcione. El camino por defecto es OAuth oficial (o la API de partners de Rumble). Guardar Client ID/Secret solo guarda la app: el servidor sigue sin vincular hasta que pulses Conectar e inicies sesión; Desconectar o Quitar API lo desvincula, y conectar otra cuenta en la misma ficha reemplaza la anterior. Registra SITE_URL/oauth/{plataforma}/callback en cada consola de desarrollador. VMOS Cloud es una alternativa para TikTok, Instagram, Facebook, YouTube, X y Snapchat: se conecta desde Servidores sin pegar tokens de esas redes. Dailymotion, Bilibili y Rumble siguen por su API. Odysee entra con email/contraseña (auth token LBRY, TUS). Si el token es Automático, el panel lo renueva en cuentas OAuth; VMOS y Odysee no usan esos tokens.",
     },
     "apidoc.col_server": {"en": "Server", "es": "Servidor"},
     "apidoc.col_api": {"en": "API", "es": "API"},
@@ -2808,8 +2891,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "En Servidores abre las cuentas de esa red y pulsa Conectar con VMOS. Guarda Access Key, Secret, padCode y la plantilla. Prueba VMOS antes de publicar.",
     },
     "apidoc.vmos.extra": {
-        "en": "Covers TikTok, Instagram, Facebook, YouTube, X, Threads and Snapchat. The panel picks VMOS or OAuth from how that account+network is linked. Without a template the post is not marked sent. Dailymotion, Bilibili and Rumble stay on their APIs. Panel proxies are not used. Stats/comments stay local to this panel.",
-        "es": "Cubre TikTok, Instagram, Facebook, YouTube, X, Threads y Snapchat. El panel elige VMOS u OAuth según cómo esté unida esa cuenta+red. Sin plantilla no se marca como enviado. Dailymotion, Bilibili y Rumble siguen por su API. No se usa el proxy del panel. Estadísticas y comentarios siguen siendo locales de este panel.",
+        "en": "Covers TikTok, Instagram, Facebook, YouTube, X and Snapchat. The panel picks VMOS or OAuth from how that account+network is linked. Without a template the post is not marked sent. Dailymotion, Bilibili and Rumble stay on their APIs. Panel proxies are not used. Stats/comments stay local to this panel.",
+        "es": "Cubre TikTok, Instagram, Facebook, YouTube, X y Snapchat. El panel elige VMOS u OAuth según cómo esté unida esa cuenta+red. Sin plantilla no se marca como enviado. Dailymotion, Bilibili y Rumble siguen por su API. No se usa el proxy del panel. Estadísticas y comentarios siguen siendo locales de este panel.",
     },
     "apidoc.vmos_alt": {
         "en": "Alternative: in Servers, Connect with VMOS for this network (Access Key, Secret, padCode and template) instead of official OAuth.",
@@ -3419,21 +3502,21 @@ MESSAGES: dict[str, dict[str, str]] = {
     # ------------------------------------------------------------------
     "configx.title": {"en": "Config X", "es": "Config X"},
     "configx.intro": {
-        "en": "Pick one X account whose balance pays for publishing on every other X account. Recharge that account, track how much has been spent and how much is left, and get a daily check at 4 AM (panel time) that tells you which X accounts already meet the requirements to start earning, so you only pay the subscription on those.",
-        "es": "Elige una cuenta de X cuyo saldo paga las publicaciones de todas las demás cuentas de X. Recarga esa cuenta, mira cuánto saldo se ha gastado y cuánto queda, y recibe un chequeo diario a las 4 am (hora del panel) que te dice qué cuentas de X ya cumplen los requisitos para empezar a ganar, para pagar la suscripción solo en esas.",
+        "en": "Add one or more X accounts whose apps pay for publishing. Posts are split across those apps. Each app stops near 9,900 posts in 24 hours (X’s cap is 10,000). Recharge balances; the panel emails admins when a balance is running low. A daily check at 4 AM (panel time) shows which X accounts already meet the follower threshold to start earning.",
+        "es": "Añade una o varias cuentas de X cuyas apps pagan las publicaciones. Los posts se reparte entre esas apps. Cada app se corta cerca de 9.900 posts en 24 horas (el tope de X es 10.000). Recarga el saldo; el panel avisa a los admins cuando se está acabando. Un chequeo diario a las 4 am (hora del panel) muestra qué cuentas de X ya cumplen el mínimo de seguidores para empezar a ganar.",
     },
     "configx.info_btn": {"en": "About Config X", "es": "Acerca de Config X"},
     "configx.sources_title": {
-        "en": "Account that recharges (pays the API)",
-        "es": "Cuenta que recarga (paga la API)",
+        "en": "Apps that pay the API",
+        "es": "Apps que pagan la API",
     },
     "configx.sources_info_btn": {
         "en": "About the account that pays the API",
         "es": "Acerca de la cuenta que paga la API",
     },
     "configx.sources_hint": {
-        "en": "Choose which connected X account holds the balance. Every publish to X made with the checkbox enabled deducts the cost per post from this balance instead of spending on each account.",
-        "es": "Elige qué cuenta de X conectada tiene el saldo. Cada publicación en X hecha con el checkbox activado descuenta el costo por publicación de este saldo, en vez de gastar en cada cuenta.",
+        "en": "Add every connected X account whose developer app should pay. Publishing with the Config X checkbox splits posts across these apps (the one with the most posts left in 24 hours is used first). Each app stops at 9,900 posts / 24 h.",
+        "es": "Añade cada cuenta de X conectada cuya app de desarrollador debe pagar. Al publicar con el checkbox de Config X, los posts se reparte entre estas apps (se usa primero la que más hueco tenga en 24 h). Cada app se corta a 9.900 posts / 24 h.",
     },
     "configx.account_label": {"en": "X account", "es": "Cuenta de X"},
     "configx.cost_label": {"en": "Cost per post (USD)", "es": "Costo por publicación (USD)"},
@@ -3452,6 +3535,17 @@ MESSAGES: dict[str, dict[str, str]] = {
     "configx.recharged_label": {"en": "Recharged", "es": "Recargado"},
     "configx.spent_label": {"en": "Spent", "es": "Gastado"},
     "configx.available_label": {"en": "Available", "es": "Disponible"},
+    "configx.posts_24h_label": {"en": "Posts (24 h)", "es": "Posts (24 h)"},
+    "configx.low_badge": {"en": "Low balance", "es": "Saldo bajo"},
+    "configx.cap_badge": {"en": "Daily cap reached", "es": "Tope diario alcanzado"},
+    "configx.low_balance_subject": {
+        "en": "Config X: low balance on {name}",
+        "es": "Config X: saldo bajo en {name}",
+    },
+    "configx.low_balance_body": {
+        "en": "The Config X app {name} is running low.\nAvailable: {available}\nRecharged: {recharged}\nRecharge it in Config X so publishing on X does not stop.",
+        "es": "La app de Config X {name} se está quedando sin saldo.\nDisponible: {available}\nRecargado: {recharged}\nRecárgala en Config X para que no se detengan las publicaciones en X.",
+    },
     "configx.recharge_ph": {"en": "Amount (USD)", "es": "Monto (USD)"},
     "configx.recharge_btn": {"en": "Recharge", "es": "Recargar"},
     "configx.recharged": {
@@ -3518,12 +3612,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Ninguna publicación ha usado el saldo de Config X todavía.",
     },
     "pub.x_use_funding": {
-        "en": "Use Config X balance ({name}) for this X post",
-        "es": "Usar saldo de Config X ({name}) para esta publicación en X",
+        "en": "Use Config X apps ({name}) for this X post",
+        "es": "Usar apps de Config X ({name}) para esta publicación en X",
     },
     "pub.x_use_funding_hint": {
-        "en": "Checked: this post uses the Config X developer app (and its balance). Uncheck it only if this account has its own X API keys and should spend from that app.",
-        "es": "Marcado: esta publicación usa la app de Config X (y su saldo). Desmárcalo solo si esta cuenta tiene su propia API de X y debe gastar de esa app.",
+        "en": "Checked: this post uses a Config X developer app (balance shared, posts split across apps, 9,900 / 24 h per app). Uncheck it only if this account has its own X API keys.",
+        "es": "Marcado: esta publicación usa una app de Config X (saldo compartido, posts repartidos entre apps, 9.900 / 24 h por app). Desmárcalo solo si esta cuenta tiene su propia API de X.",
     },
     "nav.membresias": {"en": "Pricing", "es": "Precio"},
     "nav.pagos": {"en": "Payments", "es": "Pagos"},

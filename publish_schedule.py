@@ -226,6 +226,14 @@ def process_due_scheduled_publications(*, upload_dir: Path) -> int:
                     row["user_id"], getattr(video, "file_hash", "") or ""
                 )
                 continue
+            account_link_id = (row.get("account_link_id") or "").strip()
+            slot_utc, pace_reason = db.next_account_publish_slot(
+                account_link_id, exclude_sched_id=sched_id
+            )
+            now_utc = datetime.now(timezone.utc)
+            if pace_reason != "now" and slot_utc > now_utc + timedelta(seconds=30):
+                db.reschedule_pending_publication(sched_id, slot_utc)
+                continue
             execute_video_publish(
                 upload_dir=upload_dir,
                 user_id=row["user_id"],
@@ -234,7 +242,7 @@ def process_due_scheduled_publications(*, upload_dir: Path) -> int:
                 tiktoker_config_id=(row.get("tiktok_config_id") or "").strip(),
                 content_type=row.get("content_type") or "video",
                 lang=row.get("lang") or "es",
-                account_link_id=(row.get("account_link_id") or "").strip(),
+                account_link_id=account_link_id,
                 retry_sched_id=sched_id,
                 x_use_funding=bool(row.get("x_use_funding") or 0),
             )

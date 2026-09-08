@@ -48,6 +48,7 @@ def _read_max_upload_mb() -> int:
 
 MAX_UPLOAD_MB = _read_max_upload_mb()
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+PUBLISHER_MIN_VIDEO_SECONDS = 60
 COMMENT_INBOX_PER_PAGE = 15
 
 load_dotenv(BASE_DIR / ".env")
@@ -76,6 +77,7 @@ import publish_schedule  # noqa: E402
 import proxy_util  # noqa: E402
 import membership  # noqa: E402
 import video_temp_util  # noqa: E402
+import video_probe  # noqa: E402
 import security_headers  # noqa: E402
 
 SECRET_KEY = os.environ.get("SESSION_SECRET", "dev-cambiar-en-produccion")
@@ -910,6 +912,25 @@ def _proxy_api_item(row: dict) -> dict:
     out.pop("password", None)
     out["display"] = proxy_util.proxy_display(row, mask_password=True)
     return out
+
+
+def _publisher_media_error(user, path: Path, content_type: str, lang: str) -> str | None:
+    """Publicador: solo video de 60 s o más. Admin y modo TikTok no tienen este tope."""
+    if not db.user_is_publisher_mode(user):
+        return None
+    if content_type == "photo" or path.suffix.lower() in ALLOWED_PHOTO_EXT:
+        return i18n.t("pub.flash.publisher_no_photos", lang)
+    meta = video_probe.probe_video(path)
+    duration = meta.get("duration_seconds")
+    if duration is None:
+        return i18n.t("pub.flash.publisher_duration_unknown", lang)
+    try:
+        seconds = float(duration)
+    except (TypeError, ValueError):
+        return i18n.t("pub.flash.publisher_duration_unknown", lang)
+    if seconds + 0.05 < PUBLISHER_MIN_VIDEO_SECONDS:
+        return i18n.t("pub.flash.publisher_min_duration", lang, seconds=PUBLISHER_MIN_VIDEO_SECONDS)
+    return None
 
 
 def _video_suffix_from_upload(filename: str, content_type: str | None) -> str | None:
@@ -2452,6 +2473,9 @@ def admin_publicaciones(request: Request):
             "x_funding_source": (
                 db.resolve_active_x_funding_source() if is_publish_admin else None
             ),
+            "x_funding_source_count": (
+                len(db.list_usable_x_funding_sources()) if is_publish_admin else 0
+            ),
             "schedule_datetime_default": publish_schedule.min_datetime_local_input(),
         },
     )
@@ -2485,6 +2509,11 @@ async def api_video_temp_upload(request: Request, file: UploadFile = File(...)):
         )
 
     token, stored = video_temp_util.save_temp(UPLOAD_DIR, u.id, contents, suffix)
+    temp_file = UPLOAD_DIR / "temp" / stored
+    restrict = _publisher_media_error(u, temp_file, "video", lang)
+    if restrict:
+        video_temp_util.discard_temp(UPLOAD_DIR, u.id, token)
+        return JSONResponse({"ok": False, "error": restrict, "code": "publisher_media"}, status_code=400)
     return {
         "ok": True,
         "token": token,
@@ -2724,9 +2753,19 @@ async def admin_upload_video(request: Request):
         path = UPLOAD_DIR / stored
         path.write_bytes(contents)
     else:
-        return _publicaciones_result(
-            request, ok=False, message=_msg(request, "pub.flash.missing_file")
+        missing_key = (
+            "pub.flash.missing_file_publisher"
+            if db.user_is_publisher_mode(u)
+            else "pub.flash.missing_file"
         )
+        return _publicaciones_result(
+            request, ok=False, message=_msg(request, missing_key)
+        )
+
+    restrict = _publisher_media_error(u, path, content_type, lang)
+    if restrict:
+        path.unlink(missing_ok=True)
+        return _publicaciones_result(request, ok=False, message=restrict)
 
     file_hash = db.file_sha256(path)
     if db.should_block_consecutive_same_file(u.id, file_hash):
@@ -2739,6 +2778,7 @@ async def admin_upload_video(request: Request):
     scheduled_raw = (form.get("scheduled_at") or "").strip()
     scheduled_utc = None
     schedule_for_later = False
+    pace_reason = "now"
     if schedule_enabled:
         scheduled_utc = publish_schedule.parse_scheduled_at_local(scheduled_raw)
         if not scheduled_utc:
@@ -2747,7 +2787,25 @@ async def admin_upload_video(request: Request):
                 request, ok=False, message=_msg(request, "pub.flash.schedule_invalid")
             )
         now_utc = publish_schedule.now_publish_tz().astimezone(timezone.utc)
+        if scheduled_utc <= now_utc:
+            scheduled_utc = now_utc
+        slot_utc, pace_reason = db.next_account_publish_slot(
+            account_link_id, requested_at=scheduled_utc
+        )
+        if slot_utc > scheduled_utc:
+            scheduled_utc = slot_utc
         schedule_for_later = scheduled_utc > now_utc
+    else:
+        now_utc = datetime.now(timezone.utc)
+        slot_utc, pace_reason = db.next_account_publish_slot(
+            account_link_id, requested_at=now_utc
+        )
+        if slot_utc > now_utc:
+            scheduled_utc = slot_utc
+            schedule_for_later = True
+            schedule_enabled = True
+        else:
+            pace_reason = "now"
 
     if not db.try_lock_publish_file(u.id, file_hash):
         path.unlink(missing_ok=True)
@@ -2779,8 +2837,14 @@ async def admin_upload_video(request: Request):
         when_local = publish_schedule.format_scheduled_local(
             scheduled_utc.isoformat(), lang
         )
+        if pace_reason == "daily_cap":
+            flash_key = "pub.flash.queued_daily_cap"
+        elif pace_reason == "spacing":
+            flash_key = "pub.flash.queued_spacing"
+        else:
+            flash_key = "pub.flash.scheduled"
         return _publicaciones_result(
-            request, ok=True, message=_msg(request, "pub.flash.scheduled", when=when_local)
+            request, ok=True, message=_msg(request, flash_key, when=when_local)
         )
 
     ok_n, fail_n, failures = await asyncio.to_thread(
@@ -3101,6 +3165,7 @@ def admin_api_documento(request: Request):
             "user": admin,
             "nav_active": "api_docs",
             "api_docs": platforms.api_document_rows(lang),
+            "daily_limits": platforms.daily_video_limit_rows(lang),
         },
     )
 
@@ -3108,19 +3173,10 @@ def admin_api_documento(request: Request):
 @app.get("/admin/condiciones-servidores", response_class=HTMLResponse, name="admin_server_conditions")
 def admin_server_conditions(request: Request):
     try:
-        admin = require_server_admin(request)
+        require_server_admin(request)
     except PermissionError:
         return _admin_privileges_redirect_login(request)
-    lang = i18n.resolve_lang(request)
-    return _render(
-        request,
-        "admin_condiciones_servidores.html",
-        {
-            "user": admin,
-            "nav_active": "server_conditions",
-            "server_conditions": platforms.server_conditions_rows(lang),
-        },
-    )
+    return RedirectResponse(url=request.url_for("admin_api_documento"), status_code=303)
 
 
 @app.get("/admin/extractor", response_class=HTMLResponse, name="admin_extractor")
@@ -5113,6 +5169,7 @@ def api_xconfig_recharge(request: Request, body: XFundingRechargeBody):
         )
     try:
         src = db.add_x_funding_recharge(body.source_id, amount)
+        db.set_app_setting(f"x_funding_low_alert:{src['id']}", "")
     except ValueError:
         return JSONResponse(
             {"ok": False, "error": i18n.t("configx.err.account_not_found", lang)},

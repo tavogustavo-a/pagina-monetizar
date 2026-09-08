@@ -57,6 +57,9 @@ PLATFORMS: list[dict[str, Any]] = [
         "has_api": True,
         "api_kind": "vmos",
         "token_renewal": "manual",
+        # Threads no se usa. Código VMOS se conserva. Para reactivar: ambos a True.
+        "publish_enabled": False,
+        "ui_visible": False,
         "video": "limited",
         "photo": "yes",
         "comment": "no",
@@ -149,6 +152,9 @@ PLATFORMS: list[dict[str, Any]] = [
         "has_api": True,
         "api_kind": "filehost",
         "token_renewal": "manual",
+        # DoodStream no sirve. Código de filehost.py se conserva.
+        "publish_enabled": False,
+        "ui_visible": False,
         "video": "yes",
         "photo": "no",
         "comment": "no",
@@ -160,6 +166,9 @@ PLATFORMS: list[dict[str, Any]] = [
         "has_api": True,
         "api_kind": "filehost",
         "token_renewal": "manual",
+        # StreamWish no sirve. Código de filehost.py se conserva.
+        "publish_enabled": False,
+        "ui_visible": False,
         "video": "yes",
         "photo": "no",
         "comment": "no",
@@ -171,6 +180,10 @@ PLATFORMS: list[dict[str, Any]] = [
         "has_api": True,
         "api_kind": "filehost",
         "token_renewal": "manual",
+        # FileMoon no sirve: hay que publicar para atraer tráfico.
+        # El código de filehost.py se conserva. Para reactivar: ambos a True.
+        "publish_enabled": False,
+        "ui_visible": False,
         "video": "yes",
         "photo": "no",
         "comment": "no",
@@ -182,6 +195,9 @@ PLATFORMS: list[dict[str, Any]] = [
         "has_api": True,
         "api_kind": "filehost",
         "token_renewal": "manual",
+        # MixDrop no sirve. Código de filehost.py se conserva.
+        "publish_enabled": False,
+        "ui_visible": False,
         "video": "yes",
         "photo": "no",
         "comment": "no",
@@ -193,6 +209,9 @@ PLATFORMS: list[dict[str, Any]] = [
         "has_api": True,
         "api_kind": "filehost",
         "token_renewal": "manual",
+        # Streamtape no sirve. Código de filehost.py se conserva.
+        "publish_enabled": False,
+        "ui_visible": False,
         "video": "yes",
         "photo": "no",
         "comment": "no",
@@ -204,6 +223,9 @@ PLATFORMS: list[dict[str, Any]] = [
         "has_api": True,
         "api_kind": "filehost",
         "token_renewal": "manual",
+        # VOE no sirve. Código de filehost.py se conserva.
+        "publish_enabled": False,
+        "ui_visible": False,
         "video": "yes",
         "photo": "no",
         "comment": "no",
@@ -215,6 +237,9 @@ PLATFORMS: list[dict[str, Any]] = [
         "has_api": True,
         "api_kind": "filehost",
         "token_renewal": "manual",
+        # Vidoza no sirve. Código de filehost.py se conserva.
+        "publish_enabled": False,
+        "ui_visible": False,
         "video": "yes",
         "photo": "no",
         "comment": "no",
@@ -226,6 +251,9 @@ PLATFORMS: list[dict[str, Any]] = [
         "has_api": True,
         "api_kind": "filehost",
         "token_renewal": "manual",
+        # LuluStream no sirve. Código de filehost.py se conserva.
+        "publish_enabled": False,
+        "ui_visible": False,
         "video": "yes",
         "photo": "no",
         "comment": "no",
@@ -237,6 +265,9 @@ PLATFORMS: list[dict[str, Any]] = [
         "has_api": True,
         "api_kind": "filehost",
         "token_renewal": "manual",
+        # Loadvid no sirve: hay que llevar público. Código de filehost.py se conserva.
+        "publish_enabled": False,
+        "ui_visible": False,
         "video": "yes",
         "photo": "no",
         "comment": "no",
@@ -248,6 +279,9 @@ PLATFORMS: list[dict[str, Any]] = [
         "has_api": True,
         "api_kind": "filehost",
         "token_renewal": "manual",
+        # VidSonic no sirve. Código de filehost.py se conserva.
+        "publish_enabled": False,
+        "ui_visible": False,
         "video": "yes",
         "photo": "no",
         "comment": "no",
@@ -259,6 +293,9 @@ PLATFORMS: list[dict[str, Any]] = [
         "has_api": True,
         "api_kind": "filehost",
         "token_renewal": "manual",
+        # FlyFile no sirve, igual que FileMoon. Código de filehost.py se conserva.
+        "publish_enabled": False,
+        "ui_visible": False,
         "video": "yes",
         "photo": "no",
         "comment": "no",
@@ -270,6 +307,9 @@ PLATFORMS: list[dict[str, Any]] = [
         "has_api": True,
         "api_kind": "filehost",
         "token_renewal": "manual",
+        # VenVo no sirve. Código de filehost.py se conserva.
+        "publish_enabled": False,
+        "ui_visible": False,
         "video": "yes",
         "photo": "no",
         "comment": "no",
@@ -519,6 +559,47 @@ def api_document_rows(lang: str) -> list[dict[str, Any]]:
                 "token_label": t(f"apidoc.token.{token}", lang),
                 "setup_steps": steps,
                 "extra": extra,
+            }
+        )
+    return rows
+
+
+DAILY_LIMIT_KIND = {
+    "tiktok": "no",
+    "youtube": "no",
+    "instagram": "no",
+    "facebook": "no",
+    "x": "no",
+    "dailymotion": "no_public",
+    "bilibili": "no",
+    "rumble": "no_public",
+    "snapchat": "no_public",
+    "odysee": "no_public",
+}
+
+
+def daily_video_limit_rows(lang: str) -> list[dict[str, Any]]:
+    """Tabla corta de topes diarios para los servidores visibles (sin VMOS)."""
+    from i18n import t
+
+    rows: list[dict[str, Any]] = []
+    for p in PLATFORMS:
+        if not bool(p.get("ui_visible", True)):
+            continue
+        pid = str(p["id"])
+        kind = DAILY_LIMIT_KIND.get(pid, "no")
+        unlimited_label = t(
+            "apidoc.limits_no_public" if kind == "no_public" else "apidoc.limits_no",
+            lang,
+        )
+        rows.append(
+            {
+                "id": pid,
+                "icon": str(p.get("icon") or ""),
+                "name": t(f"platform.{pid}", lang),
+                "unlimited_kind": kind,
+                "unlimited_label": unlimited_label,
+                "cap": t(f"apidoc.limits.{pid}", lang),
             }
         )
     return rows

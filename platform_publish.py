@@ -277,6 +277,10 @@ def publish_to_platform(
     x_mode = "auto"
     if pid == "x":
         x_mode = "funding" if x_use_funding else "own"
+        if x_mode == "funding" and not db.resolve_active_x_funding_source():
+            from i18n import t as _t
+
+            return False, _t("pub.x.need_funding_api", lang)
     with db.using_credentials_account(name):
         with db.using_x_app_mode(x_mode):
             if pid in vmos.PLATFORM_IDS and db.resolve_vmos_account_for_publish(

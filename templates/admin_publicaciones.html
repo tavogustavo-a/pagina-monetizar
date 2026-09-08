@@ -155,10 +155,13 @@
           {% if publish_unlocked %}
           <div class="pub-field pub-field--dropzone">
             <div class="dropzone pub-control pub-control--dropzone" id="video-dropzone">
-              <input type="file" name="file" id="video-file" accept=".mp4,.webm,.mov,.mkv,.jpg,.jpeg,.png,.webp,.gif,video/*,image/*" class="dropzone__input" />
+              <input type="file" name="file" id="video-file" accept="{% if user_is_publisher_mode(user) %}.mp4,.webm,.mov,.mkv,.m4v,video/*{% else %}.mp4,.webm,.mov,.mkv,.jpg,.jpeg,.png,.webp,.gif,video/*,image/*{% endif %}" class="dropzone__input" />
               <div class="dropzone__content" id="video-dropzone-empty">
                 <p class="dropzone__text">{{ t('pub.dropzone_text') }}</p>
                 <button type="button" class="btn btn-ghost btn-sm" id="video-browse">{{ t('pub.browse_files') }}</button>
+                {% if user_is_publisher_mode(user) %}
+                <p class="dropzone__hint">{{ t('pub.dropzone_publisher_hint') }}</p>
+                {% endif %}
               </div>
               <div class="dropzone__preview" id="video-preview" hidden>
                 <div class="dropzone__thumb-wrap">
@@ -191,7 +194,7 @@
           <div class="pub-field pub-x-funding" id="pub-x-funding" hidden>
             <label class="pub-x-funding__label">
               <input type="checkbox" name="x_use_funding" value="1" checked />
-              <span>{{ t('pub.x_use_funding', name=x_funding_source.name) }}</span>
+              <span>{% if x_funding_source_count > 1 %}{{ t('pub.x_use_funding', name=t('configx.sources_title')) }}{% else %}{{ t('pub.x_use_funding', name=x_funding_source.name) }}{% endif %}</span>
             </label>
             <p class="sub pub-x-funding__hint">{{ t('pub.x_use_funding_hint') }}</p>
           </div>
@@ -1009,7 +1012,9 @@
     if (!zone || !input) return;
     var previewObjectUrl = "";
 
-    var msgFile = {{ t('pub.flash.missing_file') | tojson }};
+    var publisherOnlyVideo = {{ 'true' if user_is_publisher_mode(user) else 'false' }};
+    var publisherMinSeconds = 60;
+    var msgFile = {{ t('pub.flash.missing_file_publisher' if user_is_publisher_mode(user) else 'pub.flash.missing_file') | tojson }};
     var msgDesc = {{ t('pub.flash.missing_description') | tojson }};
     var msgTitle = {{ t('pub.flash.missing_title') | tojson }};
     var msgAccount = {{ pub_account_i18n.select_required | tojson }};
@@ -1032,6 +1037,8 @@
       uploadFail: {{ t('pub.captions_upload_fail') | tojson }},
       fileTooLarge: {{ t('pub.flash.file_too_large', max_mb=max_upload_mb) | tojson }},
       maxUploadBytes: {{ max_upload_bytes | tojson }},
+      publisherNoPhotos: {{ t('pub.flash.publisher_no_photos') | tojson }},
+      publisherMinDuration: {{ t('pub.flash.publisher_min_duration', seconds=60) | tojson }},
       publishingJob: {{ t('pub.publishing_job') | tojson }},
       cancelJob: {{ t('pub.cancel_job') | tojson }},
     };
@@ -1291,12 +1298,48 @@
 
     function handleSelectedFile(file) {
       if (!file) return;
+      if (publisherOnlyVideo) {
+        var isImage = (file.type || "").indexOf("image/") === 0 || /\.(jpe?g|png|webp|gif)$/i.test(file.name || "");
+        if (isImage || !isVideoFile(file)) {
+          alert(uploadI18n.publisherNoPhotos);
+          return;
+        }
+      }
       heldFile = file;
       if (isVideoFile(file)) {
         if (file.size > uploadI18n.maxUploadBytes) {
           alert(uploadI18n.fileTooLarge);
           return;
         }
+        if (publisherOnlyVideo) {
+          var probeUrl = URL.createObjectURL(file);
+          var probeVideo = document.createElement("video");
+          probeVideo.preload = "metadata";
+          probeVideo.muted = true;
+          probeVideo.onloadedmetadata = function () {
+            var dur = probeVideo.duration;
+            URL.revokeObjectURL(probeUrl);
+            if (isFinite(dur) && dur + 0.05 < publisherMinSeconds) {
+              alert(uploadI18n.publisherMinDuration);
+              resetSelectedMedia();
+              return;
+            }
+            startTempUpload(file);
+          };
+          probeVideo.onerror = function () {
+            URL.revokeObjectURL(probeUrl);
+            startTempUpload(file);
+          };
+          probeVideo.src = probeUrl;
+          return;
+        }
+        startTempUpload(file);
+        return;
+      }
+      showLocalPreview(file);
+    }
+
+    function startTempUpload(file) {
         if (currentUploadJob) cancelPubJob(currentUploadJob);
         clearFileInput();
         revokePreviewUrl();
@@ -1347,13 +1390,6 @@
               uploadPromise = null;
             }
           });
-        return;
-      }
-      if (tempToken) {
-        discardTemp(tempToken, false);
-        setTempToken("", "", "");
-      }
-      showLocalPreview(file);
     }
 
     var savedTempRaw = sessionStorage.getItem(tempStorageKey);
@@ -1424,6 +1460,10 @@
         }
         if (!token && !fileToSend) {
           alert(msgFile);
+          return;
+        }
+        if (publisherOnlyVideo && fileToSend && !isVideoFile(fileToSend)) {
+          alert(uploadI18n.publisherNoPhotos);
           return;
         }
         var fd = new FormData(form);

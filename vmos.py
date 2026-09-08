@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 PLATFORM_IDS = frozenset(
-    {"tiktok", "instagram", "facebook", "youtube", "x", "threads", "snapchat"}
+    {"tiktok", "instagram", "facebook", "youtube", "x", "snapchat"}
 )
 
 SHORT_LABEL = {
@@ -22,7 +22,6 @@ SHORT_LABEL = {
     "facebook": "FB",
     "youtube": "YT",
     "x": "X",
-    "threads": "Threads",
     "snapchat": "Snap",
 }
 
