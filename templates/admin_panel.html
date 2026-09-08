@@ -310,7 +310,7 @@
               <label class="field equipo-create-form__field equipo-create-form__field--wide">
                 <select name="user_mode" aria-label="{{ t('team.mode') }}">
                   {% for opt in user_mode_choices %}
-                  <option value="{{ opt.id }}" title="{{ opt.hint }}">{{ opt.label }}</option>
+                  <option value="{{ opt.id }}" title="{{ opt.hint }}"{% if opt.id == 'publisher' %} selected{% endif %}>{{ opt.label }}</option>
                   {% endfor %}
                 </select>
               </label>
@@ -1025,18 +1025,20 @@
           '">' +
           escapeHtml(i18n.edit || "Edit") +
           "</button>" +
-          '<button type="button" class="btn btn-ghost btn-sm js-open-wallet"' +
-          ' data-user-id="' +
-          attrEsc(u.id) +
-          '"' +
-          ' data-username="' +
-          attrEsc(u.username) +
-          '"' +
-          ' data-wallet="' +
-          attrEsc(String(u.wallet_balance_usd || 0)) +
-          '">' +
-          escapeHtml(i18n.addCredit || "Add credit") +
-          "</button>" +
+          (u.user_mode === "tiktok"
+            ? '<button type="button" class="btn btn-ghost btn-sm js-open-wallet"' +
+              ' data-user-id="' +
+              attrEsc(u.id) +
+              '"' +
+              ' data-username="' +
+              attrEsc(u.username) +
+              '"' +
+              ' data-wallet="' +
+              attrEsc(String(u.wallet_balance_usd || 0)) +
+              '">' +
+              escapeHtml(i18n.addCredit || "Add credit") +
+              "</button>"
+            : "") +
           '<label class="user-active-toggle" title="' +
           attrEsc(i18n.toggleActive) +
           '">' +
@@ -1909,9 +1911,9 @@
 
     function setEditMode(mode) {
       if (!editMode) return;
-      var m = mode || "basic";
+      var m = mode || "publisher";
       editMode.value = m;
-      if (editMode.value !== m) editMode.value = "basic";
+      if (editMode.value !== m) editMode.value = "publisher";
     }
 
     function openEditModal(userId, username, userMode, linkedAccountIds, canViewComments, trigger) {
@@ -1930,7 +1932,7 @@
       }
       editAccountPickerApi.setSelectedIds(linkedAccountIds || []);
       editAccountPickerApi.loadStatsAccountChoices("", true);
-      setEditMode(userMode || "basic");
+      setEditMode(userMode || "publisher");
       if (editCanComments) editCanComments.checked = !!canViewComments;
       resetEditPasswordField();
       modal.classList.add("is-open");

@@ -448,7 +448,7 @@
 </div>
 
 <div hidden id="server-modal-templates">
-  {% for platform in platforms %}
+  {% for platform in platforms_all %}
   {% set creds = platform_creds.get(platform.id, {}) %}
   <div data-platform-template="{{ platform.id }}">
     {% if platform.fields %}
@@ -793,8 +793,8 @@
 
   (function () {
     var platformMeta = {
-      {% for platform in platforms %}
-      "{{ platform.id }}": { name: {{ platform.name | tojson }}, icon: {{ platform.icon | tojson }} }{% if not loop.last %},{% endif %}
+      {% for platform in platforms_all %}
+      "{{ platform.id }}": { name: {{ platform.name | tojson }}, icon: {{ platform.icon | tojson }}, uiVisible: {{ platform.ui_visible | tojson }} }{% if not loop.last %},{% endif %}
       {% endfor %}
     };
     var pageLang = {{ lang | tojson }};
@@ -2323,11 +2323,17 @@
       members.forEach(function (member) {
         linkedPlatforms[member.platform_id] = member;
       });
-      var platformIds = Object.keys(platformMeta).sort(function (a, b) {
-        var an = (platformMeta[a] && platformMeta[a].name) || a;
-        var bn = (platformMeta[b] && platformMeta[b].name) || b;
-        return an.localeCompare(bn, undefined, { sensitivity: "base" });
-      });
+      var platformIds = Object.keys(platformMeta)
+        .filter(function (platformId) {
+          var meta = platformMeta[platformId] || {};
+          if (meta.uiVisible === false && !linkedPlatforms[platformId]) return false;
+          return true;
+        })
+        .sort(function (a, b) {
+          var an = (platformMeta[a] && platformMeta[a].name) || a;
+          var bn = (platformMeta[b] && platformMeta[b].name) || b;
+          return an.localeCompare(bn, undefined, { sensitivity: "base" });
+        });
       accountPickerList.innerHTML = platformIds
         .map(function (platformId) {
           var meta = platformMeta[platformId] || { name: platformId, icon: "•" };

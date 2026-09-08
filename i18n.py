@@ -269,6 +269,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "servers.coming_soon": {"en": "Coming soon", "es": "Próximamente"},
     "servers.publish_paused": {"en": "Paused", "es": "Pausado"},
+    "servers.platform_unavailable": {
+        "en": "This server is temporarily unavailable.",
+        "es": "Este servidor no está disponible por ahora.",
+    },
     "servers.dtube_uploader_paused": {
         "en": "Publishing is paused: DTube’s upload servers (cluster.d.tube) are not available. Your Hive username and posting key stay saved. We will use them again if the uploader returns.",
         "es": "La publicación está pausada: los servidores de subida de DTube (cluster.d.tube) no están disponibles. El usuario Hive y la clave posting se quedan guardados. Se usarán otra vez si el uploader vuelve.",
@@ -1032,6 +1036,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "No accounts registered",
         "es": "No hay cuentas registradas",
     },
+    "pub.no_tiktok_linked": {
+        "en": "This account has no TikTok linked.",
+        "es": "Esta cuenta no tiene TikTok vinculado.",
+    },
     "pub.publish_video": {"en": "Publish video", "es": "Publicar video"},
     "pub.platforms_toggle": {
         "en": "Show or hide platforms",
@@ -1065,8 +1073,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "pub.publishing_as": {"en": "Publishing as", "es": "Publicando como"},
     "pub.dropzone_text": {
-        "en": "Drag & drop your video here",
-        "es": "Arrastra y suelta tu video aquí",
+        "en": "Drag your video here",
+        "es": "Arrastra tu video aquí",
     },
     "pub.browse_files": {"en": "Browse files", "es": "Explorar archivos"},
     "pub.remove_file": {"en": "Remove file", "es": "Quitar archivo"},
@@ -1221,6 +1229,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Upload a photo or video before publishing.",
         "es": "Sube una foto o un video antes de publicar.",
     },
+    "pub.flash.video_in_queue": {
+        "en": "That video is already in the queue. Wait until it is published.",
+        "es": "Ese video ya está en cola. Espera a que se publique.",
+    },
+    "pub.flash.video_just_published": {
+        "en": "That video was just published. Upload a different one before sending it again.",
+        "es": "Ese video acaba de publicarse. Sube uno distinto antes de volver a enviarlo.",
+    },
     "pub.flash.missing_description": {
         "en": "Description is required.",
         "es": "La descripción es obligatoria.",
@@ -1307,6 +1323,18 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pub.log_platforms_n": {
         "en": "{n} platforms",
         "es": "{n} plataformas",
+    },
+    "pub.log_search": {
+        "en": "Search by status, platform or account…",
+        "es": "Buscar por estado, plataforma o cuenta…",
+    },
+    "pub.log_no_results": {
+        "en": "No publications match that search.",
+        "es": "Ninguna publicación coincide con esa búsqueda.",
+    },
+    "pub.log_pagination": {
+        "en": "Publication log pagination",
+        "es": "Paginación del registro de publicaciones",
     },
     "log.purge_from": {"en": "From", "es": "Desde"},
     "log.purge_to": {"en": "To", "es": "Hasta"},
@@ -2370,20 +2398,9 @@ MESSAGES: dict[str, dict[str, str]] = {
     "team.page_info": {"en": "Page {page} of {total}", "es": "Página {page} de {total}"},
     "team.page_info_compact": {"en": "{page} / {total}", "es": "{page} / {total}"},
     "team.loading": {"en": "Loading members…", "es": "Cargando miembros…"},
-    "mode.basic": {"en": "Basic mode", "es": "Modo básico"},
     "mode.admin": {"en": "Admin mode", "es": "Modo admin"},
     "mode.tiktok": {"en": "TikTok user", "es": "Usuario TikTok"},
-    "mode.supervisor": {"en": "Supervisor mode", "es": "Modo supervisor"},
-    "mode.videos_only": {"en": "Videos only", "es": "Solo videos"},
-    "mode.videos_comments": {"en": "Videos & comments", "es": "Videos y comentarios"},
-    "mode.videos_comments_stats": {
-        "en": "Videos, comments & stats",
-        "es": "Videos, comentarios y estadísticas",
-    },
-    "mode.basic.hint": {
-        "en": "Default: minimal access until permissions are configured.",
-        "es": "Por defecto: acceso mínimo hasta configurar permisos.",
-    },
+    "mode.publisher": {"en": "Publisher user", "es": "Usuario publicador"},
     "mode.admin.hint": {
         "en": "High permission level in the app (separate from site administrator account).",
         "es": "Nivel alto de permisos en la app (aparte de la cuenta administradora del sitio).",
@@ -2392,21 +2409,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Admin-like workspace: publish, stats and team, without server credentials.",
         "es": "Espacio tipo admin: publicar, estadísticas y equipo, sin credenciales de servidores.",
     },
-    "mode.supervisor.hint": {
-        "en": "Content and workflow oversight.",
-        "es": "Supervisión de contenido y flujo de trabajo.",
-    },
-    "mode.videos_only.hint": {
-        "en": "Publish and manage videos only.",
-        "es": "Publicar y gestionar videos solamente.",
-    },
-    "mode.videos_comments.hint": {
-        "en": "Videos plus comment interaction.",
-        "es": "Videos más interacción con comentarios.",
-    },
-    "mode.videos_comments_stats.hint": {
-        "en": "Videos, comments, and analytics.",
-        "es": "Videos, comentarios y analíticas.",
+    "mode.publisher.hint": {
+        "en": "Only linked TikTok accounts: own posts, stats and comments. No panel, chats or servers.",
+        "es": "Solo las cuentas TikTok vinculadas: publicaciones, estadísticas y comentarios propios. Sin panel, chats ni servidores.",
     },
     "team.js.show_password": {"en": "Show password", "es": "Mostrar contraseña"},
     "team.js.hide_password": {"en": "Hide password", "es": "Ocultar contraseña"},
@@ -3233,6 +3238,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Introduce un importe en USD válido.",
     },
     "membresias.err.user_required": {"en": "User not found.", "es": "Usuario no encontrado."},
+    "membresias.err.credit_tiktok_only": {
+        "en": "Wallet credit can only be added to TikTok users.",
+        "es": "El saldo solo se puede añadir a usuarios TikTok.",
+    },
     "membresias.err.no_plan": {
         "en": "Choose a plan on Pricing before publishing or querying stats.",
         "es": "Elige un plan en Precio para publicar o consultar estadísticas.",
@@ -3787,7 +3796,17 @@ MESSAGES: dict[str, dict[str, str]] = {
 
 
 def resolve_lang(request: Request) -> str:
-    """Inglés por defecto. Solo cambia si eligió idioma (sesión)."""
+    """Inglés por defecto. Usuario publicador siempre español."""
+    try:
+        uid = request.session.get("user_id")
+        if uid:
+            import db as _db
+
+            user = _db.get_user_by_id(str(uid))
+            if user and _db.user_is_publisher_mode(user):
+                return "es"
+    except Exception:
+        pass
     session_lang = request.session.get("lang")
     if session_lang in LANGUAGES:
         return session_lang

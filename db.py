@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import hashlib
 import random
 import sqlite3
 import threading
@@ -31,60 +32,49 @@ def reset_request_db_caches() -> None:
 
 # Modos para usuarios con role='user'. El role='admin' de la cuenta maestra sigue aparte.
 REGULAR_USER_MODES = frozenset({
-    "basic",
     "admin",
     "tiktok",
-    "supervisor",
-    "videos_only",
-    "videos_comments",
-    "videos_comments_stats",
+    "publisher",
 })
 USER_MODE_LABELS: dict[str, str] = {
-    "basic": "Basic mode",
     "admin": "Admin mode",
     "tiktok": "TikTok user",
-    "supervisor": "Supervisor mode",
-    "videos_only": "Videos only",
-    "videos_comments": "Videos & comments",
-    "videos_comments_stats": "Videos, comments & stats",
+    "publisher": "Publisher user",
 }
 USER_MODE_HINTS: dict[str, str] = {
-    "basic": "Default: minimal access until permissions are configured.",
     "admin": "High permission level in the app (separate from site administrator account).",
     "tiktok": "Admin-like workspace without server credentials (publish, stats, team).",
-    "supervisor": "Content and workflow oversight.",
-    "videos_only": "Publish and manage videos only.",
-    "videos_comments": "Videos plus comment interaction.",
-    "videos_comments_stats": "Videos, comments, and analytics.",
+    "publisher": "Publish and see only their linked TikTok accounts.",
 }
 # Backward-compatible aliases
 USER_MODE_LABELS_ES = USER_MODE_LABELS
 USER_MODE_HINTS_ES = USER_MODE_HINTS
 # Orden en formularios (crear / editar).
 REGULAR_USER_MODE_ORDER = (
-    "basic",
     "admin",
     "tiktok",
-    "supervisor",
-    "videos_only",
-    "videos_comments",
-    "videos_comments_stats",
+    "publisher",
 )
 USER_MODES_CAN_UPLOAD_VIDEOS = frozenset({
-    "videos_only",
-    "videos_comments",
-    "videos_comments_stats",
-    "supervisor",
     "admin",
     "tiktok",
+    "publisher",
 })
 USER_MODES_CAN_MANAGE_COMMENTS = frozenset({
-    "videos_comments",
-    "videos_comments_stats",
-    "supervisor",
     "admin",
     "tiktok",
+    "publisher",
 })
+_LEGACY_USER_MODES = {
+    "viewer": "publisher",
+    "basic": "publisher",
+    "supervisor": "publisher",
+    "videos_only": "publisher",
+    "videos_comments": "publisher",
+    "videos_comments_stats": "publisher",
+    "creator": "publisher",
+    "manager": "publisher",
+}
 
 
 def user_has_admin_privileges(user: User) -> bool:
@@ -97,6 +87,11 @@ def user_has_admin_privileges(user: User) -> bool:
 def user_is_tiktok_mode(user: User) -> bool:
     """Usuario TikTok: panel tipo admin pero sin Servidores/Extractor/API."""
     return user.role == "user" and user.user_mode == "tiktok"
+
+
+def user_is_publisher_mode(user: User) -> bool:
+    """Usuario publicador: solo TikTok vinculado, sin panel ni chats."""
+    return user.role == "user" and user.user_mode == "publisher"
 
 
 def user_can_access_servers(user: User) -> bool:
@@ -141,7 +136,7 @@ class User:
     display_name: str
     created_at: str
     active: bool = True
-    user_mode: str = "basic"
+    user_mode: str = "publisher"
     linked_tiktok_config_id: str | None = None
     can_view_comments: bool = True
     notification_email: str = ""
@@ -172,6 +167,7 @@ class Video:
     likes: int
     shares: int
     created_at: str
+    file_hash: str = ""
 
 
 @dataclass
@@ -575,9 +571,10 @@ def _migrate_legacy_user_modes() -> None:
     try:
         conn.executescript(
             """
-            UPDATE users SET user_mode = 'basic' WHERE user_mode = 'viewer';
-            UPDATE users SET user_mode = 'videos_comments' WHERE user_mode = 'creator';
-            UPDATE users SET user_mode = 'videos_comments_stats' WHERE user_mode = 'manager';
+            UPDATE users SET user_mode = 'publisher' WHERE user_mode IN (
+                'viewer', 'basic', 'supervisor', 'videos_only',
+                'videos_comments', 'videos_comments_stats', 'creator', 'manager'
+            );
             """
         )
         conn.commit()
@@ -588,10 +585,11 @@ def _migrate_legacy_user_modes() -> None:
 def _user_from_row(row: sqlite3.Row) -> User:
     d = dict(row)
     active_v = d.get("active", 1)
-    mode = (d.get("user_mode") or "basic").strip() or "basic"
-    legacy = {"viewer": "basic", "creator": "videos_comments", "manager": "videos_comments_stats"}
-    if mode in legacy:
-        mode = legacy[mode]
+    mode = (d.get("user_mode") or "publisher").strip() or "publisher"
+    if mode in _LEGACY_USER_MODES:
+        mode = _LEGACY_USER_MODES[mode]
+    if mode not in REGULAR_USER_MODES and mode != "admin":
+        mode = "publisher"
     ltid = d.get("linked_tiktok_config_id")
     if ltid is not None:
         ltid = str(ltid).strip() or None
@@ -812,6 +810,8 @@ def _init_db_schema() -> None:
     _ensure_filehost_accounts_table()
     _ensure_chain_accounts_table()
     _ensure_scheduled_publications_table()
+    _ensure_videos_file_hash_column()
+    _ensure_publish_file_locks_table()
     _ensure_platform_credentials_name_column()
     _ensure_platform_credentials_owner_column()
     _ensure_account_platform_credentials_table()
@@ -1483,6 +1483,19 @@ def list_stats_filter_choices(viewer: User, *, lang: str = "es") -> list[dict[st
         finally:
             conn.close()
     choices.sort(key=lambda item: str(item.get("name") or "").casefold())
+    if user_is_publisher_mode(viewer):
+        allowed = set(list_user_account_link_ids(viewer.id))
+        out: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for c in choices:
+            cid = str(c.get("id") or "").strip()
+            if not cid or cid in seen:
+                continue
+            pids = [str(p) for p in (c.get("platform_ids") or [])]
+            if cid in allowed or "tiktok" in pids:
+                seen.add(cid)
+                out.append(c)
+        return out
     return choices
 
 
@@ -1992,7 +2005,7 @@ def normalize_team_members_per_page(per_page: int | str | None) -> int | None:
 def _team_member_matches_query(user: User, q: str, mode_labels: dict[str, str]) -> bool:
     if q in user.username.lower():
         return True
-    mode_id = (user.user_mode or "basic").lower()
+    mode_id = (user.user_mode or "publisher").lower()
     if q in mode_id or q in mode_id.replace("_", " "):
         return True
     label = mode_labels.get(user.user_mode, user.user_mode).lower()
@@ -2045,12 +2058,16 @@ def create_user(
     if role == "admin":
         mode = "admin"
     else:
-        m = (user_mode or "basic").strip().lower()
+        m = (user_mode or "publisher").strip().lower()
         if m not in REGULAR_USER_MODES:
             raise ValueError("Invalid user mode")
         mode = m
     link = (linked_tiktok_config_id or "").strip() or None
-    comments_flag = 1 if can_view_comments or role == "admin" else 0
+    comments_flag = 1 if (
+        can_view_comments
+        or role == "admin"
+        or mode in ("publisher", "tiktok", "admin")
+    ) else 0
     conn = _connect()
     try:
         conn.execute(
@@ -2118,7 +2135,7 @@ def update_user_record(
     if user_mode is None or not str(user_mode).strip():
         mode = target.user_mode
         if mode not in REGULAR_USER_MODES:
-            mode = "basic"
+            mode = "publisher"
     else:
         m = str(user_mode).strip().lower()
         if m not in REGULAR_USER_MODES:
@@ -2127,6 +2144,8 @@ def update_user_record(
     comments_flag = (
         target.can_view_comments if can_view_comments is None else bool(can_view_comments)
     )
+    if mode in ("publisher", "tiktok", "admin"):
+        comments_flag = True
     conn = _connect()
     try:
         clash = conn.execute(
@@ -3150,8 +3169,169 @@ def _fmt_metric(n: int) -> str:
     return str(n)
 
 
+def _ensure_videos_file_hash_column() -> None:
+    _ensure_column("videos", "file_hash", "TEXT NOT NULL DEFAULT ''")
+
+
+def _ensure_publish_file_locks_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS publish_file_locks (
+                user_id TEXT NOT NULL,
+                file_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (user_id, file_hash)
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def file_sha256(path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        while True:
+            chunk = fh.read(1024 * 1024)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def user_has_queued_file_hash(user_id: str, file_hash: str) -> bool:
+    uid = (user_id or "").strip()
+    digest = (file_hash or "").strip().lower()
+    if not uid or not digest:
+        return False
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT 1 AS ok
+            FROM scheduled_publications sp
+            JOIN videos v ON v.id = sp.video_id
+            WHERE sp.user_id = ?
+              AND sp.status IN ('pending', 'processing', 'awaiting_retry')
+              AND lower(v.file_hash) = ?
+            LIMIT 1
+            """,
+            (uid, digest),
+        ).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
+def should_block_consecutive_same_file(user_id: str, file_hash: str) -> bool:
+    """True si el último envío del usuario es este archivo y ya se publicó con éxito."""
+    uid = (user_id or "").strip()
+    digest = (file_hash or "").strip().lower()
+    if not uid or not digest:
+        return False
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT t.video_id AS video_id
+            FROM (
+                SELECT video_id, created_at
+                FROM scheduled_publications
+                WHERE user_id = ?
+                UNION ALL
+                SELECT video_id, created_at
+                FROM publication_log
+                WHERE user_id = ?
+            ) t
+            ORDER BY t.created_at DESC
+            LIMIT 1
+            """,
+            (uid, uid),
+        ).fetchone()
+        if not row:
+            return False
+        video_id = str(row["video_id"] or "").strip()
+        if not video_id:
+            return False
+        video = conn.execute(
+            "SELECT file_hash FROM videos WHERE id = ?",
+            (video_id,),
+        ).fetchone()
+        last_hash = str((video["file_hash"] if video else "") or "").strip().lower()
+        if last_hash != digest:
+            return False
+        ok = conn.execute(
+            """
+            SELECT 1 AS ok
+            FROM publication_log
+            WHERE user_id = ? AND video_id = ? AND status = 'ok'
+            LIMIT 1
+            """,
+            (uid, video_id),
+        ).fetchone()
+        return ok is not None
+    finally:
+        conn.close()
+
+
+def try_lock_publish_file(user_id: str, file_hash: str) -> bool:
+    uid = (user_id or "").strip()
+    digest = (file_hash or "").strip().lower()
+    if not uid or not digest:
+        return False
+    if user_has_queued_file_hash(uid, digest):
+        return False
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            INSERT INTO publish_file_locks (user_id, file_hash, created_at)
+            VALUES (?, ?, ?)
+            """,
+            (uid, digest, datetime.now(timezone.utc).isoformat()),
+        )
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
+
+
+def release_publish_file_lock(user_id: str, file_hash: str) -> None:
+    uid = (user_id or "").strip()
+    digest = (file_hash or "").strip().lower()
+    if not uid or not digest:
+        return
+    conn = _connect()
+    try:
+        conn.execute(
+            "DELETE FROM publish_file_locks WHERE user_id = ? AND file_hash = ?",
+            (uid, digest),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def release_publish_file_lock_if_idle(user_id: str, file_hash: str) -> None:
+    digest = (file_hash or "").strip().lower()
+    if not digest:
+        return
+    if user_has_queued_file_hash(user_id, digest):
+        return
+    release_publish_file_lock(user_id, digest)
+
+
 def create_video(
-    user_id: str, title: str, description: str, stored_filename: str
+    user_id: str,
+    title: str,
+    description: str,
+    stored_filename: str,
+    file_hash: str = "",
 ) -> Video:
     seed_admin_if_missing()
     vid = str(uuid.uuid4())
@@ -3164,9 +3344,20 @@ def create_video(
     conn = _connect()
     try:
         conn.execute(
-            """INSERT INTO videos (id, user_id, title, description, file_name, views, likes, shares, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (vid, user_id, title.strip(), description.strip(), stored_filename, views, likes, shares, now),
+            """INSERT INTO videos (id, user_id, title, description, file_name, views, likes, shares, created_at, file_hash)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                vid,
+                user_id,
+                title.strip(),
+                description.strip(),
+                stored_filename,
+                views,
+                likes,
+                shares,
+                now,
+                (file_hash or "").strip().lower(),
+            ),
         )
         conn.commit()
     finally:
@@ -3199,6 +3390,7 @@ def _row_to_video(row: sqlite3.Row) -> Video:
         likes=int(row["likes"]),
         shares=int(row["shares"]),
         created_at=row["created_at"],
+        file_hash=str(dict(row).get("file_hash") or ""),
     )
 
 
@@ -3839,6 +4031,34 @@ def list_comment_threads_for_owners(
         conn.close()
 
 
+def video_ids_published_by(user_id: str, *, platform_id: str | None = None) -> set[str]:
+    """Videos que este usuario envió (no reenvíos de otro actor sobre el mismo archivo)."""
+    uid = (user_id or "").strip()
+    if not uid:
+        return set()
+    conn = _connect()
+    try:
+        if platform_id:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT video_id FROM publication_log
+                WHERE user_id = ? AND platform_id = ? AND video_id IS NOT NULL
+                """,
+                (uid, platform_id),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT video_id FROM publication_log
+                WHERE user_id = ? AND video_id IS NOT NULL
+                """,
+                (uid,),
+            ).fetchall()
+        return {str(r["video_id"]) for r in rows if r["video_id"]}
+    finally:
+        conn.close()
+
+
 def build_feed_clips() -> list[dict[str, Any]]:
     """Videos subidos en el feed (más recientes primero)."""
     seed_admin_if_missing()
@@ -4010,6 +4230,8 @@ def user_can_upload_videos(user: User) -> bool:
 
 
 def user_can_manage_comments(user: User) -> bool:
+    if user_has_admin_privileges(user) or user_is_publisher_mode(user):
+        return True
     return bool(user.can_view_comments)
 
 
@@ -4046,6 +4268,8 @@ def publication_log_viewer_scope(viewer: User) -> list[str] | None:
     """None = ver todo el historial (admin sitio o servidores); lista = user ids visibles."""
     if user_is_site_admin(viewer) or user_can_access_servers(viewer):
         return None
+    if user_is_publisher_mode(viewer):
+        return [str(viewer.id)]
     ids = {str(viewer.id)}
     ids.update(allowed_video_owner_ids_for_user(viewer))
     return list(ids)
@@ -4060,11 +4284,34 @@ def _publication_log_scope_sql(viewer: User | None) -> tuple[str, list[Any]]:
     if not scope:
         return "WHERE 1=0", []
     ph = ",".join("?" * len(scope))
+    if user_is_publisher_mode(viewer):
+        return (
+            f"WHERE pl.user_id IN ({ph}) AND pl.platform_id = 'tiktok'",
+            list(scope),
+        )
     where = (
         f"WHERE (pl.user_id IN ({ph})"
         f" OR pl.video_id IN (SELECT id FROM videos WHERE user_id IN ({ph})))"
     )
     return where, [*scope, *scope]
+
+
+def _scheduled_viewer_sql(viewer: User | None) -> tuple[str, list[Any]]:
+    """Recorta programaciones al actor. El publicador no ve reenvíos de admin."""
+    if viewer is None:
+        return "", []
+    scope = publication_log_viewer_scope(viewer)
+    if scope is None:
+        return "", []
+    if not scope:
+        return "AND 1=0", []
+    ph = ",".join("?" * len(scope))
+    if user_is_publisher_mode(viewer):
+        return f"AND sp.user_id IN ({ph})", list(scope)
+    return (
+        f"AND (sp.user_id IN ({ph}) OR v.user_id IN ({ph}))",
+        [*scope, *scope],
+    )
 
 
 def resolve_publish_owner_user_id(viewer: User, config_id: str) -> str | None:
@@ -7503,12 +7750,9 @@ def list_scheduled_publications(
         if scope is not None and not scope:
             return []
         where = "sp.status = 'pending'"
-        params: list[Any] = []
-        if scope is not None:
-            ph = ",".join("?" * len(scope))
-            where += f" AND (sp.user_id IN ({ph}) OR v.user_id IN ({ph}))"
-            params.extend(scope)
-            params.extend(scope)
+        extra, extra_params = _scheduled_viewer_sql(viewer)
+        where = f"{where} {extra}".strip()
+        params: list[Any] = list(extra_params)
         rows = conn.execute(
             f"""
             SELECT sp.*, v.title AS video_title
@@ -7656,12 +7900,9 @@ def list_awaiting_retry_publications(
         if scope is not None and not scope:
             return []
         where = "sp.status = 'awaiting_retry'"
-        params: list[Any] = []
-        if scope is not None:
-            ph = ",".join("?" * len(scope))
-            where += f" AND (sp.user_id IN ({ph}) OR v.user_id IN ({ph}))"
-            params.extend(scope)
-            params.extend(scope)
+        extra, extra_params = _scheduled_viewer_sql(viewer)
+        where = f"{where} {extra}".strip()
+        params: list[Any] = list(extra_params)
         rows = conn.execute(
             f"""
             SELECT sp.*, v.title AS video_title,
@@ -7696,16 +7937,18 @@ def list_publication_logs(*, limit: int = 40, viewer: User | None = None) -> lis
                    u.role AS user_role,
                    u.user_mode AS user_user_mode,
                    vu.username AS uploader_username,
-                   vu.display_name AS uploader_display_name
+                   vu.display_name AS uploader_display_name,
+                   al.name AS account_name
             FROM publication_log pl
             LEFT JOIN videos v ON v.id = pl.video_id
             LEFT JOIN users u ON u.id = pl.user_id
             LEFT JOIN users vu ON vu.id = v.user_id
+            LEFT JOIN server_account_links al ON al.id = pl.account_link_id
             {where_sql}
             ORDER BY pl.created_at DESC
             LIMIT ?
             """,
-            (*where_params, max(1, min(limit, 200))),
+            (*where_params, max(1, min(limit, 2500))),
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
@@ -7788,6 +8031,7 @@ def list_publication_log_groups(
                 "user_role": user_role,
                 "user_mode": user_mode,
                 "user_is_admin": user_role == "admin" or user_mode == "admin",
+                "account_name": str(latest.get("account_name") or "").strip(),
                 "status": status,
                 "ok_n": ok_n,
                 "fail_n": fail_n,
@@ -9502,7 +9746,12 @@ def _ensure_stats_query_log_table() -> None:
 
 
 def membership_quota_exempt(user: User) -> bool:
-    return user_is_site_admin(user) or user_can_access_servers(user)
+    """Admin de servidores y usuario publicador no pasan por Precio/membresía."""
+    return (
+        user_is_site_admin(user)
+        or user_can_access_servers(user)
+        or user_is_publisher_mode(user)
+    )
 
 
 def _count_since(conn: sqlite3.Connection, sql: str, user_id: str, start_iso: str) -> int:

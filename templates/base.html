@@ -15,7 +15,9 @@
   <body>
     {% block body %}{% endblock %}
     {% block site_footer %}
+    {% if not (user is defined and user and user_is_publisher_mode(user)) %}
     {% include "_footer.html" %}
+    {% endif %}
     {% endblock %}
     <script src="/static/js/register_service_worker.js?v=1" defer></script>
     <script src="/static/js/offline-status.js?v=1" defer></script>

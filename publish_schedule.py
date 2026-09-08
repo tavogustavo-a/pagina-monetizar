@@ -222,6 +222,9 @@ def process_due_scheduled_publications(*, upload_dir: Path) -> int:
                 db.complete_scheduled_publication(
                     sched_id, "failed", "No platforms selected"
                 )
+                db.release_publish_file_lock_if_idle(
+                    row["user_id"], getattr(video, "file_hash", "") or ""
+                )
                 continue
             execute_video_publish(
                 upload_dir=upload_dir,
@@ -234,6 +237,9 @@ def process_due_scheduled_publications(*, upload_dir: Path) -> int:
                 account_link_id=(row.get("account_link_id") or "").strip(),
                 retry_sched_id=sched_id,
                 x_use_funding=bool(row.get("x_use_funding") or 0),
+            )
+            db.release_publish_file_lock_if_idle(
+                row["user_id"], getattr(video, "file_hash", "") or ""
             )
             processed += 1
         except (OSError, Exception) as e:
@@ -284,4 +290,9 @@ def cancel_awaiting_retry(*, sched_id: str, actor_user_id: str, lang: str) -> bo
             batch_id=batch_id,
         )
     db.complete_scheduled_publication(sched_id, "cancelled")
+    video = db.get_video_by_id(str(row.get("video_id") or ""))
+    if video:
+        db.release_publish_file_lock_if_idle(
+            str(row.get("user_id") or ""), getattr(video, "file_hash", "") or ""
+        )
     return True

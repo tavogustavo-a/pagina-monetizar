@@ -3819,6 +3819,10 @@ input:focus {
   margin-top: 0.75rem;
 }
 
+#pub-publish-section .pub-field--title .pub-control--input {
+  text-align: center;
+}
+
 #pub-publish-section .pub-field__label {
   display: block;
   margin-bottom: 0.38rem;
@@ -3842,36 +3846,50 @@ input:focus {
 
 #pub-publish-section .pub-schedule-row {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.4rem;
 }
 
 #pub-publish-section .pub-schedule-row .pub-control--datetime {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   width: auto;
+  padding: 0 0.4rem;
+  font-size: clamp(0.64rem, 2.8vw, 0.84rem);
 }
 
 #pub-publish-section .pub-schedule-row__btn {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   height: var(--pub-control-h);
   min-height: var(--pub-control-h);
   border-radius: 0.6rem;
-  font-size: 0.84rem;
+  font-size: clamp(0.68rem, 2.7vw, 0.84rem);
   font-weight: 600;
-  padding: 0 1rem;
+  padding: 0 0.75rem;
   line-height: 1;
+  white-space: nowrap;
   box-shadow: 0 4px 14px rgba(254, 44, 85, 0.16);
+}
+
+#pub-publish-section .pub-schedule-row .pub-control--datetime::-webkit-calendar-picker-indicator {
+  margin: 0;
+  padding: 0;
 }
 
 @media (max-width: 520px) {
   #pub-publish-section .pub-schedule-row {
-    flex-direction: column;
-    align-items: stretch;
+    gap: 0.3rem;
+  }
+
+  #pub-publish-section .pub-schedule-row .pub-control--datetime {
+    padding: 0 0.15rem;
+    font-size: clamp(0.58rem, 2.55vw, 0.72rem);
   }
 
   #pub-publish-section .pub-schedule-row__btn {
-    width: 100%;
+    padding: 0 0.55rem;
+    font-size: clamp(0.62rem, 2.45vw, 0.76rem);
   }
 }
 
@@ -3918,6 +3936,12 @@ input:focus {
 
 #pub-publish-section .pub-control--datetime {
   color-scheme: dark;
+  text-align: center;
+}
+
+#pub-publish-section .pub-control--datetime::-webkit-datetime-edit,
+#pub-publish-section .pub-control--datetime::-webkit-datetime-edit-fields-wrapper {
+  text-align: center;
 }
 
 #pub-publish-section .pub-control--dropzone {
@@ -3942,38 +3966,34 @@ input:focus {
 }
 
 #pub-publish-section .dropzone__content {
-  padding: 1rem 0.85rem;
-  gap: 0.45rem 0.65rem;
-}
-
-#pub-publish-section .dropzone--has-file.pub-control--dropzone {
-  background: linear-gradient(180deg, rgba(10, 20, 30, 0.72), rgba(6, 12, 20, 0.88));
-}
-
-#pub-publish-section .dropzone__icon {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 999px;
-  font-size: 1rem;
-  color: rgba(37, 244, 238, 0.9);
-  background: rgba(37, 244, 238, 0.1);
-  border: 1px solid rgba(37, 244, 238, 0.22);
-  opacity: 1;
+  gap: 0.35rem 0.5rem;
+  padding: 0.7rem 0.55rem;
+  text-align: center;
 }
 
 #pub-publish-section .dropzone__text {
   margin: 0;
-  font-size: 0.84rem;
+  font-size: clamp(0.68rem, 2.9vw, 0.84rem);
   color: rgba(200, 225, 240, 0.82);
-  line-height: 1.35;
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
 #pub-publish-section .dropzone__content .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
   border-color: rgba(37, 244, 238, 0.28);
   color: rgba(37, 244, 238, 0.92);
+  font-size: clamp(0.66rem, 2.7vw, 0.78rem);
+  padding: 0.28rem 0.5rem;
+}
+
+#pub-publish-section .dropzone--has-file.pub-control--dropzone {
+  background: linear-gradient(180deg, rgba(10, 20, 30, 0.72), rgba(6, 12, 20, 0.88));
 }
 
 .dashboard--pub {
@@ -4002,6 +4022,24 @@ input:focus {
   font-weight: 600;
   color: #ffffff;
   text-align: center;
+}
+
+.dashboard--pub .pub-log-section .equipo-members-head {
+  margin-bottom: 0.45rem;
+}
+
+.dashboard--pub .pub-log-section .equipo-members-head h2.pub-log-section__title {
+  margin: 0;
+  text-align: left;
+}
+
+.dashboard--pub .pub-log-section .equipo-members-per-page__prefix,
+.dashboard--pub .pub-log-section .equipo-members-per-page select {
+  font-size: 0.76rem;
+}
+
+.dashboard--pub .pub-log-empty {
+  margin: 0.45rem 0 0;
 }
 
 .dashboard--pub .pub-divider + .pub-log-section {
@@ -4137,6 +4175,7 @@ input:focus {
 
 .pub-account-filter__empty {
   margin: 0.45rem 0 0;
+  text-align: center;
 }
 
 .pub-account-picker__meta {
@@ -7601,6 +7640,18 @@ form.server-modal__body.api-form .panel-api-test-msg {
 .pub-scheduled-table .cap {
   margin-right: 0.25rem;
   margin-bottom: 0.15rem;
+}
+
+.dashboard--pub .pub-scheduled-table th:first-child,
+.dashboard--pub .pub-scheduled-table td:first-child,
+.dashboard--pub .pub-scheduled-table th:nth-child(2),
+.dashboard--pub .pub-scheduled-table td:nth-child(2) {
+  text-align: center;
+}
+
+.dashboard--pub .pub-pending-section .pub-scheduled-table th:first-child,
+.dashboard--pub .pub-pending-section .pub-scheduled-table td:first-child {
+  text-align: center;
 }
 
 .pub-pending-section__hint {

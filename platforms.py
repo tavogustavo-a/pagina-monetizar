@@ -134,7 +134,10 @@ PLATFORMS: list[dict[str, Any]] = [
         "has_api": True,
         "api_kind": "hive",
         "token_renewal": "manual",
+        # Pausado y oculto en Servidores/Publicaciones. El módulo dtube.py
+        # sigue montado: para reactivar pon ui_visible y publish_enabled en True.
         "publish_enabled": False,
+        "ui_visible": False,
         "video": "yes",
         "photo": "no",
         "comment": "no",
@@ -363,6 +366,14 @@ def is_publish_enabled(platform_id: str) -> bool:
     return bool(p.get("publish_enabled", True))
 
 
+def is_ui_visible(platform_id: str) -> bool:
+    """False = no aparece en Servidores, extractor, condiciones ni publicaciones."""
+    p = get_platform(platform_id)
+    if not p:
+        return False
+    return bool(p.get("ui_visible", True))
+
+
 def platform_select_label(platform: dict[str, Any]) -> str:
     icon = str(platform.get("icon") or "").strip()
     name = str(platform.get("name") or "").strip()
@@ -382,12 +393,15 @@ def _field_label(lang: str, prefix: str, platform_id: str, fallback_key: str) ->
     return t(fallback_key, lang)
 
 
-def platform_list(lang: str) -> list[dict[str, Any]]:
+def platform_list(lang: str, *, include_hidden: bool = False) -> list[dict[str, Any]]:
     from i18n import t
 
     out: list[dict[str, Any]] = []
     for p in PLATFORMS:
         pid = str(p["id"])
+        ui_visible = bool(p.get("ui_visible", True))
+        if not include_hidden and not ui_visible:
+            continue
         out.append(
             {
                 "id": pid,
@@ -399,6 +413,7 @@ def platform_list(lang: str) -> list[dict[str, Any]]:
                 "comment": str(p["comment"]),
                 "fields": list(p["fields"]),
                 "publish_enabled": bool(p.get("publish_enabled", True)),
+                "ui_visible": ui_visible,
                 "note": t(f"limits.note.{pid}", lang),
                 "label_client_id": _field_label(lang, "api.field.client_id", pid, "api.field.client_id"),
                 "label_client_secret": _field_label(
@@ -462,6 +477,8 @@ def api_document_rows(lang: str) -> list[dict[str, Any]]:
     vmos_ids = _vmos_platform_ids()
     rows: list[dict[str, Any]] = [_vmos_apidoc_row(lang)]
     for p in PLATFORMS:
+        if not bool(p.get("ui_visible", True)):
+            continue
         pid = str(p["id"])
         steps: list[str] = []
         n = 1
@@ -514,6 +531,8 @@ def server_conditions_rows(lang: str) -> list[dict[str, Any]]:
     vmos_ids = _vmos_platform_ids()
     rows: list[dict[str, Any]] = [_vmos_conditions_row(lang)]
     for p in PLATFORMS:
+        if not bool(p.get("ui_visible", True)):
+            continue
         pid = str(p["id"])
         kind = str(p.get("api_kind") or ("oauth" if p.get("has_api") else "none"))
         if kind == "filehost":

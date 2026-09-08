@@ -14,6 +14,7 @@
       <form method="get" action="/admin" class="stats-filters{% if not show_account_filter %} stats-filters--no-account{% endif %}" id="stats-filters-form" style="margin-bottom: 1rem">
         <input type="hidden" name="consult" id="stats-consult-flag" value="{{ '1' if stats_consulted else '' }}" />
         <input type="hidden" name="spend" id="stats-spend-flag" value="" />
+        {% if show_stats_platform_filter %}
         <div class="field stats-filters__field stats-filter-field">
           <span>{{ t('admin.platform') }}</span>
           <input type="hidden" name="platform" id="stats-platform-id" value="{{ selected_platform }}" />
@@ -36,6 +37,9 @@
             <span class="stats-picker__chevron" aria-hidden="true">▾</span>
           </button>
         </div>
+        {% else %}
+        <input type="hidden" name="platform" id="stats-platform-id" value="{{ selected_platform }}" />
+        {% endif %}
         {% if show_account_filter %}
         <div class="field stats-filters__field stats-filter-field">
           <span>{{ account_filter_label }}</span>
@@ -54,6 +58,8 @@
             <span class="stats-picker__chevron" aria-hidden="true">▾</span>
           </button>
         </div>
+        {% elif selected_tiktoker %}
+        <input type="hidden" name="account" id="stats-account-id" value="{{ selected_tiktoker }}" />
         {% endif %}
         <div class="stats-filters__actions">
           <button type="submit" class="btn btn-primary stats-filters__consult" id="stats-consult-btn"{% if not membership_usage.can_query_stats and not stats_consulted %} disabled{% endif %}>
@@ -63,13 +69,9 @@
       </form>
       {% endif %}
 
-      {% if not show_stats_filters and not tiktok_stat_choices %}
+      {% if not show_stats_filters and not tiktok_stat_choices and user_is_tiktok_mode(user) %}
       <p class="sub stats-empty-hint">
-        {% if user_is_tiktok_mode(user) %}
         {{ t('admin.no_tiktok_accounts_panel') }}
-        {% else %}
-        {{ t('admin.no_server_account_linked') }}
-        {% endif %}
       </p>
       {% endif %}
 

@@ -20,7 +20,9 @@
     >
       <span class="brand-mark">C</span>
     </button>
+    {% if not user_is_publisher_mode(user) %}
     {% include "_lang_switcher.html" %}
+    {% endif %}
   </div>
   {% if user_has_admin_privileges(user) %}
   <nav id="sidebar-nav">
@@ -108,6 +110,21 @@
     >
     {% endif %}
   </nav>
+  {% elif user_is_publisher_mode(user) %}
+  <nav id="sidebar-nav">
+    <a
+      href="/admin/publicaciones"
+      class="nav-link {% if nav_active == 'publicaciones' %}nav-link--active{% endif %}"
+      title="{{ t('nav.publications') }}"
+      ><span class="nav-ic">🎬</span><span class="nav-label">{{ t('nav.publications') }}</span></a
+    >
+    <a
+      href="/admin"
+      class="nav-link {% if nav_active == 'admin' %}nav-link--active{% endif %}"
+      title="{{ t('nav.statistics') }}"
+      ><span class="nav-ic">📊</span><span class="nav-label">{{ t('nav.statistics') }}</span></a
+    >
+  </nav>
   {% elif user.role == 'user' %}
   <nav id="sidebar-nav">
     {% if user_can_access_publicaciones(user) %}
@@ -159,10 +176,12 @@
     </form>
   </div>
 </aside>
+{% if not user_is_publisher_mode(user) %}
 <meta name="support-notify-user" content="{{ t('support.notify_new') }}" />
 <meta name="support-notify-admin" content="{{ t('support.notify_new_admin') }}" />
 <meta name="support-notify-is-agent" content="{{ '1' if user_can_access_servers(user) else '0' }}" />
 <script src="/static/js/support-notify.js?v=1" defer></script>
+{% endif %}
 <script>
   (function () {
     var sidebar = document.getElementById("app-sidebar");

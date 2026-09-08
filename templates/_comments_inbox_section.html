@@ -35,7 +35,9 @@
   </div>
 
   <div class="pub-accordion__panel" id="stats-comments-panel">
+    {% if show_comment_platform_filter or show_comment_user_filter %}
     <div class="comment-filters">
+      {% if show_comment_platform_filter %}
       <label class="field comment-filters__field">
         <span>{{ t('pub.comments_filter_platform') }}</span>
         <select id="comment-filter-platform" aria-label="{{ t('pub.comments_filter_platform') }}">
@@ -47,6 +49,9 @@
           {% endfor %}
         </select>
       </label>
+      {% else %}
+      <input type="hidden" id="comment-filter-platform" value="tiktok" />
+      {% endif %}
       {% if show_comment_user_filter %}
       <label class="field comment-filters__field">
         <span>{{ t('pub.comments_filter_user') }}</span>
@@ -59,6 +64,9 @@
       </label>
       {% endif %}
     </div>
+    {% else %}
+    <input type="hidden" id="comment-filter-platform" value="tiktok" />
+    {% endif %}
 
     <p class="sub comment-results-loading" id="comment-results-loading" hidden>{{ t('team.loading') }}</p>
     <p class="sub comment-results-empty" id="comment-results-empty" hidden>{{ t('pub.comments_no_results') }}</p>

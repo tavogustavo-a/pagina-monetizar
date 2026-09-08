@@ -134,7 +134,9 @@
                 </span>
                 <span class="stats-picker__chevron" aria-hidden="true">▾</span>
               </button>
+              {% if not user_is_publisher_mode(user) %}
               <p class="sub pub-account-filter__empty" id="pub-account-platforms-empty" hidden>{{ pub_account_i18n.empty }}</p>
+              {% endif %}
             </div>
           </div>
           {% elif publish_account_choices | length == 1 %}
@@ -143,7 +145,7 @@
           <div class="pub-publish-account pub-publish-account--locked">
             <div class="publish-locked">
               <p class="publish-locked__title">{{ t('pub.no_accounts_title') }}</p>
-              {% if not user_is_tiktok_mode(user) %}
+              {% if not user_is_tiktok_mode(user) and not user_is_publisher_mode(user) %}
               <p class="sub">{{ t('pub.no_accounts_hint', servers=t('servers.ref_servers'), team=t('nav.panel')) }}</p>
               {% endif %}
             </div>
@@ -205,6 +207,7 @@
                 id="scheduled-at"
                 step="60"
                 required
+                value="{{ schedule_datetime_default }}"
                 aria-label="{{ t('pub.schedule_datetime') }}"
               />
               <button type="submit" class="btn btn-accent pub-schedule-row__btn" id="publish-submit">{{ t('pub.schedule_submit_btn') }}</button>
@@ -225,7 +228,45 @@
         <span class="servers-divider__line"></span>
       </div>
       <section class="section dashboard-section pub-log-section">
-        <h2 class="pub-log-section__title">{{ t('pub.failure_log') }}</h2>
+        <div class="equipo-members-head pub-log-section__head">
+          <div class="equipo-members-head__title">
+            <h2 class="pub-log-section__title">{{ t('pub.failure_log') }}</h2>
+            <div class="equipo-members-per-page">
+              <div class="equipo-members-per-page__field">
+                <span class="equipo-members-per-page__prefix">{{ t('team.show') }}</span>
+                <select id="pub-log-per-page" aria-label="{{ t('team.per_page_label') }}">
+                  <option value="10" selected>10</option>
+                  <option value="20">20</option>
+                  <option value="30">30</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="200">200</option>
+                  <option value="all">{{ t('team.per_page_all') }}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="equipo-members-toolbar">
+            <div class="equipo-search-wrap panel-search-wrap--highlight">
+              <input
+                type="search"
+                id="pub-log-search"
+                class="equipo-search-input panel-search-input--highlight"
+                placeholder="{{ t('pub.log_search') }}"
+                aria-label="{{ t('pub.log_search') }}"
+                autocomplete="off"
+              />
+              <button
+                type="button"
+                id="pub-log-search-clear"
+                class="equipo-search-clear"
+                aria-label="{{ t('team.search_clear') }}"
+                title="{{ t('team.search_clear') }}"
+                hidden
+              >×</button>
+            </div>
+          </div>
+        </div>
         {% if user_has_admin_privileges(user) %}
         <div class="log-purge">
           <label class="log-purge__field">
@@ -240,6 +281,7 @@
         </div>
         <p class="log-purge__msg" id="pub-log-msg" hidden></p>
         {% endif %}
+        <p class="sub pub-log-empty" id="pub-log-no-results" hidden>{{ t('pub.log_no_results') }}</p>
         <div class="pub-log-wrap" id="pub-log-wrap"{% if publication_logs | length == 0 %} hidden{% endif %}>
           <table class="pub-log-table">
             <thead>
@@ -248,13 +290,17 @@
                 {% if show_pub_log_user %}
                 <th>{{ t('pub.log_col_user') }}</th>
                 {% endif %}
+                {% if show_pub_log_platform %}
                 <th>{{ t('pub.log_col_platform') }}</th>
+                {% endif %}
                 <th>{{ t('pub.log_col_status') }}</th>
+                {% if show_pub_log_message %}
                 <th>{{ t('pub.log_col_message') }}</th>
+                {% endif %}
               </tr>
             </thead>
             <tbody id="pub-log-tbody">
-              {% for row in publication_logs %}
+              {% for row in publication_logs[:10] %}
               {% set n = row.entries|length %}
               {% set first = row.entries[0] %}
               <tr class="pub-log-table__row pub-log-table__row--{{ row.status }}" data-log-row="{{ row.id }}">
@@ -262,6 +308,7 @@
                 {% if show_pub_log_user %}
                 <td class="pub-log-user-cell">{{ row.user_username or '—' }}</td>
                 {% endif %}
+                {% if show_pub_log_platform %}
                 <td>
                   {% if n == 1 %}
                   {{ first.platform_name }}
@@ -282,6 +329,7 @@
                   </button>
                   {% endif %}
                 </td>
+                {% endif %}
                 <td>
                   {% if row.status == 'mixed' %}
                   <button
@@ -306,6 +354,7 @@
                   <span class="pub-log-status pub-log-status--fail">{{ t('pub.log_status_fail') }}</span>
                   {% endif %}
                 </td>
+                {% if show_pub_log_message %}
                 <td>
                   {% if row.fail_n == 1 %}
                     {% for e in row.entries %}
@@ -328,11 +377,24 @@
                   </button>
                   {% endif %}
                 </td>
+                {% endif %}
               </tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
+        <nav
+          id="pub-log-pagination"
+          class="comment-inbox-pagination equipo-members-pagination"
+          aria-label="{{ t('pub.log_pagination') }}"
+          hidden
+        >
+          <div class="comment-inbox-pagination__inner">
+            <button type="button" id="pub-log-prev" class="btn btn-ghost btn-sm">{{ t('team.previous') }}</button>
+            <span id="pub-log-page-info" class="equipo-members-page-info"></span>
+            <button type="button" id="pub-log-next" class="btn btn-ghost btn-sm">{{ t('team.next') }}</button>
+          </div>
+        </nav>
         <script type="application/json" id="pub-log-groups-json">{{ publication_logs | tojson }}</script>
       </section>
 
@@ -365,7 +427,20 @@
           if (dataEl) {
             try { groups = JSON.parse(dataEl.textContent || "[]"); } catch (e) { groups = []; }
           }
+          var searchEl = document.getElementById("pub-log-search");
+          var searchClear = document.getElementById("pub-log-search-clear");
+          var perPageEl = document.getElementById("pub-log-per-page");
+          var noResultsEl = document.getElementById("pub-log-no-results");
+          var paginationEl = document.getElementById("pub-log-pagination");
+          var prevBtn = document.getElementById("pub-log-prev");
+          var nextBtn = document.getElementById("pub-log-next");
+          var pageInfoEl = document.getElementById("pub-log-page-info");
+          var logState = { page: 1, q: "", perPage: "10" };
+          var pageInfoTpl = {{ t('team.page_info') | tojson }};
+          var pageInfoCompact = {{ t('team.page_info_compact') | tojson }};
           var showUser = {{ show_pub_log_user | tojson }};
+          var showPlatform = {{ show_pub_log_platform | tojson }};
+          var showMessage = {{ show_pub_log_message | tojson }};
           var titles = {
             platforms: {{ t('pub.log_modal_platforms') | tojson }},
             status: {{ t('pub.log_modal_status') | tojson }},
@@ -418,13 +493,106 @@
             return "";
           }
 
-          function renderLogs(next) {
-            groups = next || [];
-            if (dataEl) dataEl.textContent = JSON.stringify(groups);
+          function attrEsc(s) {
+            return String(s || "")
+              .replace(/&/g, "&amp;")
+              .replace(/"/g, "&quot;")
+              .replace(/</g, "&lt;");
+          }
+
+          function escapeHtml(s) {
+            return String(s || "")
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;");
+          }
+
+          function parsePerPage(raw) {
+            var s = String(raw || "10").trim().toLowerCase();
+            if (s === "all" || s === "todos" || s === "0") return null;
+            var n = parseInt(s, 10);
+            return n > 0 ? n : 10;
+          }
+
+          function groupMatches(row, q) {
+            if (!q) return true;
+            var aliases = {
+              fallo: "fail",
+              falló: "fail",
+              failed: "fail",
+              omitido: "skipped",
+              skipped: "skipped",
+              mixto: "mixed",
+              mixed: "mixed",
+              ok: "ok"
+            };
+            if (aliases[q] && String(row.status || "") === aliases[q]) return true;
+            var hay = [
+              row.status || "",
+              statusLabels[row.status] || "",
+              row.account_name || "",
+              row.user_username || "",
+              row.user_display_name || "",
+              row.video_title || ""
+            ];
+            (row.entries || []).forEach(function (e) {
+              hay.push(e.platform_id || "");
+              hay.push(e.platform_name || "");
+              hay.push(e.status || "");
+              hay.push(statusLabels[e.status] || "");
+            });
+            return hay.join(" ").toLowerCase().indexOf(q) !== -1;
+          }
+
+          function filteredGroups() {
+            var q = (logState.q || "").trim().toLowerCase();
+            if (!q) return groups.slice();
+            return groups.filter(function (row) { return groupMatches(row, q); });
+          }
+
+          function renderPageInfo(page, totalPages) {
+            if (!pageInfoEl) return;
+            var compact = String(pageInfoCompact || "{page} / {total}")
+              .replace("{page}", String(page))
+              .replace("{total}", String(totalPages));
+            var aria = String(pageInfoTpl || "Page {page} of {total}")
+              .replace("{page}", String(page))
+              .replace("{total}", String(totalPages));
+            pageInfoEl.innerHTML =
+              '<span class="equipo-members-page-info__wrap" role="status" aria-label="' +
+              attrEsc(aria) +
+              '">' +
+              '<svg class="equipo-members-page-info__icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">' +
+              '<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />' +
+              "</svg>" +
+              '<span class="equipo-members-page-info__text">' +
+              escapeHtml(compact) +
+              "</span></span>";
+          }
+
+          function updatePagination(filtered) {
+            if (!paginationEl) return;
+            var size = parsePerPage(logState.perPage);
+            var total = filtered.length;
+            var totalPages = size ? Math.max(1, Math.ceil(total / size)) : 1;
+            var show = total > 0 && size != null && totalPages > 1;
+            paginationEl.hidden = !show;
+            if (!show) return;
+            if (prevBtn) {
+              prevBtn.disabled = logState.page <= 1;
+              prevBtn.classList.toggle("comment-inbox-pagination__off", logState.page <= 1);
+            }
+            if (nextBtn) {
+              nextBtn.disabled = logState.page >= totalPages;
+              nextBtn.classList.toggle("comment-inbox-pagination__off", logState.page >= totalPages);
+            }
+            renderPageInfo(logState.page, totalPages);
+          }
+
+          function drawRows(pageRows) {
             if (!tbody) return;
             tbody.innerHTML = "";
-            if (wrap) wrap.hidden = groups.length === 0;
-            groups.forEach(function (row) {
+            pageRows.forEach(function (row) {
               var n = (row.entries || []).length;
               var first = (row.entries || [])[0] || {};
               var tr = document.createElement("tr");
@@ -436,9 +604,10 @@
               if (showUser) {
                 var tdUser = document.createElement("td");
                 tdUser.className = "pub-log-user-cell";
-                tdUser.textContent = row.user_username || "—";
+                tdUser.textContent = row.user_username || row.account_name || "—";
                 tr.appendChild(tdUser);
               }
+              if (showPlatform) {
               var tdPlat = document.createElement("td");
               if (n === 1) {
                 tdPlat.textContent = first.platform_name || first.platform_id || "";
@@ -448,6 +617,7 @@
                 tdPlat.appendChild(platBtn);
               }
               tr.appendChild(tdPlat);
+              }
               var tdStatus = document.createElement("td");
               if (row.status === "mixed") {
                 var mixBtn = viewButton(row.id, "status", statusLabels.mixed);
@@ -465,6 +635,7 @@
                 tdStatus.appendChild(badge);
               }
               tr.appendChild(tdStatus);
+              if (showMessage) {
               var tdMsg = document.createElement("td");
               if (row.fail_n === 1) {
                 tdMsg.textContent = failMessage(row);
@@ -474,8 +645,33 @@
                 tdMsg.appendChild(errBtn);
               }
               tr.appendChild(tdMsg);
+              }
               tbody.appendChild(tr);
             });
+          }
+
+          function applyView() {
+            var filtered = filteredGroups();
+            var size = parsePerPage(logState.perPage);
+            var totalPages = size ? Math.max(1, Math.ceil(filtered.length / size) || 1) : 1;
+            if (logState.page > totalPages) logState.page = totalPages;
+            if (logState.page < 1) logState.page = 1;
+            var pageRows = size
+              ? filtered.slice((logState.page - 1) * size, logState.page * size)
+              : filtered;
+            var hasQuery = !!(logState.q || "").trim();
+            if (wrap) wrap.hidden = pageRows.length === 0;
+            if (noResultsEl) noResultsEl.hidden = !(hasQuery && filtered.length === 0);
+            drawRows(pageRows);
+            updatePagination(filtered);
+            if (searchClear) searchClear.hidden = !hasQuery;
+          }
+
+          function renderLogs(next) {
+            groups = next || [];
+            if (dataEl) dataEl.textContent = JSON.stringify(groups);
+            logState.page = 1;
+            applyView();
           }
 
           function addItem(name, status, message) {
@@ -566,6 +762,50 @@
               })
               .catch(function () {});
           };
+
+          var searchTimer = null;
+          if (searchEl) {
+            searchEl.addEventListener("input", function () {
+              var q = searchEl.value || "";
+              if (searchClear) searchClear.hidden = !q.trim();
+              clearTimeout(searchTimer);
+              searchTimer = setTimeout(function () {
+                logState.q = q;
+                logState.page = 1;
+                applyView();
+              }, 120);
+            });
+          }
+          if (searchClear) {
+            searchClear.addEventListener("click", function () {
+              if (searchEl) searchEl.value = "";
+              logState.q = "";
+              logState.page = 1;
+              applyView();
+              if (searchEl) searchEl.focus();
+            });
+          }
+          if (perPageEl) {
+            perPageEl.addEventListener("change", function () {
+              logState.perPage = perPageEl.value || "10";
+              logState.page = 1;
+              applyView();
+            });
+          }
+          if (prevBtn) {
+            prevBtn.addEventListener("click", function () {
+              if (logState.page <= 1) return;
+              logState.page -= 1;
+              applyView();
+            });
+          }
+          if (nextBtn) {
+            nextBtn.addEventListener("click", function () {
+              logState.page += 1;
+              applyView();
+            });
+          }
+          applyView();
         })();
       </script>
 
@@ -621,7 +861,9 @@
               <tr>
                 <th>{{ t('pub.scheduled_col_when') }}</th>
                 <th>{{ t('pub.scheduled_col_title') }}</th>
+                {% if show_pub_log_platform %}
                 <th>{{ t('pub.scheduled_col_platforms') }}</th>
+                {% endif %}
               </tr>
             </thead>
             <tbody>
@@ -629,11 +871,13 @@
               <tr>
                 <td>{{ format_publish_schedule(row.scheduled_at, lang) }}</td>
                 <td>{{ row.video_title or '—' }}</td>
+                {% if show_pub_log_platform %}
                 <td>
                   {% for pid in row.platforms_json | fromjson %}
                   <span class="cap cap--yes">{{ t('platform.' ~ pid) }}</span>
                   {% endfor %}
                 </td>
+                {% endif %}
               </tr>
               {% endfor %}
             </tbody>
@@ -742,6 +986,26 @@
     var previewFallback = document.getElementById("video-preview-fallback");
     var clearBtn = document.getElementById("video-clear");
     var form = document.getElementById("publish-form");
+    function panelNowLocalValue() {
+      var shifted = new Date(Date.now() - 5 * 60 * 60 * 1000);
+      function pad(n) { return String(n).padStart(2, "0"); }
+      return (
+        shifted.getUTCFullYear() +
+        "-" +
+        pad(shifted.getUTCMonth() + 1) +
+        "-" +
+        pad(shifted.getUTCDate()) +
+        "T" +
+        pad(shifted.getUTCHours()) +
+        ":" +
+        pad(shifted.getUTCMinutes())
+      );
+    }
+    function fillScheduleNow() {
+      var el = document.getElementById("scheduled-at");
+      if (el) el.value = panelNowLocalValue();
+    }
+    fillScheduleNow();
     if (!zone || !input) return;
     var previewObjectUrl = "";
 
@@ -1170,6 +1434,7 @@
           fd.set("video_temp_token", "");
           fd.append("file", fileToSend, fileToSend.name || "video.mp4");
         }
+        fillScheduleNow();
         var job = existingJob && existingJob.root ? existingJob : addPubJob(titleVal);
         if (job.aborted) return;
         if (currentUploadJob === job) currentUploadJob = null;
@@ -1253,9 +1518,8 @@
           if (title) title.focus();
           return;
         }
-        if (scheduledAt && !scheduledAt.value) {
-          scheduledAt.focus();
-          return;
+        if (scheduledAt && !(scheduledAt.value || "").trim()) {
+          fillScheduleNow();
         }
         var accountInput = form.querySelector('input[name="account_link_id"]');
         if (accountInput && !(accountInput.value || "").trim()) {
@@ -1330,7 +1594,11 @@
         }
         if (show) visibleCount += 1;
       });
-      if (emptyHint) emptyHint.hidden = !hasFilter || visibleCount > 0;
+      if (emptyHint && platformRows.length) {
+        emptyHint.hidden = !hasFilter || visibleCount > 0;
+      } else if (emptyHint) {
+        emptyHint.hidden = true;
+      }
     }
 
     window.__pubApplyPlatformFilter = applyPlatformFilter;
@@ -1441,7 +1709,7 @@
         }
       },
     });
-    if (window.__pubApplyPlatformFilter) {
+    if (window.__pubApplyPlatformFilter && emptyHint) {
       window.__pubApplyPlatformFilter([], emptyHint, true, null);
     }
   })();
