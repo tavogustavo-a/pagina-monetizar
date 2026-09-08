@@ -80,11 +80,13 @@
               </thead>
               <tbody>
                 {% for p in publish_platforms %}
-                <tr data-platform-id="{{ p.id }}"{% if p.configured is defined and not p.configured %} class="is-disabled"{% endif %}>
+                {% set pub_off = p.publish_enabled is defined and not p.publish_enabled %}
+                <tr data-platform-id="{{ p.id }}"{% if pub_off or (p.configured is defined and not p.configured) %} class="is-disabled"{% endif %}>
                   <td>
                     <span class="pub-platforms-table__name">
                       <span class="pub-platforms-table__icon" aria-hidden="true">{{ p.icon }}</span>
                       {{ p.name }}
+                      {% if pub_off %}<span class="api-status" data-ok="False">{{ t('servers.publish_paused') }}</span>{% endif %}
                       <span class="pub-platforms-table__via{% if p.via_vmos %} is-vmos{% elif p.via_filehost %} is-filehost{% elif p.via_chain %} is-chain{% endif %}" data-platform-via>
                         {% if p.via_vmos %}{{ t('servers.vmos_badge') }}{% elif p.via_filehost %}{{ t('servers.filehost_badge') }}{% elif p.via_chain %}{{ t('servers.chain_badge') }}{% elif p.configured %}{{ t('admin.via_api') }}{% endif %}
                       </span>
@@ -100,7 +102,7 @@
                         type="checkbox"
                         name="platforms"
                         value="{{ p.id }}"
-                        {% if p.configured is defined and not p.configured %}disabled{% else %}checked{% endif %}
+                        {% if pub_off or (p.configured is defined and not p.configured) %}disabled{% else %}checked{% endif %}
                       />
                       <span class="pub-platform-check__ui" aria-hidden="true"></span>
                     </label>
@@ -215,6 +217,7 @@
         {% endif %}
       </form>
       <ul class="pub-bg-jobs" id="pub-bg-jobs" hidden aria-live="polite"></ul>
+      {% endif %}
 
       <div class="servers-divider pub-divider" role="separator" aria-hidden="true">
         <span class="servers-divider__line"></span>
@@ -638,76 +641,6 @@
         </div>
       </section>
       {% endif %}
-      {% endif %}
-
-      {% if can_manage_comments %}
-      <div class="servers-divider pub-divider" role="separator" aria-hidden="true">
-        <span class="servers-divider__line"></span>
-        <span class="servers-divider__gem"></span>
-        <span class="servers-divider__line"></span>
-      </div>
-      <section class="section dashboard-section pub-accordion" id="pub-comments-accordion">
-        <div class="pub-accordion__head">
-          <div class="pub-accordion__title-group" id="pub-comments-title-group" role="button" tabindex="0" aria-controls="pub-comments-panel">
-            <span class="pub-accordion__title">{{ t('pub.comments_section') }}</span>
-            <button
-              type="button"
-              class="servers-info-btn panel-info-btn pub-accordion__info-btn js-panel-info-open"
-              data-info-title="{{ t('pub.comments_section') }}"
-              data-info-text="{{ t('pub.comments_scopes') }}"
-              aria-label="{{ t('pub.comments_info_btn') }}"
-              title="{{ t('pub.comments_info_btn') }}"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h.008v.008H11.25v-.008zM12 17.25h.01M12 21a9 9 0 100-18 9 9 0 000 18z" />
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v.008M12 11.25V16.5" />
-              </svg>
-            </button>
-          </div>
-          <button
-            type="button"
-            class="pub-accordion__trigger pub-accordion__trigger--chevron"
-            id="pub-comments-trigger"
-            aria-expanded="true"
-            aria-controls="pub-comments-panel"
-            aria-label="{{ t('pub.comments_section') }}"
-          >
-            <span class="pub-accordion__chevron" aria-hidden="true"></span>
-          </button>
-        </div>
-
-        <div class="pub-accordion__panel" id="pub-comments-panel">
-          <div class="comment-filters">
-            <label class="field comment-filters__field">
-              <span>{{ t('pub.comments_filter_platform') }}</span>
-              <select id="comment-filter-platform" aria-label="{{ t('pub.comments_filter_platform') }}">
-                {% if publish_platforms | length > 1 %}
-                <option value="__all__">{{ t('admin.all') }}</option>
-                {% endif %}
-                {% for p in publish_platforms %}
-                <option value="{{ p.id }}">{{ p.name }}</option>
-                {% endfor %}
-              </select>
-            </label>
-            {% if show_comment_user_filter %}
-            <label class="field comment-filters__field">
-              <span>{{ t('pub.comments_filter_user') }}</span>
-              <select id="comment-filter-user" aria-label="{{ t('pub.comments_filter_user') }}">
-                <option value="__all__">{{ t('admin.all') }}</option>
-                {% for u in comment_user_choices %}
-                <option value="{{ u.id }}">{{ u.name }}</option>
-                {% endfor %}
-              </select>
-            </label>
-            {% endif %}
-          </div>
-
-          <p class="sub comment-results-loading" id="comment-results-loading" hidden>{{ t('team.loading') }}</p>
-          <p class="sub comment-results-empty" id="comment-results-empty" hidden>{{ t('pub.comments_no_results') }}</p>
-          <div class="comment-thread-list" id="comment-thread-list" hidden></div>
-        </div>
-      </section>
-      {% endif %}
     </div>
   </main>
 </div>
@@ -772,11 +705,14 @@
           </thead>
           <tbody>
             {% for p in publish_platforms %}
-            <tr>
+            <tr{% if p.publish_enabled is defined and not p.publish_enabled %} class="is-disabled"{% endif %}>
               <td>
                 <span class="pub-platforms-table__name">
                   <span class="pub-platforms-table__icon" aria-hidden="true">{{ p.icon }}</span>
                   {{ p.name }}
+                  {% if p.publish_enabled is defined and not p.publish_enabled %}
+                  <span class="api-status" data-ok="False">{{ t('servers.publish_paused') }}</span>
+                  {% endif %}
                 </span>
               </td>
               <td class="pub-platforms-table__caps">
@@ -1512,242 +1448,6 @@
 </script>
 <script>
   (function () {
-    var accordion = document.getElementById("pub-comments-accordion");
-    var trigger = document.getElementById("pub-comments-trigger");
-    var titleGroup = document.getElementById("pub-comments-title-group");
-    var panel = document.getElementById("pub-comments-panel");
-    if (!accordion || !trigger || !panel) return;
-
-    var storageKey = "pub-comments-accordion-open";
-
-    function setOpen(open) {
-      accordion.classList.toggle("pub-accordion--collapsed", !open);
-      trigger.setAttribute("aria-expanded", open ? "true" : "false");
-      if (titleGroup) titleGroup.setAttribute("aria-expanded", open ? "true" : "false");
-      panel.hidden = !open;
-      try {
-        localStorage.setItem(storageKey, open ? "1" : "0");
-      } catch (err) {}
-    }
-
-    function toggleOpen() {
-      setOpen(trigger.getAttribute("aria-expanded") !== "true");
-    }
-
-    var saved = null;
-    try {
-      saved = localStorage.getItem(storageKey);
-    } catch (err) {}
-    setOpen(saved !== "0");
-
-    trigger.addEventListener("click", toggleOpen);
-    if (titleGroup) {
-      titleGroup.addEventListener("click", function (e) {
-        if (e.target.closest(".js-panel-info-open")) return;
-        toggleOpen();
-      });
-      titleGroup.addEventListener("keydown", function (e) {
-        if (e.target.closest(".js-panel-info-open")) return;
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          toggleOpen();
-        }
-      });
-    }
-  })();
-
-  (function () {
-    var threadList = document.getElementById("comment-thread-list");
-    var emptyEl = document.getElementById("comment-results-empty");
-    var loadingEl = document.getElementById("comment-results-loading");
-    var platformEl = document.getElementById("comment-filter-platform");
-    var userEl = document.getElementById("comment-filter-user");
-    if (!threadList || !platformEl) return;
-
-    var platformLabels = {{ platform_labels | tojson }};
-    var labelYou = {{ t('pub.badge_you') | tojson }};
-    var labelReplyPh = {{ t('pub.reply_ph') | tojson }};
-    var labelReplyBtn = {{ t('pub.reply_btn') | tojson }};
-    var labelCommentsCount = {{ t('pub.comments_count') | tojson }};
-
-    function escapeHtml(value) {
-      return String(value)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-    }
-
-    function formatCount(n) {
-      return labelCommentsCount.replace("{n}", String(n));
-    }
-
-    function bindThreadToggle(article, btn, body) {
-      btn.addEventListener("click", function () {
-        var open = btn.getAttribute("aria-expanded") === "true";
-        btn.setAttribute("aria-expanded", open ? "false" : "true");
-        article.classList.toggle("comment-thread--open", !open);
-        body.hidden = open;
-      });
-    }
-
-    function renderCommentItem(comment, videoId) {
-      var li = document.createElement("li");
-      li.className = "comment-inbox__item" + (comment.parent_id ? " comment-inbox__item--reply" : "");
-
-      var meta = document.createElement("div");
-      meta.className = "comment-inbox__meta";
-      meta.innerHTML =
-        "<strong>" + escapeHtml(comment.author_name) + "</strong>" +
-        (comment.is_creator_reply ? ' <span class="badge badge-creator">' + escapeHtml(labelYou) + "</span>" : "") +
-        ' <time class="sub" datetime="' + escapeHtml(comment.created_at) + '">' +
-        escapeHtml((comment.created_at || "").slice(0, 19).replace("T", " ")) +
-        "</time>";
-
-      var body = document.createElement("p");
-      body.className = "comment-inbox__body";
-      body.textContent = comment.body;
-
-      li.appendChild(meta);
-      li.appendChild(body);
-
-      if (!comment.parent_id && !comment.is_creator_reply) {
-        var form = document.createElement("form");
-        form.method = "post";
-        form.action = "/admin/comments/reply";
-        form.className = "reply-form";
-
-        var videoInput = document.createElement("input");
-        videoInput.type = "hidden";
-        videoInput.name = "video_id";
-        videoInput.value = videoId;
-
-        var parentInput = document.createElement("input");
-        parentInput.type = "hidden";
-        parentInput.name = "parent_id";
-        parentInput.value = comment.id;
-
-        var textarea = document.createElement("textarea");
-        textarea.name = "body";
-        textarea.rows = 2;
-        textarea.required = true;
-        textarea.placeholder = labelReplyPh;
-
-        var submit = document.createElement("button");
-        submit.type = "submit";
-        submit.className = "btn btn-accent btn-sm";
-        submit.textContent = labelReplyBtn;
-
-        form.appendChild(videoInput);
-        form.appendChild(parentInput);
-        form.appendChild(textarea);
-        form.appendChild(submit);
-        li.appendChild(form);
-      }
-
-      return li;
-    }
-
-    function renderThreads(list) {
-      threadList.innerHTML = "";
-      list.forEach(function (thread) {
-        var article = document.createElement("article");
-        article.className = "comment-thread";
-
-        var btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "comment-thread__trigger";
-        btn.setAttribute("aria-expanded", "false");
-
-        var platformTags = (thread.platform_ids || [])
-          .map(function (pid) {
-            return '<span class="cap cap--yes">' + escapeHtml(platformLabels[pid] || pid) + "</span>";
-          })
-          .join(" ");
-
-        btn.innerHTML =
-          '<span class="comment-thread__title">' + escapeHtml(thread.video_title || "—") + "</span>" +
-          '<span class="comment-thread__meta sub">' +
-          escapeHtml(thread.owner_username || "") +
-          " · " +
-          escapeHtml(formatCount((thread.comments || []).length)) +
-          (platformTags ? " · " + platformTags : "") +
-          "</span>" +
-          '<span class="comment-thread__chevron" aria-hidden="true"></span>';
-
-        var panel = document.createElement("div");
-        panel.className = "comment-thread__panel";
-        panel.hidden = true;
-
-        var ul = document.createElement("ul");
-        ul.className = "comment-inbox comment-inbox--thread";
-        (thread.comments || []).forEach(function (comment) {
-          ul.appendChild(renderCommentItem(comment, thread.video_id));
-        });
-
-        panel.appendChild(ul);
-        article.appendChild(btn);
-        article.appendChild(panel);
-        bindThreadToggle(article, btn, panel);
-        threadList.appendChild(article);
-      });
-    }
-
-    function runSearch() {
-      var platform = platformEl ? platformEl.value : "__all__";
-      var user = userEl ? userEl.value : "__all__";
-      var params = new URLSearchParams();
-      if (platform && platform !== "__all__") params.set("platform", platform);
-      if (user && user !== "__all__") params.set("user", user);
-
-      if (loadingEl) loadingEl.hidden = false;
-      if (emptyEl) emptyEl.hidden = true;
-      threadList.hidden = true;
-      threadList.innerHTML = "";
-
-      fetch("/admin/api/publicaciones/comentarios?" + params.toString(), {
-        credentials: "same-origin",
-        headers: { Accept: "application/json" },
-      })
-        .then(function (r) {
-          return r.json();
-        })
-        .then(function (body) {
-          if (!body || !body.ok) {
-            if (emptyEl) emptyEl.hidden = false;
-            return;
-          }
-          var filtered = body.threads || [];
-          if (!filtered.length) {
-            if (emptyEl) emptyEl.hidden = false;
-            threadList.hidden = true;
-            threadList.innerHTML = "";
-          } else {
-            if (emptyEl) emptyEl.hidden = true;
-            threadList.hidden = false;
-            renderThreads(filtered);
-          }
-        })
-        .catch(function () {
-          if (emptyEl) emptyEl.hidden = false;
-        })
-        .finally(function () {
-          if (loadingEl) loadingEl.hidden = true;
-        });
-    }
-
-    if (window.wireAjaxSelectSearch) {
-      window.wireAjaxSelectSearch(platformEl, runSearch);
-      if (userEl) window.wireAjaxSelectSearch(userEl, runSearch);
-    } else {
-      platformEl.addEventListener("change", runSearch);
-      if (userEl) userEl.addEventListener("change", runSearch);
-    }
-
-    runSearch();
-  })();
-
-  (function () {
     var modal = document.getElementById("pub-platforms-info-modal");
     var trigger = document.getElementById("open-pub-platforms-info-modal");
     if (!modal || !trigger) return;
@@ -1829,81 +1529,6 @@
       ok: {{ t('log.purge_ok') | tojson }}
     }
   });
-</script>
-{% endif %}
-{% if can_manage_comments %}
-<div id="panel-info-modal" class="equipo-modal" aria-hidden="true">
-  <div class="equipo-modal__backdrop" data-close-panel-info tabindex="-1"></div>
-  <div class="equipo-modal__panel panel-info-modal__panel" role="dialog" aria-modal="true" aria-labelledby="panel-info-modal-title">
-    <div class="equipo-modal__accent" aria-hidden="true"></div>
-    <div class="equipo-modal__head">
-      <div>
-        <h2 id="panel-info-modal-title"></h2>
-      </div>
-      <button type="button" class="equipo-modal__close" data-close-panel-info aria-label="{{ t('servers.modal_close') }}">×</button>
-    </div>
-    <div class="server-modal__body">
-      <p class="sub panel-info-modal__text" id="panel-info-modal-text"></p>
-    </div>
-  </div>
-</div>
-<script>
-  (function () {
-    var modal = document.getElementById("panel-info-modal");
-    var titleEl = document.getElementById("panel-info-modal-title");
-    var textEl = document.getElementById("panel-info-modal-text");
-    var lastTrigger = null;
-
-    if (!modal || !titleEl || !textEl) return;
-
-    function releaseModalFocus(returnFocusEl) {
-      var active = document.activeElement;
-      if (!active || !modal.contains(active)) return;
-      if (returnFocusEl && typeof returnFocusEl.focus === "function") {
-        returnFocusEl.focus();
-      } else {
-        active.blur();
-      }
-    }
-
-    function openPanelInfo(btn) {
-      var title = btn.getAttribute("data-info-title") || "";
-      var text = btn.getAttribute("data-info-text") || "";
-      lastTrigger = btn;
-      titleEl.textContent = title;
-      textEl.textContent = text;
-      modal.classList.add("is-open");
-      modal.setAttribute("aria-hidden", "false");
-      document.body.style.overflow = "hidden";
-      var closeBtn = modal.querySelector(".equipo-modal__close");
-      if (closeBtn) closeBtn.focus();
-    }
-
-    function closePanelInfo() {
-      releaseModalFocus(lastTrigger);
-      modal.classList.remove("is-open");
-      modal.setAttribute("aria-hidden", "true");
-      document.body.style.overflow = "";
-      lastTrigger = null;
-    }
-
-    document.querySelectorAll(".js-panel-info-open").forEach(function (btn) {
-      btn.addEventListener("click", function (e) {
-        e.stopPropagation();
-        openPanelInfo(btn);
-      });
-    });
-
-    modal.querySelectorAll("[data-close-panel-info]").forEach(function (el) {
-      el.addEventListener("click", closePanelInfo);
-    });
-
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && modal.classList.contains("is-open")) {
-        closePanelInfo();
-      }
-    });
-  })();
 </script>
 {% endif %}
 {% endblock %}

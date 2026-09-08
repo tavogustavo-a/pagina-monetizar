@@ -4765,7 +4765,6 @@ def _vmos_public_row(r: Any) -> dict[str, Any]:
         "access_key": r["access_key"] or "",
         "secret_key_set": bool(secret.strip()),
         "secret_key": secret,
-        "secret_key_mask": _mask_secret(secret),
         "pad_code": r["pad_code"] or "",
         "template_id": r["template_id"] or "",
         "remark": r["remark"] or "",
@@ -4996,7 +4995,6 @@ def _filehost_public_row(r: Any) -> dict[str, Any]:
         "name": (r["name"] or "").strip() or "PPV",
         "api_key_set": bool(key.strip()),
         "api_key": key,
-        "api_key_mask": _mask_secret(key),
         "extra": extra,
         "extra_mask": _mask_secret(extra) if extra else "",
         "updated_at": r["updated_at"],
@@ -5179,7 +5177,6 @@ def _chain_public_row(r: Any) -> dict[str, Any]:
         "platform_id": r["platform_id"],
         "name": (r["name"] or "").strip() or login or "chain",
         "login": login,
-        "login_mask": _mask_secret(login) if login else "",
         "secret_set": bool(str(r["secret"] or "").strip()),
         "secret": str(r["secret"] or ""),
         "extra": extra,
@@ -5945,67 +5942,6 @@ def bind_tiktok_config_name(config_id: str, account_name: str) -> None:
     finally:
         conn.close()
     sync_server_accounts_from_links()
-
-
-def rebind_platform_connection(kind: str, account_id: str, name: str) -> None:
-    """Cambia a qué cuenta lógica pertenece una conexión de servidor."""
-    label = _normalize_account_name(name)
-    oid = (account_id or "").strip()
-    src = (kind or "").strip().lower()
-    if not oid:
-        raise ValueError("not_found")
-    if not label:
-        raise ValueError("missing_name")
-    if src == "oauth":
-        bind_oauth_account_name(oid, label)
-        return
-    if src == "tiktok":
-        bind_tiktok_config_name(oid, label)
-        return
-    if src == "filehost":
-        raw = get_filehost_account_raw(oid)
-        if not raw:
-            raise ValueError("not_found")
-        upsert_filehost_account(
-            account_id=oid,
-            platform_id=str(raw["platform_id"] or ""),
-            name=label,
-            api_key=None,
-            extra=None,
-            link_name=label,
-        )
-        return
-    if src == "vmos":
-        raw = get_vmos_account_raw(oid)
-        if not raw:
-            raise ValueError("not_found")
-        upsert_vmos_account(
-            account_id=oid,
-            platform_id=str(raw["platform_id"] or ""),
-            name=label,
-            access_key=str(raw["access_key"] or ""),
-            secret_key=None,
-            pad_code=str(raw["pad_code"] or ""),
-            template_id=str(raw["template_id"] or ""),
-            remark=str(raw["remark"] or ""),
-            link_name=label,
-        )
-        return
-    if src == "chain":
-        raw = get_chain_account_raw(oid)
-        if not raw:
-            raise ValueError("not_found")
-        upsert_chain_account(
-            account_id=oid,
-            platform_id=str(raw["platform_id"] or ""),
-            name=label,
-            login=None,
-            secret=None,
-            extra=None,
-            link_name=label,
-        )
-        return
-    raise ValueError("unknown_kind")
 
 
 def update_oauth_tokens(
@@ -7728,9 +7664,13 @@ def list_awaiting_retry_publications(
             params.extend(scope)
         rows = conn.execute(
             f"""
-            SELECT sp.*, v.title AS video_title
+            SELECT sp.*, v.title AS video_title,
+                   COALESCE(NULLIF(TRIM(u.username), ''), u.display_name, '') AS user_username,
+                   COALESCE(NULLIF(TRIM(vu.username), ''), vu.display_name, '') AS uploader_username
             FROM scheduled_publications sp
             LEFT JOIN videos v ON v.id = sp.video_id
+            LEFT JOIN users u ON u.id = sp.user_id
+            LEFT JOIN users vu ON vu.id = v.user_id
             WHERE {where}
             ORDER BY sp.created_at DESC
             LIMIT ?
@@ -7750,13 +7690,17 @@ def list_publication_logs(*, limit: int = 40, viewer: User | None = None) -> lis
         rows = conn.execute(
             f"""
             SELECT pl.*, v.title AS video_title,
+                   v.user_id AS video_user_id,
                    u.username AS user_username,
                    u.display_name AS user_display_name,
                    u.role AS user_role,
-                   u.user_mode AS user_user_mode
+                   u.user_mode AS user_user_mode,
+                   vu.username AS uploader_username,
+                   vu.display_name AS uploader_display_name
             FROM publication_log pl
             LEFT JOIN videos v ON v.id = pl.video_id
             LEFT JOIN users u ON u.id = pl.user_id
+            LEFT JOIN users vu ON vu.id = v.user_id
             {where_sql}
             ORDER BY pl.created_at DESC
             LIMIT ?

@@ -49,7 +49,12 @@
             <div class="servers-list__main">
               <span class="servers-list__icon" aria-hidden="true">{{ platform.icon }}</span>
               <div class="servers-list__info">
-                <span class="servers-list__name">{{ platform.name }}</span>
+                <span class="servers-list__name-row">
+                  <span class="servers-list__name">{{ platform.name }}</span>
+                  {% if not platform.publish_enabled %}
+                  <span class="api-status" data-ok="False">{{ t('servers.publish_paused') }}</span>
+                  {% endif %}
+                </span>
               </div>
             </div>
           </li>
@@ -523,9 +528,6 @@
       {% for c in linked_accounts %}
       <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
-          {% set relink_kind = 'tiktok' %}
-          {% set relink_id = c.id %}
-          {% set relink_name = c.account_name or '' %}
           {% include "_servers_linked_head.html" %}
           {% if c.account_name or c.internal_username %}
           {% include "_servers_linked_owner.html" %}
@@ -557,9 +559,6 @@
       {% for c in youtube_linked %}
       <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
-          {% set relink_kind = 'oauth' %}
-          {% set relink_id = c.id %}
-          {% set relink_name = c.account_name or '' %}
           {% include "_servers_linked_head.html" %}
           {% include "_servers_linked_owner.html" %}
         </div>
@@ -587,9 +586,6 @@
       {% for c in instagram_linked %}
       <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
-          {% set relink_kind = 'oauth' %}
-          {% set relink_id = c.id %}
-          {% set relink_name = c.account_name or '' %}
           {% include "_servers_linked_head.html" %}
           {% include "_servers_linked_owner.html" %}
         </div>
@@ -617,9 +613,6 @@
       {% for c in facebook_linked %}
       <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
-          {% set relink_kind = 'oauth' %}
-          {% set relink_id = c.id %}
-          {% set relink_name = c.account_name or '' %}
           {% include "_servers_linked_head.html" %}
           {% include "_servers_linked_owner.html" %}
         </div>
@@ -647,9 +640,6 @@
       {% for c in x_linked %}
       <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
-          {% set relink_kind = 'oauth' %}
-          {% set relink_id = c.id %}
-          {% set relink_name = c.account_name or '' %}
           {% include "_servers_linked_head.html" %}
           {% include "_servers_linked_owner.html" %}
         </div>
@@ -677,9 +667,6 @@
       {% for c in bilibili_linked %}
       <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
-          {% set relink_kind = 'oauth' %}
-          {% set relink_id = c.id %}
-          {% set relink_name = c.account_name or '' %}
           {% include "_servers_linked_head.html" %}
           {% include "_servers_linked_owner.html" %}
         </div>
@@ -721,9 +708,6 @@
       {% for c in snapchat_linked %}
       <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
-          {% set relink_kind = 'oauth' %}
-          {% set relink_id = c.id %}
-          {% set relink_name = c.account_name or '' %}
           {% include "_servers_linked_head.html" %}
           {% include "_servers_linked_owner.html" %}
         </div>
@@ -751,9 +735,6 @@
       {% for c in dailymotion_linked %}
       <li class="tiktok-config-card tiktok-config-card--linked" data-config-id="{{ c.id }}" data-account-name="{{ c.account_name or '' }}">
         <div class="tiktok-config-card__main">
-          {% set relink_kind = 'oauth' %}
-          {% set relink_id = c.id %}
-          {% set relink_name = c.account_name or '' %}
           {% include "_servers_linked_head.html" %}
           {% include "_servers_linked_owner.html" %}
         </div>
@@ -872,7 +853,6 @@
     var titleAccounts = {{ t('servers.modal_accounts_title', platform='__NAME__') | tojson }};
     var accountTitleLabel = {{ t('servers.modal_account_name') | tojson }};
     var confirmMsg = {{ t('servers.disconnect_confirm') | tojson }};
-    var relinkPrompt = {{ t('servers.relink_prompt') | tojson }};
     var errorMsg = {{ t('servers.disconnect_error') | tojson }};
     var networkMsg = {{ t('servers.network_error') | tojson }};
     var vmosTitleTpl = {{ t('servers.vmos_title', platform='__NAME__') | tojson }};
@@ -1019,46 +999,6 @@
       });
     }
 
-    function bindRelinkButtons(root) {
-      root.querySelectorAll(".js-relink-connection").forEach(function (btn) {
-        if (btn.dataset.bound) return;
-        btn.dataset.bound = "1";
-        btn.addEventListener("click", function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          var id = btn.getAttribute("data-id") || "";
-          var kind = btn.getAttribute("data-kind") || "";
-          var current = btn.getAttribute("data-name") || "";
-          if (!id || !kind) return;
-          var next = window.prompt(relinkPrompt, current);
-          if (next == null) return;
-          next = String(next).trim();
-          if (!next || next === current) return;
-          btn.disabled = true;
-          fetch("/admin/api/server-connections/relink", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json", Accept: "application/json" },
-            body: JSON.stringify({ kind: kind, id: id, name: next }),
-          })
-            .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
-            .then(function (x) {
-              if (!x.res.ok || !x.body.ok) {
-                alert((x.body && x.body.error) || errorMsg);
-                btn.disabled = false;
-                return;
-              }
-              rememberAccountPickerRestore();
-              window.location.reload();
-            })
-            .catch(function () {
-              alert(networkMsg);
-              btn.disabled = false;
-            });
-        });
-      });
-    }
-
     function parseCardPayload(card) {
       try {
         return JSON.parse(card.getAttribute("data-payload") || "{}") || {};
@@ -1070,29 +1010,6 @@
     function visibleLinkedCards(root, selector) {
       return Array.prototype.filter.call(root.querySelectorAll(selector), function (el) {
         return !el.hidden;
-      });
-    }
-
-    function joinLinkedMasks(cards) {
-      var byName = {};
-      cards.forEach(function (c) {
-        var k = String(c.getAttribute("data-account-name") || "").trim().toLowerCase() || "_";
-        (byName[k] = byName[k] || []).push(c);
-      });
-      Object.keys(byName).forEach(function (k) {
-        var group = byName[k];
-        var masks = [];
-        group.forEach(function (c) {
-          var m = String(c.getAttribute("data-link-mask") || "").trim();
-          if (m) masks.push(m);
-        });
-        var joined = masks.join(", ");
-        var name = String(group[0].getAttribute("data-account-name") || "").trim();
-        var text = name && joined ? name + " · " + joined : (name || joined);
-        group.forEach(function (c) {
-          var meta = c.querySelector(".tiktok-config-card__meta");
-          if (meta && !meta.classList.contains("js-rumble-channel")) meta.textContent = text;
-        });
       });
     }
 
@@ -1135,7 +1052,6 @@
         form.dataset.bound = "1";
         fillAccountLinkName(form, ".js-vmos-link-name");
         var vmosCards = visibleLinkedCards(root, ".js-vmos-linked");
-        joinLinkedMasks(vmosCards);
         var vmosData = vmosCards[0] ? parseCardPayload(vmosCards[0]) : {};
         var vmosId = form.querySelector('[name="id"]');
         if (vmosId) vmosId.value = vmosData.id || "";
@@ -1274,7 +1190,6 @@
         form.dataset.bound = "1";
         fillAccountLinkName(form, ".js-filehost-link-name");
         var hostCards = visibleLinkedCards(root, ".js-filehost-linked");
-        joinLinkedMasks(hostCards);
         var hostData = hostCards[0] ? parseCardPayload(hostCards[0]) : {};
         var hostId = form.querySelector('[name="id"]');
         if (hostId) hostId.value = hostData.id || "";
@@ -1408,7 +1323,6 @@
         form.dataset.bound = "1";
         fillAccountLinkName(form, ".js-chain-link-name");
         var chainCards = visibleLinkedCards(root, ".js-chain-linked");
-        joinLinkedMasks(chainCards);
         var chainData = chainCards[0] ? parseCardPayload(chainCards[0]) : {};
         var chainId = form.querySelector('[name="id"]');
         if (chainId) chainId.value = chainData.id || "";
@@ -1841,7 +1755,6 @@
         });
       }
       bindDisconnectButtons(modalBody);
-      bindRelinkButtons(modalBody);
       bindVmos(modalBody);
       bindFilehost(modalBody);
       bindChain(modalBody);

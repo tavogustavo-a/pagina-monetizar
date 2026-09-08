@@ -4,6 +4,7 @@
   <input type="hidden" name="platform_id" value="{{ platform.id }}" />
   <input type="hidden" name="link_name" class="js-chain-link-name" value="" />
   {% if platform.id == 'dtube' %}
+  <p class="sub filehost-hint">{{ t('servers.dtube_uploader_paused') }}</p>
   <p class="sub filehost-hint">
     <a href="https://wallet.hive.blog" target="_blank" rel="noopener noreferrer">https://wallet.hive.blog</a>
   </p>

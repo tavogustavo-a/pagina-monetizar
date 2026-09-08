@@ -49,6 +49,37 @@ class DTubeError(ValueError):
     pass
 
 
+def _fail_message(lang: str, err: BaseException) -> str:
+    from i18n import t
+
+    text = str(err or "")
+    low = text.lower()
+    dns = (
+        "name or service not known",
+        "nodename nor servname provided",
+        "getaddrinfo failed",
+        "temporary failure in name resolution",
+        "errno -2",
+        "errno 11001",
+        "errno 8",
+    )
+    if any(m in low for m in dns):
+        return t("pub.dtube.dns_fail", lang)
+    if "timed out" in low or "timeout" in low:
+        return t("pub.dtube.timeout", lang)
+    if any(
+        m in low
+        for m in (
+            "connection refused",
+            "network is unreachable",
+            "no route to host",
+            "connection reset",
+        )
+    ):
+        return t("pub.dtube.unreachable", lang)
+    return t("pub.dtube.upload_fail", lang, error=text[:180])
+
+
 def _parse(raw: str) -> dict[str, Any]:
     try:
         data = json.loads(raw) if raw else {}
@@ -434,6 +465,6 @@ def publish_video(
         )
         return True, t("pub.dtube.ok", lang, url=watch)
     except DTubeError as e:
-        return False, t("pub.dtube.upload_fail", lang, error=str(e)[:180])
+        return False, _fail_message(lang, e)
     except Exception as e:
-        return False, t("pub.dtube.upload_fail", lang, error=str(e)[:180])
+        return False, _fail_message(lang, e)

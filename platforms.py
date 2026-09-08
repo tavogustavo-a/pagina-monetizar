@@ -134,6 +134,7 @@ PLATFORMS: list[dict[str, Any]] = [
         "has_api": True,
         "api_kind": "hive",
         "token_renewal": "manual",
+        "publish_enabled": False,
         "video": "yes",
         "photo": "no",
         "comment": "no",
@@ -354,6 +355,14 @@ def get_platform(pid: str) -> dict[str, Any] | None:
     return None
 
 
+def is_publish_enabled(platform_id: str) -> bool:
+    """False = código montado pero no se publica (p. ej. uploader de DTube caído)."""
+    p = get_platform(platform_id)
+    if not p:
+        return False
+    return bool(p.get("publish_enabled", True))
+
+
 def platform_select_label(platform: dict[str, Any]) -> str:
     icon = str(platform.get("icon") or "").strip()
     name = str(platform.get("name") or "").strip()
@@ -389,6 +398,7 @@ def platform_list(lang: str) -> list[dict[str, Any]]:
                 "photo": str(p["photo"]),
                 "comment": str(p["comment"]),
                 "fields": list(p["fields"]),
+                "publish_enabled": bool(p.get("publish_enabled", True)),
                 "note": t(f"limits.note.{pid}", lang),
                 "label_client_id": _field_label(lang, "api.field.client_id", pid, "api.field.client_id"),
                 "label_client_secret": _field_label(

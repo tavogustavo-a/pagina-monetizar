@@ -5,18 +5,15 @@
     class="tiktok-config-card tiktok-config-card--linked js-filehost-linked"
     data-account-id="{{ c.id }}"
     data-account-name="{{ c.name }}"
-    data-link-mask="{{ c.api_key_mask }}"
     data-payload="{{ {'id': c.id, 'api_key': c.api_key, 'extra': c.extra} | json_attr }}"
   >
     <div class="tiktok-config-card__main">
       <div class="tiktok-config-card__head">
-        {% set relink_kind = 'filehost' %}
-        {% set relink_id = c.id %}
-        {% set relink_name = c.name %}
-        {% include "_servers_relink_btn.html" %}
         <span class="badge badge-active">{{ t('servers.connected') }}</span>
       </div>
-      <p class="tiktok-config-card__meta sub">{% if c.name %}{{ c.name }}{% if c.api_key_mask %} · {% endif %}{% endif %}{{ c.api_key_mask }}</p>
+      {% if c.name %}
+      <p class="tiktok-config-card__meta sub">{{ c.name }}</p>
+      {% endif %}
     </div>
     <div class="tiktok-config-card__actions">
       <button type="button" class="btn btn-ghost btn-sm btn-equipo-warn js-filehost-disconnect" data-account-id="{{ c.id }}">

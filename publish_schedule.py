@@ -10,6 +10,7 @@ import db
 import i18n
 import notify
 import platform_publish
+import platforms
 
 # Colombia y Chicago (CST) comparten UTC-5 sin cambio horario estacional.
 PUBLISH_TZ = timezone(timedelta(hours=-5))
@@ -133,6 +134,8 @@ def execute_video_publish(
     sched_id = (retry_sched_id or "").strip() or None
 
     for pid in selected_platforms:
+        if not platforms.is_publish_enabled(pid):
+            continue
         ok, message = platform_publish.publish_to_platform(
             pid,
             file_path=path,

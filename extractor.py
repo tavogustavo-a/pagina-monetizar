@@ -249,16 +249,22 @@ def _publish_one(
         entry = _target_state(state, pid)
         cap = platforms.get_platform(pid) or {}
         cap_key = "video" if content_type == "video" else "photo"
-        if str(cap.get(cap_key, "no")) == "no":
-            # El servidor no soporta este contenido: se marca como omitido para
-            # que no quede pendiente para siempre.
+        if str(cap.get(cap_key, "no")) == "no" or not platforms.is_publish_enabled(pid):
+            # El servidor no soporta este contenido o la publicación está pausada:
+            # se marca como omitido para que no quede pendiente para siempre.
             db.insert_publication_log(
                 user_id=job["owner_user_id"],
                 video_id=video.id,
                 platform_id=pid,
                 content_type=content_type,
                 status="skipped",
-                message=i18n.t("extractor.log_skipped", lang),
+                message=i18n.t(
+                    "pub.platform_paused",
+                    lang,
+                    platform=i18n.t(f"platform.{pid}", lang),
+                )
+                if not platforms.is_publish_enabled(pid)
+                else i18n.t("extractor.log_skipped", lang),
                 account_link_id=job["account_link_id"],
                 batch_id=batch_id,
             )

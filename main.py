@@ -349,12 +349,6 @@ class PlatformApiBody(BaseModel):
     extra: str = ""
 
 
-class RelinkConnectionBody(BaseModel):
-    kind: str = ""
-    id: str = ""
-    name: str = ""
-
-
 class VmosAccountBody(BaseModel):
     id: str = ""
     platform_id: str = ""
@@ -510,6 +504,30 @@ def _publicaciones_comment_user_choices(
             out.append({"id": uid, "name": c.get("name") or uid})
             seen.add(uid)
     return out
+
+
+def _comments_inbox_context(user: db.User, lang: str, platform_choices: list) -> dict:
+    usage = db.membership_usage(user)
+    can = db.user_can_manage_comments(user) and usage["can_view_comments"]
+    if not can:
+        return {
+            "can_manage_comments": False,
+            "comment_user_choices": [],
+            "platform_labels": {},
+            "show_comment_user_filter": False,
+            "comment_platforms": [],
+        }
+    return {
+        "can_manage_comments": True,
+        "comment_user_choices": _publicaciones_comment_user_choices(
+            db.publicaciones_tiktoker_choices(user)
+        ),
+        "platform_labels": {
+            p["id"]: i18n.t(f"platform.{p['id']}", lang) for p in platform_choices
+        },
+        "show_comment_user_filter": db.user_can_access_servers(user),
+        "comment_platforms": platform_choices,
+    }
 
 
 def _default_app_home(user: db.User) -> str:
@@ -2113,6 +2131,7 @@ def admin_panel(request: Request):
         "account_filter_label": account_filter_label,
         "selected_account_name": selected_account_name,
     }
+    ctx.update(_comments_inbox_context(u, lang, platform_choices))
     return _render(request, "admin.html", ctx)
 
 
@@ -2154,7 +2173,7 @@ def api_publicaciones_comentarios(
     user: str = "__all__",
 ):
     try:
-        u = _require_publicaciones_user(request)
+        u = require_user(request)
     except PermissionError as e:
         if str(e) == "login_required":
             return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
@@ -2282,17 +2301,6 @@ def admin_publicaciones(request: Request):
     )
     publish_ready_n = sum(1 for c in publish_choices if c.get("internal_user_id"))
 
-    comment_threads: list[dict] = []
-    comment_user_choices: list[dict[str, str]] = []
-    platform_labels: dict[str, str] = {}
-    if db.user_can_manage_comments(u) and usage["can_view_comments"]:
-        comment_owner_scope = _publicaciones_comment_scope(u)
-        comment_threads = db.list_comment_threads_for_owners(comment_owner_scope)
-        comment_user_choices = _publicaciones_comment_user_choices(publish_choices)
-        platform_labels = {
-            p["id"]: i18n.t(f"platform.{p['id']}", lang) for p in platform_choices
-        }
-
     err = request.session.pop("admin_error", None)
     ok = request.session.pop("admin_ok", None)
     is_admin = db.user_has_admin_privileges(u)
@@ -2326,9 +2334,6 @@ def admin_publicaciones(request: Request):
         "admin_publicaciones.html",
         {
             "user": u,
-            "comment_threads": comment_threads,
-            "comment_user_choices": comment_user_choices,
-            "platform_labels": platform_labels,
             "error": err,
             "success": ok,
             "nav_active": "publicaciones",
@@ -2341,7 +2346,6 @@ def admin_publicaciones(request: Request):
                 selected_publish_cfg["name"] if selected_publish_cfg else ""
             ),
             "can_upload_videos": db.user_can_upload_videos(u),
-            "can_manage_comments": db.user_can_manage_comments(u) and usage["can_view_comments"],
             "membership_usage": usage,
             "publish_platforms": platform_choices,
             "publication_logs": _publication_log_groups(lang, u),
@@ -2355,7 +2359,6 @@ def admin_publicaciones(request: Request):
             ),
             "can_manage_publish_retry": is_publish_admin,
             "show_pub_log_user": False,
-            "show_comment_user_filter": is_publish_admin,
             "account_filter_label": account_filter_label,
             "publish_account_choices": publish_account_choices,
             "show_publish_account_picker": show_publish_account_picker,
@@ -2451,7 +2454,11 @@ async def admin_upload_video(request: Request):
     description = (form.get("description") or "").strip()
     tiktoker_config_id = (form.get("tiktoker_config_id") or "").strip()
     account_link_id = (form.get("account_link_id") or "").strip()
-    selected_platforms = [p for p in form.getlist("platforms") if p in platforms.PLATFORM_IDS]
+    selected_platforms = [
+        p
+        for p in form.getlist("platforms")
+        if p in platforms.PLATFORM_IDS and platforms.is_publish_enabled(p)
+    ]
     upload = form.get("file")
     video_temp_token = (form.get("video_temp_token") or "").strip().lower()
     x_use_funding = (form.get("x_use_funding") or "").strip() in ("1", "on", "true")
@@ -2794,14 +2801,14 @@ def admin_reply_comment(
     body: Annotated[str, Form()],
 ):
     try:
-        u = _require_publicaciones_user(request)
+        u = require_user(request)
     except PermissionError as e:
         if str(e) == "login_required":
-            return _publicaciones_redirect_login()
+            return RedirectResponse(url="/login?next=/admin", status_code=303)
         return HTMLResponse("Permission denied.", status_code=403)
     if not db.user_can_manage_comments(u) or not db.membership_usage(u)["can_view_comments"]:
         request.session["admin_error"] = _msg(request, "pub.flash.no_comments")
-        return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+        return RedirectResponse(url=request.url_for("admin"), status_code=303)
 
     v = db.get_video_by_id(video_id)
     if not v or not db.user_may_act_on_video_owner(u, v.user_id):
@@ -2818,7 +2825,7 @@ def admin_reply_comment(
             request.session["admin_ok"] = _msg(request, "pub.flash.reply_published")
         except ValueError as e:
             request.session["admin_error"] = str(e)
-    return RedirectResponse(url=request.url_for("admin_publicaciones"), status_code=303)
+    return RedirectResponse(url=request.url_for("admin"), status_code=303)
 
 
 @app.get("/admin/equipo")
@@ -2998,7 +3005,9 @@ def admin_extractor_page(request: Request):
         {
             "user": admin,
             "nav_active": "extractor",
-            "platform_choices": platforms.platform_list(lang),
+            "platform_choices": [
+                p for p in platforms.platform_list(lang) if p.get("publish_enabled", True)
+            ],
             "extractor_limits": {
                 "batch_min": extractor.MIN_BATCH,
                 "batch_max": extractor.MAX_BATCH,
@@ -3269,7 +3278,11 @@ def api_extractor_create_job(request: Request, body: ExtractorJobBody):
     if api_block:
         return api_block
 
-    allowed_targets = [t for t in (choice.get("platform_ids") or []) if t != pid]
+    allowed_targets = [
+        t
+        for t in (choice.get("platform_ids") or [])
+        if t != pid and platforms.is_publish_enabled(t)
+    ]
     requested = [
         str(t).strip() for t in (body.target_platform_ids or []) if str(t).strip()
     ]
@@ -4585,30 +4598,6 @@ def api_oauth_delete(request: Request, account_id: str):
     return {"ok": True, "message": "Account disconnected."}
 
 
-@app.post("/admin/api/server-connections/relink")
-def api_server_connection_relink(request: Request, body: RelinkConnectionBody):
-    deny = _require_server_admin_json(request)
-    if deny:
-        return deny
-    lang = i18n.resolve_lang(request)
-    try:
-        db.rebind_platform_connection(body.kind, body.id, body.name)
-    except ValueError as e:
-        code = str(e)
-        if code == "missing_name":
-            return JSONResponse(
-                {"ok": False, "error": i18n.t("servers.relink_missing", lang)},
-                status_code=400,
-            )
-        if code == "not_found":
-            return JSONResponse(
-                {"ok": False, "error": i18n.t("servers.accounts_not_found", lang)},
-                status_code=404,
-            )
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
-    return {"ok": True}
-
-
 @app.post("/admin/api/vmos")
 def api_vmos_save(request: Request, body: VmosAccountBody):
     deny = _require_server_admin_json(request)
@@ -5123,7 +5112,6 @@ def _server_account_error_message(code: str, lang: str) -> str:
         "save_fail": "servers.accounts_save_fail",
         "name_taken": "servers.accounts_name_taken",
         "link_name_taken": "servers.accounts_link_name_taken",
-        "missing_name": "servers.relink_missing",
     }
     return i18n.t(keys.get(code, "servers.network_error"), lang)
 

@@ -2477,6 +2477,7 @@ input:focus {
   margin: 0;
   line-height: 1.55;
   color: rgba(255, 255, 255, 0.88);
+  white-space: pre-wrap;
 }
 
 .panel-smtp-status--ok {
@@ -5060,6 +5061,14 @@ input:focus {
   min-width: 0;
 }
 
+.servers-list__name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
 .servers-list__name {
   font-size: 0.8rem;
   font-weight: 600;
@@ -5091,23 +5100,6 @@ input:focus {
 
 .servers-list__badge {
   font-size: 0.68rem;
-}
-
-.servers-list__accounts-btn {
-  position: relative;
-  justify-content: center;
-  width: 1.45rem;
-  height: 1.45rem;
-  min-width: 1.45rem;
-  padding: 0;
-  border-radius: 0.35rem;
-}
-
-.servers-list__accounts-icon {
-  display: block;
-  width: 0.92rem;
-  height: 0.92rem;
-  flex-shrink: 0;
 }
 
 .server-modal__panel {
@@ -8058,13 +8050,6 @@ form.server-modal__body.api-form .panel-api-test-msg {
     padding: 0.12rem 0.3rem;
     white-space: nowrap;
     text-align: center;
-  }
-
-  .servers-list__actions .servers-list__accounts-btn {
-    width: 1.45rem;
-    height: 1.45rem;
-    min-width: 1.45rem;
-    padding: 0;
   }
 
   .servers-accounts-row__main,
@@ -11169,6 +11154,10 @@ ul.proxys-list .proxys-row__actions {
 .configx-card__title {
   margin: 0 0 0.35rem;
   font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
 }
 .configx-form {
   display: flex;

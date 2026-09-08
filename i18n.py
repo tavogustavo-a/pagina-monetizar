@@ -260,14 +260,19 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Solo video. En Servidores entra con el email y la contraseña de Odysee (no hay OAuth público). El panel publica con TUS + stream_create de LBRY.",
     },
     "limits.note.dtube": {
-        "en": "Video only. Hive username + posting WIF. The file goes to the DTube IPFS cluster, then a Hive post is broadcast. Not a PPV host API.",
-        "es": "Solo video. Usuario Hive + posting WIF. El archivo va al cluster IPFS de DTube y luego se emite un post en Hive. No es una API de host PPV.",
+        "en": "Hive account stays saved. Publishing is paused: DTube’s IPFS upload cluster has no DNS. Code remains ready if the uploader returns.",
+        "es": "La cuenta Hive se guarda. La publicación está pausada: el cluster IPFS de DTube no tiene DNS. El código queda listo por si el uploader vuelve.",
     },
     "servers.intro": {
         "en": "Connect creator accounts on each platform. TikTok is available now; more platforms are coming soon.",
         "es": "Conecta cuentas de creador en cada plataforma. TikTok ya está disponible; más plataformas llegarán pronto.",
     },
     "servers.coming_soon": {"en": "Coming soon", "es": "Próximamente"},
+    "servers.publish_paused": {"en": "Paused", "es": "Pausado"},
+    "servers.dtube_uploader_paused": {
+        "en": "Publishing is paused: DTube’s upload servers (cluster.d.tube) are not available. Your Hive username and posting key stay saved. We will use them again if the uploader returns.",
+        "es": "La publicación está pausada: los servidores de subida de DTube (cluster.d.tube) no están disponibles. El usuario Hive y la clave posting se quedan guardados. Se usarán otra vez si el uploader vuelve.",
+    },
     "servers.accounts_btn": {"en": "Accounts", "es": "Cuentas"},
     "servers.platform_configure": {
         "en": "Configure server",
@@ -668,14 +673,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "servers.accounts_server_not_linked": {"en": "Disconnected", "es": "Desconectado"},
     "servers.accounts_platform": {"en": "Server", "es": "Servidor"},
     "servers.accounts_edit": {"en": "Edit", "es": "Editar"},
-    "servers.relink_prompt": {
-        "en": "Account this connection belongs to",
-        "es": "Cuenta a la que pertenece",
-    },
-    "servers.relink_missing": {
-        "en": "Enter the account name.",
-        "es": "Escribe el nombre de la cuenta.",
-    },
     "servers.accounts_delete": {"en": "Delete account", "es": "Eliminar cuenta"},
     "servers.accounts_toggle": {
         "en": "Enable or disable account",
@@ -1705,6 +1702,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Odysee videos must be MP4, MOV, AVI, WMV, FLV, MKV, WebM or M4V.",
         "es": "Los videos de Odysee deben ser MP4, MOV, AVI, WMV, FLV, MKV, WebM o M4V.",
     },
+    "pub.platform_paused": {
+        "en": "{platform} publishing is paused until the platform’s upload API is available again.",
+        "es": "La publicación en {platform} está pausada hasta que vuelva a estar disponible la API de subida.",
+    },
     "pub.dtube.ok": {
         "en": "Published on DTube: {url}",
         "es": "Publicado en DTube: {url}",
@@ -1712,6 +1713,18 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pub.dtube.upload_fail": {
         "en": "DTube publish failed: {error}",
         "es": "Falló la publicación en DTube: {error}",
+    },
+    "pub.dtube.dns_fail": {
+        "en": "Could not reach DTube’s upload servers (the address was not found). Try again later; this is not your Hive key.",
+        "es": "No se pudo llegar a los servidores de subida de DTube (no se encontró la dirección). Prueba más tarde; no es tu clave Hive.",
+    },
+    "pub.dtube.timeout": {
+        "en": "DTube’s upload servers did not respond in time. Try again later.",
+        "es": "Los servidores de subida de DTube no respondieron a tiempo. Prueba más tarde.",
+    },
+    "pub.dtube.unreachable": {
+        "en": "Could not connect to DTube’s upload servers. Try again later.",
+        "es": "No se pudo conectar a los servidores de subida de DTube. Prueba más tarde.",
     },
     "pub.dtube.no_account": {
         "en": "Connect DTube in Servers with Hive username and posting WIF first.",
@@ -2548,8 +2561,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Deja margen de RC. No marques enviado si Hive no aceptó el comentario y el cluster no devolvió el hash del video.",
     },
     "cond.dtube.detail": {
-        "en": "Connect in Servers with Hive username and posting WIF (never the owner key). Video goes to cluster.d.tube then a real Hive post. Linked proxies are used. Stats/comments in this panel stay local.",
-        "es": "En Servidores conecta con usuario Hive y posting WIF (nunca la owner key). El video va a cluster.d.tube y luego un post real en Hive. Se usa el proxy vinculado. Estadísticas y comentarios de este panel siguen siendo locales.",
+        "en": "Hive username + posting WIF stay in Servers. Publishing is paused while cluster.d.tube has no DNS. Linked proxies unused until then. Stats/comments stay local.",
+        "es": "Usuario Hive + posting WIF se quedan en Servidores. La publicación está pausada mientras cluster.d.tube no tenga DNS. El proxy no se usa hasta entonces. Estadísticas y comentarios siguen locales.",
     },
     "cond.tiktok.cap": {
         "en": "Daily post cap exists, number not published. Integrators usually see 15–25 videos per account/day. Error: spam_risk_too_many_posts.",
@@ -2842,12 +2855,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "En Servidores abre las cuentas de DTube y pulsa Conectar. Guarda el usuario Hive y el posting WIF. Prueba antes de publicar.",
     },
     "apidoc.dtube.step3": {
-        "en": "Publish a video. The file is uploaded to the DTube IPFS cluster; then a Hive comment with DTube json_metadata is broadcast. Do not mark sent unless Hive accepted the transaction.",
-        "es": "Publica un video. El archivo se sube al cluster IPFS de DTube; luego se emite un comentario Hive con json_metadata de DTube. No marques enviado si Hive no aceptó la transacción.",
+        "en": "Publishing is paused while cluster.d.tube has no DNS. When it returns, the file will go to the IPFS cluster and a Hive comment with DTube json_metadata will be broadcast. Do not mark sent unless Hive accepted the transaction.",
+        "es": "La publicación está pausada mientras cluster.d.tube no tenga DNS. Cuando vuelva, el archivo irá al cluster IPFS y se emitirá un comentario Hive con json_metadata de DTube. No marques enviado si Hive no aceptó la transacción.",
     },
     "apidoc.dtube.extra": {
-        "en": "Needs Hive resource credits. Video only. Linked proxies are used. Stats/comments in this panel stay local.",
-        "es": "Hacen falta resource credits de Hive. Solo video. Se usa el proxy vinculado. Estadísticas y comentarios de este panel siguen siendo locales.",
+        "en": "Publishing paused: IPFS cluster DNS is gone. Hive credentials remain. Stats/comments stay local.",
+        "es": "Publicación pausada: el cluster IPFS no tiene DNS. Las credenciales Hive se quedan. Estadísticas y comentarios siguen locales.",
     },
     "apidoc.extra_none": {"en": "None", "es": "Ninguno"},
     "apidoc.tiktok.step1": {
@@ -3405,6 +3418,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Account that recharges (pays the API)",
         "es": "Cuenta que recarga (paga la API)",
     },
+    "configx.sources_info_btn": {
+        "en": "About the account that pays the API",
+        "es": "Acerca de la cuenta que paga la API",
+    },
     "configx.sources_hint": {
         "en": "Choose which connected X account holds the balance. Every publish to X made with the checkbox enabled deducts the cost per post from this balance instead of spending on each account.",
         "es": "Elige qué cuenta de X conectada tiene el saldo. Cada publicación en X hecha con el checkbox activado descuenta el costo por publicación de este saldo, en vez de gastar en cada cuenta.",
@@ -3451,6 +3468,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "configx.checks_title": {
         "en": "Accounts that already qualify to earn",
         "es": "Cuentas que ya cumplen para ganar",
+    },
+    "configx.checks_info_btn": {
+        "en": "About qualifying to earn",
+        "es": "Acerca de cumplir para ganar",
     },
     "configx.checks_hint": {
         "en": "Every day at 4 AM (panel time) the panel queries the X API for each connected account and marks the ones that reach the follower threshold. X also requires Premium and 5M organic impressions in 3 months to share revenue; impressions are not exposed by the API, so verify them in X before paying.",

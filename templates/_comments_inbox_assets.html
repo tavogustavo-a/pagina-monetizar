@@ -1,0 +1,311 @@
+{% if can_manage_comments %}
+<div id="panel-info-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-panel-info tabindex="-1"></div>
+  <div class="equipo-modal__panel panel-info-modal__panel" role="dialog" aria-modal="true" aria-labelledby="panel-info-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div>
+        <h2 id="panel-info-modal-title"></h2>
+      </div>
+      <button type="button" class="equipo-modal__close" data-close-panel-info aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body">
+      <p class="sub panel-info-modal__text" id="panel-info-modal-text"></p>
+    </div>
+  </div>
+</div>
+<script>
+  (function () {
+    var accordion = document.getElementById("stats-comments-accordion");
+    var trigger = document.getElementById("stats-comments-trigger");
+    var titleGroup = document.getElementById("stats-comments-title-group");
+    var panel = document.getElementById("stats-comments-panel");
+    if (!accordion || !trigger || !panel) return;
+
+    var storageKey = "stats-comments-accordion-open";
+
+    function setOpen(open) {
+      accordion.classList.toggle("pub-accordion--collapsed", !open);
+      trigger.setAttribute("aria-expanded", open ? "true" : "false");
+      if (titleGroup) titleGroup.setAttribute("aria-expanded", open ? "true" : "false");
+      panel.hidden = !open;
+      try {
+        localStorage.setItem(storageKey, open ? "1" : "0");
+      } catch (err) {}
+    }
+
+    function toggleOpen() {
+      setOpen(trigger.getAttribute("aria-expanded") !== "true");
+    }
+
+    var saved = null;
+    try {
+      saved = localStorage.getItem(storageKey);
+    } catch (err) {}
+    setOpen(saved !== "0");
+
+    trigger.addEventListener("click", toggleOpen);
+    if (titleGroup) {
+      titleGroup.addEventListener("click", function (e) {
+        if (e.target.closest(".js-panel-info-open")) return;
+        toggleOpen();
+      });
+      titleGroup.addEventListener("keydown", function (e) {
+        if (e.target.closest(".js-panel-info-open")) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          toggleOpen();
+        }
+      });
+    }
+  })();
+
+  (function () {
+    var threadList = document.getElementById("comment-thread-list");
+    var emptyEl = document.getElementById("comment-results-empty");
+    var loadingEl = document.getElementById("comment-results-loading");
+    var platformEl = document.getElementById("comment-filter-platform");
+    var userEl = document.getElementById("comment-filter-user");
+    if (!threadList || !platformEl) return;
+
+    var platformLabels = {{ platform_labels | tojson }};
+    var labelYou = {{ t('pub.badge_you') | tojson }};
+    var labelReplyPh = {{ t('pub.reply_ph') | tojson }};
+    var labelReplyBtn = {{ t('pub.reply_btn') | tojson }};
+    var labelCommentsCount = {{ t('pub.comments_count') | tojson }};
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function formatCount(n) {
+      return labelCommentsCount.replace("{n}", String(n));
+    }
+
+    function bindThreadToggle(article, btn, body) {
+      btn.addEventListener("click", function () {
+        var open = btn.getAttribute("aria-expanded") === "true";
+        btn.setAttribute("aria-expanded", open ? "false" : "true");
+        article.classList.toggle("comment-thread--open", !open);
+        body.hidden = open;
+      });
+    }
+
+    function renderCommentItem(comment, videoId) {
+      var li = document.createElement("li");
+      li.className = "comment-inbox__item" + (comment.parent_id ? " comment-inbox__item--reply" : "");
+
+      var meta = document.createElement("div");
+      meta.className = "comment-inbox__meta";
+      meta.innerHTML =
+        "<strong>" + escapeHtml(comment.author_name) + "</strong>" +
+        (comment.is_creator_reply ? ' <span class="badge badge-creator">' + escapeHtml(labelYou) + "</span>" : "") +
+        ' <time class="sub" datetime="' + escapeHtml(comment.created_at) + '">' +
+        escapeHtml((comment.created_at || "").slice(0, 19).replace("T", " ")) +
+        "</time>";
+
+      var body = document.createElement("p");
+      body.className = "comment-inbox__body";
+      body.textContent = comment.body;
+
+      li.appendChild(meta);
+      li.appendChild(body);
+
+      if (!comment.parent_id && !comment.is_creator_reply) {
+        var form = document.createElement("form");
+        form.method = "post";
+        form.action = "/admin/comments/reply";
+        form.className = "reply-form";
+
+        var videoInput = document.createElement("input");
+        videoInput.type = "hidden";
+        videoInput.name = "video_id";
+        videoInput.value = videoId;
+
+        var parentInput = document.createElement("input");
+        parentInput.type = "hidden";
+        parentInput.name = "parent_id";
+        parentInput.value = comment.id;
+
+        var textarea = document.createElement("textarea");
+        textarea.name = "body";
+        textarea.rows = 2;
+        textarea.required = true;
+        textarea.placeholder = labelReplyPh;
+
+        var submit = document.createElement("button");
+        submit.type = "submit";
+        submit.className = "btn btn-accent btn-sm";
+        submit.textContent = labelReplyBtn;
+
+        form.appendChild(videoInput);
+        form.appendChild(parentInput);
+        form.appendChild(textarea);
+        form.appendChild(submit);
+        li.appendChild(form);
+      }
+
+      return li;
+    }
+
+    function renderThreads(list) {
+      threadList.innerHTML = "";
+      list.forEach(function (thread) {
+        var article = document.createElement("article");
+        article.className = "comment-thread";
+
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "comment-thread__trigger";
+        btn.setAttribute("aria-expanded", "false");
+
+        var platformTags = (thread.platform_ids || [])
+          .map(function (pid) {
+            return '<span class="cap cap--yes">' + escapeHtml(platformLabels[pid] || pid) + "</span>";
+          })
+          .join(" ");
+
+        btn.innerHTML =
+          '<span class="comment-thread__title">' + escapeHtml(thread.video_title || "—") + "</span>" +
+          '<span class="comment-thread__meta sub">' +
+          escapeHtml(thread.owner_username || "") +
+          " · " +
+          escapeHtml(formatCount((thread.comments || []).length)) +
+          (platformTags ? " · " + platformTags : "") +
+          "</span>" +
+          '<span class="comment-thread__chevron" aria-hidden="true"></span>';
+
+        var panel = document.createElement("div");
+        panel.className = "comment-thread__panel";
+        panel.hidden = true;
+
+        var ul = document.createElement("ul");
+        ul.className = "comment-inbox comment-inbox--thread";
+        (thread.comments || []).forEach(function (comment) {
+          ul.appendChild(renderCommentItem(comment, thread.video_id));
+        });
+
+        panel.appendChild(ul);
+        article.appendChild(btn);
+        article.appendChild(panel);
+        bindThreadToggle(article, btn, panel);
+        threadList.appendChild(article);
+      });
+    }
+
+    function runSearch() {
+      var platform = platformEl ? platformEl.value : "__all__";
+      var user = userEl ? userEl.value : "__all__";
+      var params = new URLSearchParams();
+      if (platform && platform !== "__all__") params.set("platform", platform);
+      if (user && user !== "__all__") params.set("user", user);
+
+      if (loadingEl) loadingEl.hidden = false;
+      if (emptyEl) emptyEl.hidden = true;
+      threadList.hidden = true;
+      threadList.innerHTML = "";
+
+      fetch("/admin/api/publicaciones/comentarios?" + params.toString(), {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      })
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (body) {
+          if (!body || !body.ok) {
+            if (emptyEl) emptyEl.hidden = false;
+            return;
+          }
+          var filtered = body.threads || [];
+          if (!filtered.length) {
+            if (emptyEl) emptyEl.hidden = false;
+            threadList.hidden = true;
+            threadList.innerHTML = "";
+          } else {
+            if (emptyEl) emptyEl.hidden = true;
+            threadList.hidden = false;
+            renderThreads(filtered);
+          }
+        })
+        .catch(function () {
+          if (emptyEl) emptyEl.hidden = false;
+        })
+        .finally(function () {
+          if (loadingEl) loadingEl.hidden = true;
+        });
+    }
+
+    if (window.wireAjaxSelectSearch) {
+      window.wireAjaxSelectSearch(platformEl, runSearch);
+      if (userEl) window.wireAjaxSelectSearch(userEl, runSearch);
+    } else {
+      platformEl.addEventListener("change", runSearch);
+      if (userEl) userEl.addEventListener("change", runSearch);
+    }
+
+    runSearch();
+  })();
+
+  (function () {
+    var modal = document.getElementById("panel-info-modal");
+    var titleEl = document.getElementById("panel-info-modal-title");
+    var textEl = document.getElementById("panel-info-modal-text");
+    var lastTrigger = null;
+
+    if (!modal || !titleEl || !textEl) return;
+
+    function releaseModalFocus(returnFocusEl) {
+      var active = document.activeElement;
+      if (!active || !modal.contains(active)) return;
+      if (returnFocusEl && typeof returnFocusEl.focus === "function") {
+        returnFocusEl.focus();
+      } else {
+        active.blur();
+      }
+    }
+
+    function openPanelInfo(btn) {
+      var title = btn.getAttribute("data-info-title") || "";
+      var text = btn.getAttribute("data-info-text") || "";
+      lastTrigger = btn;
+      titleEl.textContent = title;
+      textEl.textContent = text;
+      modal.classList.add("is-open");
+      modal.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+      var closeBtn = modal.querySelector(".equipo-modal__close");
+      if (closeBtn) closeBtn.focus();
+    }
+
+    function closePanelInfo() {
+      releaseModalFocus(lastTrigger);
+      modal.classList.remove("is-open");
+      modal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+      lastTrigger = null;
+    }
+
+    document.querySelectorAll(".js-panel-info-open").forEach(function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        openPanelInfo(btn);
+      });
+    });
+
+    modal.querySelectorAll("[data-close-panel-info]").forEach(function (el) {
+      el.addEventListener("click", closePanelInfo);
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && modal.classList.contains("is-open")) {
+        closePanelInfo();
+      }
+    });
+  })();
+</script>
+{% endif %}

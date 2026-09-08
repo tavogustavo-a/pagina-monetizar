@@ -257,6 +257,11 @@ def publish_to_platform(
     x_use_funding: bool = False,
 ) -> tuple[bool, str]:
     import proxy_util
+    from i18n import t
+
+    pid = (platform_id or "").strip()
+    if not platforms.is_publish_enabled(pid):
+        return False, t("pub.platform_paused", lang, platform=t(f"platform.{pid}", lang))
 
     kwargs = dict(
         platform_id=platform_id,
@@ -268,7 +273,6 @@ def publish_to_platform(
         tiktok_config_id=tiktok_config_id,
         account_link_id=account_link_id,
     )
-    pid = (platform_id or "").strip()
     name = db.get_account_link_name(account_link_id) if account_link_id else ""
     x_mode = "auto"
     if pid == "x":
