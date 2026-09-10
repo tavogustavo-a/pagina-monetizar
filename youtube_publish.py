@@ -13,6 +13,7 @@ import db
 import video_probe
 
 UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos"
+VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 SHORTS_MAX_SECONDS = 180.0
 TITLE_MAX = 100
@@ -232,6 +233,65 @@ def _put_file(upload_url: str, path: Path, mime: str, size: int) -> dict[str, An
         return {}
 
 
+def _video_status(token: str, video_id: str) -> dict[str, Any]:
+    qs = urllib.parse.urlencode({"part": "status,processingDetails", "id": video_id})
+    req = urllib.request.Request(
+        f"{VIDEOS_URL}?{qs}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace") if e.fp else ""
+        raise ValueError(_google_error(body, str(e))) from e
+    return data if isinstance(data, dict) else {}
+
+
+def _watch_processing(
+    *,
+    token: str,
+    video_id: str,
+    lang: str,
+    is_short: bool,
+    requested_privacy: str,
+) -> None:
+    """YouTube aceptó la subida pero aún procesa/revisa. Vigila y cierra el estado."""
+    import publish_pending
+    from i18n import t
+
+    ok_key = "pub.youtube.shorts_ok" if is_short else "pub.youtube.video_ok"
+
+    def _check() -> tuple[str, str]:
+        data = _video_status(token, video_id)
+        items = data.get("items") or []
+        if not items:
+            return "fail", t(
+                "pub.youtube.upload_fail", lang, error="video not found on channel"
+            )
+        st = items[0].get("status") or {}
+        proc = items[0].get("processingDetails") or {}
+        upload_status = str(st.get("uploadStatus") or "").lower()
+        proc_status = str(proc.get("processingStatus") or "").lower()
+        if upload_status in {"rejected", "failed"} or proc_status == "failed":
+            reason = str(
+                st.get("rejectionReason")
+                or st.get("failureReason")
+                or upload_status
+                or proc_status
+            )
+            return "fail", t("pub.youtube.upload_fail", lang, error=reason[:180])
+        if upload_status != "processed" and proc_status != "succeeded":
+            return "pending", ""
+        privacy = str(st.get("privacyStatus") or "").lower()
+        if requested_privacy == "public" and privacy == "private":
+            # Google bloquea en privado las subidas de proyectos API sin verificar.
+            return "fail", t("pub.youtube.locked_private", lang, id=video_id)
+        return "ok", t(ok_key, lang, id=video_id)
+
+    publish_pending.mark(_check)
+
+
 def publish_video(
     *,
     file_path: Path,
@@ -295,6 +355,19 @@ def publish_video(
             else:
                 raise
         video_id = str(result.get("id") or "").strip()
+        upload_status = str(
+            (result.get("status") or {}).get("uploadStatus") or ""
+        ).lower()
+        if video_id and upload_status != "processed":
+            # YouTube aceptó el archivo pero sigue procesando/revisando.
+            _watch_processing(
+                token=token,
+                video_id=video_id,
+                lang=lang,
+                is_short=is_short,
+                requested_privacy=str(status.get("privacyStatus") or "public"),
+            )
+            return True, t("pub.youtube.pending", lang, id=video_id)
         if is_short:
             return True, t("pub.youtube.shorts_ok", lang, id=video_id or "ok")
         return True, t("pub.youtube.video_ok", lang, id=video_id or "ok")

@@ -11,6 +11,7 @@ import i18n
 import notify
 import platform_publish
 import platforms
+import publish_pending
 
 # Colombia y Chicago (CST) comparten UTC-5 sin cambio horario estacional.
 PUBLISH_TZ = timezone(timedelta(hours=-5))
@@ -124,11 +125,12 @@ def execute_video_publish(
     account_link_id: str = "",
     retry_sched_id: str = "",
     x_use_funding: bool = False,
-) -> tuple[int, int, list[dict]]:
-    """Publica un video en las plataformas indicadas. Devuelve ok, fail y fallos para email."""
+) -> tuple[int, int, int, list[dict]]:
+    """Publica un video en las plataformas indicadas. Devuelve ok, fail, pendientes y fallos para email."""
     path = upload_dir / video.file_name
     ok_n = 0
     fail_n = 0
+    pending_n = 0
     failures_for_email: list[dict] = []
     batch_id = str(uuid.uuid4())
     sched_id = (retry_sched_id or "").strip() or None
@@ -147,7 +149,7 @@ def execute_video_publish(
             account_link_id=account_link_id,
             x_use_funding=bool(x_use_funding) if pid == "x" else False,
         )
-        if status not in ("ok", "fail", "skipped"):
+        if status not in ("ok", "fail", "skipped", "pending"):
             status = "fail"
         if status == "ok":
             ok_n += 1
@@ -159,6 +161,8 @@ def execute_video_publish(
                     )
                 except Exception:
                     pass
+        elif status == "pending":
+            pending_n += 1
         elif status == "fail":
             fail_n += 1
             failures_for_email.append(
@@ -168,7 +172,7 @@ def execute_video_publish(
                     "message": message,
                 }
             )
-        db.insert_publication_log(
+        log_id = db.insert_publication_log(
             user_id=user_id,
             video_id=video.id,
             platform_id=pid,
@@ -178,6 +182,8 @@ def execute_video_publish(
             account_link_id=account_link_id,
             batch_id=batch_id,
         )
+        if status == "pending":
+            publish_pending.attach(log_id)
 
     if failures_for_email:
         persist_awaiting_retry(
@@ -201,7 +207,7 @@ def execute_video_publish(
     elif sched_id:
         db.complete_scheduled_publication(sched_id, "done")
 
-    return ok_n, fail_n, failures_for_email
+    return ok_n, fail_n, pending_n, failures_for_email
 
 
 def process_due_scheduled_publications(*, upload_dir: Path) -> int:

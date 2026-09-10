@@ -20,8 +20,14 @@ RUPLOAD = "https://rupload.facebook.com/ig-api-upload/v21.0"
 PHOTO_EXT = {".jpg", ".jpeg", ".png"}
 VIDEO_EXT = {".mp4", ".mov", ".m4v"}
 CAPTION_MAX = 2200
-POLL_ATTEMPTS = 40
+# Sondeo corto dentro de la petición (~45 s). Si Instagram sigue procesando,
+# la publicación queda "pendiente" y un hilo la termina en segundo plano.
+POLL_ATTEMPTS = 15
 POLL_SECONDS = 3
+
+
+class _StillProcessing(Exception):
+    """Instagram aceptó el video pero sigue procesándolo (status IN_PROGRESS)."""
 
 
 def _graph_error(data: dict[str, Any], fallback: str) -> str:
@@ -191,13 +197,48 @@ def _poll_container(container_id: str, token: str) -> None:
         if code in {"ERROR", "EXPIRED"}:
             raise ValueError(last or code)
         time.sleep(POLL_SECONDS)
-    raise ValueError(last or "timeout")
+    raise _StillProcessing(last or "IN_PROGRESS")
 
 
 def _publish_container(user_id: str, token: str, container_id: str) -> str:
     _poll_container(container_id, token)
     data = _graph_post(f"{user_id}/media_publish", token, {"creation_id": container_id})
     return str(data.get("id") or container_id)
+
+
+def _finish_publish_later(
+    *, user_id: str, token: str, container_id: str, lang: str, is_photo: bool
+) -> None:
+    """Registra un chequeo en segundo plano: publica cuando Instagram acepte el video."""
+    import publish_pending
+    from i18n import t
+
+    def _check() -> tuple[str, str]:
+        data = _graph_get(container_id, token, {"fields": "status_code,status"})
+        code = str(data.get("status_code") or "").upper()
+        detail = str(data.get("status") or code)
+        if code in {"ERROR", "EXPIRED"}:
+            return "fail", t("pub.instagram.upload_fail", lang, error=detail[:180])
+        if code == "PUBLISHED":
+            key = "pub.instagram.photo_ok" if is_photo else "pub.instagram.reel_ok"
+            return "ok", t(key, lang, id=container_id)
+        if code != "FINISHED":
+            return "pending", ""
+        try:
+            data2 = _graph_post(
+                f"{user_id}/media_publish", token, {"creation_id": container_id}
+            )
+        except ValueError as e:
+            msg = str(e)
+            # "Media no está listo" → seguir esperando; otros errores → fallo real.
+            if "not ready" in msg.lower() or "9007" in msg:
+                return "pending", ""
+            return "fail", t("pub.instagram.upload_fail", lang, error=msg[:180])
+        media_id = str(data2.get("id") or container_id)
+        key = "pub.instagram.photo_ok" if is_photo else "pub.instagram.reel_ok"
+        return "ok", t(key, lang, id=media_id)
+
+    publish_pending.mark(_check)
 
 
 def _create_photo_container(user_id: str, token: str, image_url: str, caption: str) -> str:
@@ -286,7 +327,17 @@ def publish_media(
             if not public_url:
                 return False, t("pub.instagram.need_public_url", lang)
             container = _create_photo_container(user_id, token, public_url, caption)
-            media_id = _publish_container(user_id, token, container)
+            try:
+                media_id = _publish_container(user_id, token, container)
+            except _StillProcessing:
+                _finish_publish_later(
+                    user_id=user_id,
+                    token=token,
+                    container_id=container,
+                    lang=lang,
+                    is_photo=True,
+                )
+                return True, t("pub.instagram.pending", lang)
             return True, t("pub.instagram.photo_ok", lang, id=media_id)
         if public_url:
             container = _create_reel_url_container(user_id, token, public_url, caption)
@@ -295,7 +346,17 @@ def publish_media(
                 container = _upload_resumable(user_id, token, path, caption)
             except ValueError:
                 return False, t("pub.instagram.need_public_url", lang)
-        media_id = _publish_container(user_id, token, container)
+        try:
+            media_id = _publish_container(user_id, token, container)
+        except _StillProcessing:
+            _finish_publish_later(
+                user_id=user_id,
+                token=token,
+                container_id=container,
+                lang=lang,
+                is_photo=False,
+            )
+            return True, t("pub.instagram.pending", lang)
         return True, t("pub.instagram.reel_ok", lang, id=media_id)
     except ValueError as e:
         key = str(e)

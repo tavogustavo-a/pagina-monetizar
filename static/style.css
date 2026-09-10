@@ -4448,6 +4448,11 @@ input:focus {
   background: rgba(148, 163, 184, 0.12);
 }
 
+.pub-log-status--pending {
+  color: #7dd3fc;
+  background: rgba(56, 189, 248, 0.14);
+}
+
 .pub-log-view {
   display: inline-flex;
   align-items: center;

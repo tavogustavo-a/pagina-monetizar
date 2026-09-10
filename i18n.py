@@ -1367,6 +1367,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pub.log_status_fail": {"en": "Failed", "es": "Falló"},
     "pub.log_status_mixed": {"en": "Mixed", "es": "Mixto"},
     "pub.log_status_skipped": {"en": "Skipped", "es": "Omitido"},
+    "pub.log_status_pending": {"en": "Pending", "es": "Pendiente"},
     "pub.log_view": {"en": "View", "es": "Ver"},
     "pub.log_modal_platforms": {"en": "Platforms", "es": "Plataformas"},
     "pub.log_modal_status": {"en": "Status", "es": "Estado"},
@@ -1503,6 +1504,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Uploaded to YouTube as a Short ({id}).",
         "es": "Subido a YouTube como Short ({id}).",
     },
+    "pub.youtube.pending": {
+        "en": "YouTube accepted the video ({id}) and is processing/reviewing it. This entry will update automatically when YouTube accepts it.",
+        "es": "YouTube aceptó el video ({id}) y lo está procesando/revisando. Este registro se actualizará solo cuando YouTube lo acepte.",
+    },
+    "pub.youtube.locked_private": {
+        "en": "YouTube left the video ({id}) locked as private. This happens when the app's Google API project is not verified/audited yet. Check YouTube Studio and the app verification in Google Cloud Console.",
+        "es": "YouTube dejó el video ({id}) bloqueado en privado. Pasa cuando el proyecto de API de Google de la app aún no está verificado/auditado. Revisa YouTube Studio y la verificación de la app en Google Cloud Console.",
+    },
     "pub.youtube.video_ok": {
         "en": "Uploaded to YouTube as a regular video ({id}).",
         "es": "Subido a YouTube como video normal ({id}).",
@@ -1530,6 +1539,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pub.instagram.photo_ok": {
         "en": "Published photo to Instagram ({id}).",
         "es": "Foto publicada en Instagram ({id}).",
+    },
+    "pub.instagram.pending": {
+        "en": "Instagram accepted the video and is still processing it. It will be published automatically when Instagram accepts it; this entry will update on its own.",
+        "es": "Instagram aceptó el video y sigue procesándolo. Se publicará automáticamente cuando Instagram lo acepte; este registro se actualizará solo.",
     },
     "pub.instagram.reel_ok": {
         "en": "Published Reel to Instagram ({id}).",
@@ -1882,6 +1895,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pub.flash.no_platforms": {
         "en": "Select at least one platform.",
         "es": "Selecciona al menos una plataforma.",
+    },
+    "pub.flash.pending_review": {
+        "en": "Sent. {n} platform(s) accepted the video and are still processing/reviewing it. The log will update automatically when they accept it.",
+        "es": "Enviado. {n} plataforma(s) aceptaron el video y siguen procesándolo/revisándolo. El registro se actualizará solo cuando lo acepten.",
     },
     "pub.flash.partial": {
         "en": "Saved locally. {ok} OK, {fail} still pending — an admin can republish or cancel below.",

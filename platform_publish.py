@@ -257,8 +257,10 @@ def publish_to_platform(
     x_use_funding: bool = False,
 ) -> tuple[str, str]:
     import proxy_util
+    import publish_pending
     from i18n import t
 
+    publish_pending.clear()
     pid = (platform_id or "").strip()
     if not platforms.is_publish_enabled(pid):
         return "fail", t("pub.platform_paused", lang, platform=t(f"platform.{pid}", lang))
@@ -295,12 +297,22 @@ def publish_to_platform(
                 pid, account_link_id
             ):
                 ok, message = _publish_to_platform(**kwargs)
-                return ("ok" if ok else "fail"), message
+                return _final_status(ok), message
 
             proxy_url = db.get_active_proxy_url_for_account(account_link_id)
             with proxy_util.using_proxy(proxy_url):
                 ok, message = _publish_to_platform(**kwargs)
-                return ("ok" if ok else "fail"), message
+                return _final_status(ok), message
+
+
+def _final_status(ok: bool) -> str:
+    """La plataforma aceptó el envío pero sigue revisándolo → estado 'pending'."""
+    import publish_pending
+
+    if not ok:
+        publish_pending.clear()
+        return "fail"
+    return "pending" if publish_pending.has_pending() else "ok"
 
 
 def _publish_to_platform(

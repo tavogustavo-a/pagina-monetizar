@@ -1,5 +1,5 @@
 /* Service worker: página amable cuando no hay red o el servidor no responde. */
-var CACHE_NAME = "monetizar-offline-v1";
+var CACHE_NAME = "monetizar-offline-v2";
 var OFFLINE_URL = "/offline";
 var ERROR_PAGE_JS = "/static/js/error_page.js";
 
@@ -73,6 +73,10 @@ self.addEventListener("fetch", function (event) {
           });
         })
     );
+    return;
+  }
+
+  if (url.pathname.indexOf("/oauth/") === 0) {
     return;
   }
 

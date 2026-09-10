@@ -119,6 +119,8 @@
                   </button>
                   {% elif row.status == 'ok' %}
                   <span class="pub-log-status pub-log-status--ok">{{ t('pub.log_status_ok') }}</span>
+                  {% elif row.status == 'pending' %}
+                  <span class="pub-log-status pub-log-status--pending">{{ t('pub.log_status_pending') }}</span>
                   {% elif row.status == 'skipped' %}
                   <span class="pub-log-status pub-log-status--skipped">{{ t('pub.log_status_skipped') }}</span>
                   {% else %}
@@ -130,6 +132,10 @@
                   {% if row.fail_n == 1 %}
                     {% for e in row.entries %}
                       {% if e.status == 'fail' %}{{ e.message }}{% endif %}
+                    {% endfor %}
+                  {% elif row.fail_n == 0 and (row.pending_n or 0) >= 1 %}
+                    {% for e in row.entries if e.status == 'pending' %}
+                      {% if loop.first %}{{ e.message }}{% endif %}
                     {% endfor %}
                   {% elif row.fail_n > 1 %}
                   <button
@@ -221,7 +227,8 @@
             ok: {{ t('pub.log_status_ok') | tojson }},
             fail: {{ t('pub.log_status_fail') | tojson }},
             skipped: {{ t('pub.log_status_skipped') | tojson }},
-            mixed: {{ t('pub.log_status_mixed') | tojson }}
+            mixed: {{ t('pub.log_status_mixed') | tojson }},
+            pending: {{ t('pub.log_status_pending') | tojson }}
           };
           var viewLabel = {{ t('pub.log_view') | tojson }};
           var platformsN = {{ t('pub.log_platforms_n') | tojson }};
@@ -238,6 +245,7 @@
             if (status === "ok") return "pub-log-status--ok";
             if (status === "skipped") return "pub-log-status--skipped";
             if (status === "mixed") return "pub-log-status--mixed";
+            if (status === "pending") return "pub-log-status--pending";
             return "pub-log-status--fail";
           }
 
@@ -260,6 +268,14 @@
             var entries = row.entries || [];
             for (var i = 0; i < entries.length; i++) {
               if (entries[i].status === "fail") return entries[i].message || "";
+            }
+            return "";
+          }
+
+          function pendingMessage(row) {
+            var entries = row.entries || [];
+            for (var i = 0; i < entries.length; i++) {
+              if (entries[i].status === "pending") return entries[i].message || "";
             }
             return "";
           }
@@ -295,6 +311,8 @@
               skipped: "skipped",
               mixto: "mixed",
               mixed: "mixed",
+              pendiente: "pending",
+              pending: "pending",
               ok: "ok"
             };
             if (aliases[q] && String(row.status || "") === aliases[q]) return true;
@@ -400,7 +418,7 @@
                 tdStatus.appendChild(mixBtn);
               } else {
                 var badge = document.createElement("span");
-                var st = row.status === "ok" ? "ok" : row.status === "skipped" ? "skipped" : "fail";
+                var st = statusLabels[row.status] ? row.status : "fail";
                 badge.className = "pub-log-status pub-log-status--" + st;
                 badge.textContent = statusLabels[st] || st;
                 tdStatus.appendChild(badge);
@@ -414,6 +432,8 @@
                 var errBtn = viewButton(row.id, "errors", titles.errors);
                 errBtn.innerHTML = eyeSvg + "<span>" + viewLabel + "</span>";
                 tdMsg.appendChild(errBtn);
+              } else if ((row.pending_n || 0) >= 1) {
+                tdMsg.textContent = pendingMessage(row);
               }
               tr.appendChild(tdMsg);
               }

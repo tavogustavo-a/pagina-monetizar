@@ -207,7 +207,8 @@ app.add_middleware(
     secret_key=SECRET_KEY,
     session_cookie="tt_session",
     max_age=60 * 60 * 24 * 7,
-    same_site="lax",
+    same_site="none" if site_config.SITE_URL.startswith("https://") else "lax",
+    https_only=site_config.SITE_URL.startswith("https://"),
 )
 
 
@@ -312,6 +313,25 @@ def _session_user(request: Request) -> db.User | None:
 def _establish_session(request: Request, user: db.User) -> None:
     request.session["user_id"] = user.id
     request.session["auth_version"] = db.get_user_auth_version(user.id)
+
+
+def _keep_oauth_login(request: Request, user: db.User) -> None:
+    """Reescribe la cookie de sesión en el callback: Snapchat a menudo no envía la cookie Lax."""
+    _establish_session(request, user)
+
+
+async def _oauth_callback_params(request: Request) -> dict[str, str]:
+    out = {str(k): str(v) for k, v in request.query_params.items()}
+    if request.method == "POST":
+        try:
+            form = await request.form()
+        except Exception:
+            form = {}
+        for key in ("code", "state", "error", "error_description"):
+            val = form.get(key) if form is not None else None
+            if val and not out.get(key):
+                out[key] = str(val)
+    return out
 
 
 def require_user(request: Request) -> db.User:
@@ -1704,10 +1724,13 @@ def _filter_log_groups_for_viewer(groups: list[dict], user: db.User) -> list[dic
         ok_n = sum(1 for e in entries if e.get("status") == "ok")
         fail_n = sum(1 for e in entries if e.get("status") == "fail")
         skipped_n = sum(1 for e in entries if e.get("status") == "skipped")
-        if fail_n and ok_n:
+        pending_n = sum(1 for e in entries if e.get("status") == "pending")
+        if fail_n and (ok_n or pending_n):
             status = "mixed"
         elif fail_n:
             status = "fail"
+        elif pending_n:
+            status = "pending"
         elif ok_n:
             status = "ok"
         else:
@@ -1717,6 +1740,7 @@ def _filter_log_groups_for_viewer(groups: list[dict], user: db.User) -> list[dic
         item["ok_n"] = ok_n
         item["fail_n"] = fail_n
         item["skipped_n"] = skipped_n
+        item["pending_n"] = pending_n
         item["status"] = status
         out.append(item)
     return out
@@ -2848,7 +2872,7 @@ async def admin_upload_video(request: Request):
             request, ok=True, message=_msg(request, flash_key, when=when_local)
         )
 
-    ok_n, fail_n, failures = await asyncio.to_thread(
+    ok_n, fail_n, pending_n, failures = await asyncio.to_thread(
         publish_schedule.execute_video_publish,
         upload_dir=UPLOAD_DIR,
         user_id=u.id,
@@ -2877,13 +2901,19 @@ async def admin_upload_video(request: Request):
         ok_n = 1 if "tiktok" in selected_platforms else ok_n
         fail_n = 0
 
-    if fail_n and ok_n:
-        return _publicaciones_result(
-            request, ok=True, message=_msg(request, "pub.flash.partial", ok=ok_n, fail=fail_n)
-        )
     if fail_n:
         return _publicaciones_result(
-            request, ok=False, message=_msg(request, "pub.flash.partial", ok=ok_n, fail=fail_n)
+            request,
+            ok=bool(ok_n or pending_n),
+            message=_msg(
+                request, "pub.flash.partial", ok=ok_n + pending_n, fail=fail_n
+            ),
+        )
+    if pending_n:
+        return _publicaciones_result(
+            request,
+            ok=True,
+            message=_msg(request, "pub.flash.pending_review", n=pending_n),
         )
     if past_schedule_immediate:
         return _publicaciones_result(
@@ -2957,7 +2987,7 @@ def admin_retry_pending_publish(
         )
         request.session["admin_error"] = _msg(request, "pub.flash.no_platforms")
         return done()
-    ok_n, fail_n, _ = publish_schedule.execute_video_publish(
+    ok_n, fail_n, pending_n, _ = publish_schedule.execute_video_publish(
         upload_dir=UPLOAD_DIR,
         user_id=row["user_id"],
         video=video,
@@ -2972,13 +3002,17 @@ def admin_retry_pending_publish(
     db.release_publish_file_lock_if_idle(
         row["user_id"], getattr(video, "file_hash", "") or ""
     )
-    if fail_n and ok_n:
+    if fail_n and (ok_n or pending_n):
         request.session["admin_ok"] = _msg(
-            request, "pub.flash.partial", ok=ok_n, fail=fail_n
+            request, "pub.flash.partial", ok=ok_n + pending_n, fail=fail_n
         )
     elif fail_n:
         request.session["admin_error"] = _msg(
             request, "pub.flash.partial", ok=ok_n, fail=fail_n
+        )
+    elif pending_n:
+        request.session["admin_ok"] = _msg(
+            request, "pub.flash.pending_review", n=pending_n
         )
     else:
         request.session["admin_ok"] = _msg(request, "pub.flash.retry_all_ok", n=ok_n)
@@ -4713,10 +4747,15 @@ def snapchat_oauth_connect(request: Request):
     return RedirectResponse(url=url, status_code=303)
 
 
-@app.get("/oauth/snapchat/callback", name="snapchat_oauth_callback")
-def snapchat_oauth_callback(request: Request):
+@app.api_route(
+    "/oauth/snapchat/callback",
+    methods=["GET", "POST"],
+    name="snapchat_oauth_callback",
+)
+async def snapchat_oauth_callback(request: Request):
     lang = i18n.resolve_lang(request)
-    state = (request.query_params.get("state") or "").strip()
+    params = await _oauth_callback_params(request)
+    state = (params.get("state") or "").strip()
     packed = snapchat_oauth.read_connect_state(state)
     try:
         admin = require_admin_privileges(request)
@@ -4728,13 +4767,14 @@ def snapchat_oauth_callback(request: Request):
                 admin = None
         if not admin:
             return _admin_privileges_redirect_login(request)
+    _keep_oauth_login(request, admin)
     saved_state = request.session.get("snapchat_oauth_state")
     linked_by = request.session.get("snapchat_oauth_user_id") or (
         packed.get("user_id") if packed else None
     )
-    err_param = request.query_params.get("error")
+    err_param = (params.get("error") or "").strip()
     if err_param:
-        desc = request.query_params.get("error_description") or err_param
+        desc = params.get("error_description") or err_param
         request.session["tiktok_error"] = f"Snapchat: {desc}"
         return _oauth_redirect(request, admin)
     if packed:
@@ -4744,7 +4784,7 @@ def snapchat_oauth_callback(request: Request):
     if not ok_state:
         request.session["tiktok_error"] = i18n.t("servers.oauth_state_invalid", lang)
         return _oauth_redirect(request, admin)
-    code = (request.query_params.get("code") or "").strip()
+    code = (params.get("code") or "").strip()
     if not code:
         request.session["tiktok_error"] = i18n.t("servers.snapchat_no_code", lang)
         return _oauth_redirect(request, admin)

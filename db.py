@@ -766,7 +766,7 @@ def _init_db_schema() -> None:
                 user_id TEXT NOT NULL,
                 platform_id TEXT NOT NULL,
                 content_type TEXT NOT NULL DEFAULT 'video',
-                status TEXT NOT NULL CHECK (status IN ('ok', 'fail', 'skipped')),
+                status TEXT NOT NULL CHECK (status IN ('ok', 'fail', 'skipped', 'pending')),
                 message TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE SET NULL,
@@ -829,6 +829,7 @@ def _init_db_schema() -> None:
     _ensure_server_group_members_v3()
     _ensure_publication_log_account_link_column()
     _ensure_publication_log_batch_id_column()
+    _ensure_publication_log_pending_status()
     _ensure_scheduled_publications_account_link_column()
     _ensure_x_funding_tables()
     _ensure_extractor_tables()
@@ -1552,6 +1553,54 @@ def _ensure_publication_log_batch_id_column() -> None:
                 "ALTER TABLE publication_log ADD COLUMN batch_id TEXT NOT NULL DEFAULT ''"
             )
             conn.commit()
+    finally:
+        conn.close()
+
+
+def _ensure_publication_log_pending_status() -> None:
+    """Amplía el CHECK de status para admitir 'pending' (video en revisión de la red)."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'publication_log'"
+        ).fetchone()
+        sql = str((row["sql"] if row else "") or "")
+        if not sql or "'pending'" in sql or "CHECK" not in sql.upper():
+            return
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("ALTER TABLE publication_log RENAME TO publication_log_old")
+        conn.execute(
+            """
+            CREATE TABLE publication_log (
+                id TEXT PRIMARY KEY,
+                video_id TEXT,
+                user_id TEXT NOT NULL,
+                platform_id TEXT NOT NULL,
+                content_type TEXT NOT NULL DEFAULT 'video',
+                status TEXT NOT NULL CHECK (status IN ('ok', 'fail', 'skipped', 'pending')),
+                message TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                account_link_id TEXT NOT NULL DEFAULT '',
+                batch_id TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE SET NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO publication_log (
+                id, video_id, user_id, platform_id, content_type, status,
+                message, created_at, account_link_id, batch_id
+            )
+            SELECT id, video_id, user_id, platform_id, content_type, status,
+                   message, created_at, account_link_id, batch_id
+            FROM publication_log_old
+            """
+        )
+        conn.execute("DROP TABLE publication_log_old")
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys = ON")
     finally:
         conn.close()
 
@@ -3251,7 +3300,7 @@ def next_account_publish_slot(
             SELECT created_at
             FROM publication_log
             WHERE account_link_id = ?
-              AND status = 'ok'
+              AND status IN ('ok', 'pending')
               AND created_at >= ?
             ORDER BY created_at ASC
             """,
@@ -3373,7 +3422,7 @@ def should_block_consecutive_same_file(user_id: str, file_hash: str) -> bool:
             """
             SELECT 1 AS ok
             FROM publication_log
-            WHERE user_id = ? AND video_id = ? AND status = 'ok'
+            WHERE user_id = ? AND video_id = ? AND status IN ('ok', 'pending')
             LIMIT 1
             """,
             (uid, video_id),
@@ -7880,6 +7929,19 @@ def insert_publication_log(
     return log_id
 
 
+def update_publication_log_entry(log_id: str, *, status: str, message: str) -> None:
+    """Actualiza una fila del registro (p.ej. pending → ok/fail cuando la red acepta)."""
+    conn = _connect()
+    try:
+        conn.execute(
+            "UPDATE publication_log SET status = ?, message = ? WHERE id = ?",
+            (status, (message or "")[:1000], str(log_id)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def create_scheduled_publication(
     *,
     user_id: str,
@@ -8221,10 +8283,13 @@ def list_publication_log_groups(
         ok_n = sum(1 for r in cluster if r.get("status") == "ok")
         fail_n = sum(1 for r in cluster if r.get("status") == "fail")
         skipped_n = sum(1 for r in cluster if r.get("status") == "skipped")
-        if fail_n and ok_n:
+        pending_n = sum(1 for r in cluster if r.get("status") == "pending")
+        if fail_n and (ok_n or pending_n):
             status = "mixed"
         elif fail_n:
             status = "fail"
+        elif pending_n:
+            status = "pending"
         elif ok_n:
             status = "ok"
         else:
@@ -8249,6 +8314,7 @@ def list_publication_log_groups(
                 "ok_n": ok_n,
                 "fail_n": fail_n,
                 "skipped_n": skipped_n,
+                "pending_n": pending_n,
                 "entries": [
                     {
                         "platform_id": str(e.get("platform_id") or ""),
@@ -9171,7 +9237,7 @@ def count_extractor_pending(
               AND pl.video_id NOT IN (
                   SELECT video_id FROM publication_log
                   WHERE account_link_id = ? AND platform_id = ?
-                    AND status IN ('ok', 'skipped') AND video_id IS NOT NULL
+                    AND status IN ('ok', 'skipped', 'pending') AND video_id IS NOT NULL
               )
             """,
             (
@@ -9207,7 +9273,7 @@ def list_extractor_pending_videos(
             AND v.id NOT IN (
                 SELECT video_id FROM publication_log
                 WHERE account_link_id = ? AND platform_id = ?
-                  AND status IN ('ok', 'skipped') AND video_id IS NOT NULL
+                  AND status IN ('ok', 'skipped', 'pending') AND video_id IS NOT NULL
             )
             ORDER BY v.created_at ASC
             LIMIT ?

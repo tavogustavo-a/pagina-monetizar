@@ -19,6 +19,7 @@ import db
 import i18n
 import platform_publish
 import platforms
+import publish_pending
 import video_probe
 
 # Frecuencia del worker (main.py) y tope de publicaciones por pasada.
@@ -415,10 +416,10 @@ def _publish_one(
             else None,
             account_link_id=job.get("account_link_id"),
         )
-        if status not in ("ok", "fail", "skipped"):
+        if status not in ("ok", "fail", "skipped", "pending"):
             status = "fail"
         entry["cycle_sent"] = int(entry.get("cycle_sent") or 0) + 1
-        db.insert_publication_log(
+        log_id = db.insert_publication_log(
             user_id=job["owner_user_id"],
             video_id=video.id,
             platform_id=pid,
@@ -428,7 +429,9 @@ def _publish_one(
             account_link_id=job["account_link_id"],
             batch_id=batch_id,
         )
-        if status == "ok":
+        if status == "pending":
+            publish_pending.attach(log_id)
+        if status in ("ok", "pending"):
             ok_n += 1
             entry["fails"] = 0
             entry["last_error"] = ""
