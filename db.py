@@ -1558,14 +1558,70 @@ def _ensure_publication_log_batch_id_column() -> None:
 
 
 def _ensure_publication_log_pending_status() -> None:
-    """Amplía el CHECK de status para admitir 'pending' (video en revisión de la red)."""
+    """Amplía el CHECK de status para admitir 'pending'. Nunca tumba el arranque."""
+    try:
+        if db_engine.uses_postgres():
+            _ensure_publication_log_pending_status_pg()
+        else:
+            _ensure_publication_log_pending_status_sqlite()
+    except Exception:
+        return
+
+
+def _ensure_publication_log_pending_status_pg() -> None:
     conn = _connect()
     try:
+        rows = conn.execute(
+            """
+            SELECT conname, pg_get_constraintdef(oid) AS def
+            FROM pg_constraint
+            WHERE conrelid = 'publication_log'::regclass AND contype = 'c'
+            """
+        ).fetchall()
+        already = False
+        for row in rows:
+            name = str(row["conname"] or "")
+            defn = str(row["def"] or "")
+            if "status" not in defn.lower():
+                continue
+            if "'pending'" in defn:
+                already = True
+                continue
+            conn.execute(f'ALTER TABLE publication_log DROP CONSTRAINT IF EXISTS "{name}"')
+        if not already:
+            conn.execute(
+                """
+                ALTER TABLE publication_log
+                ADD CONSTRAINT publication_log_status_check
+                CHECK (status IN ('ok', 'fail', 'skipped', 'pending'))
+                """
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _ensure_publication_log_pending_status_sqlite() -> None:
+    conn = _connect()
+    try:
+        tables = {
+            str(r[0])
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+        if "publication_log" not in tables and "publication_log_old" in tables:
+            conn.execute("ALTER TABLE publication_log_old RENAME TO publication_log")
+            conn.commit()
+            tables.add("publication_log")
+            tables.discard("publication_log_old")
+        if "publication_log" not in tables:
+            return
         row = conn.execute(
             "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'publication_log'"
         ).fetchone()
         sql = str((row["sql"] if row else "") or "")
-        if not sql or "'pending'" in sql or "CHECK" not in sql.upper():
+        if "'pending'" in sql or "CHECK" not in sql.upper():
             return
         conn.execute("PRAGMA foreign_keys = OFF")
         conn.execute("ALTER TABLE publication_log RENAME TO publication_log_old")
