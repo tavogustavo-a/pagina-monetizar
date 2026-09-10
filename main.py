@@ -320,6 +320,19 @@ def _keep_oauth_login(request: Request, user: db.User) -> None:
     _establish_session(request, user)
 
 
+def _oauth_debug_log(platform: str, message: str) -> None:
+    """Bitácora de diagnóstico OAuth (sin tokens ni secretos) en .data/oauth_debug.log."""
+    try:
+        from db_engine import DATA_DIR
+
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with (DATA_DIR / "oauth_debug.log").open("a", encoding="utf-8") as fh:
+            fh.write(f"{stamp} [{platform}] {message}\n")
+    except Exception:
+        pass
+
+
 async def _oauth_callback_params(request: Request) -> dict[str, str]:
     out = {str(k): str(v) for k, v in request.query_params.items()}
     if request.method == "POST":
@@ -4757,6 +4770,17 @@ async def snapchat_oauth_callback(request: Request):
     params = await _oauth_callback_params(request)
     state = (params.get("state") or "").strip()
     packed = snapchat_oauth.read_connect_state(state)
+    _oauth_debug_log(
+        "snapchat",
+        "callback recibido: method=%s code=%s state=%s packed=%s error=%s"
+        % (
+            request.method,
+            "si" if params.get("code") else "no",
+            "si" if state else "no",
+            "ok" if packed else "invalido",
+            params.get("error") or "-",
+        ),
+    )
     try:
         admin = require_admin_privileges(request)
     except PermissionError:
@@ -4766,7 +4790,13 @@ async def snapchat_oauth_callback(request: Request):
             if admin and not db.user_has_admin_privileges(admin):
                 admin = None
         if not admin:
+            _oauth_debug_log(
+                "snapchat", "callback sin sesion y sin usuario del estado -> login"
+            )
             return _admin_privileges_redirect_login(request)
+        _oauth_debug_log(
+            "snapchat", f"sesion perdida; usuario recuperado del estado: {admin.username}"
+        )
     _keep_oauth_login(request, admin)
     saved_state = request.session.get("snapchat_oauth_state")
     linked_by = request.session.get("snapchat_oauth_user_id") or (
@@ -4775,6 +4805,7 @@ async def snapchat_oauth_callback(request: Request):
     err_param = (params.get("error") or "").strip()
     if err_param:
         desc = params.get("error_description") or err_param
+        _oauth_debug_log("snapchat", f"snapchat devolvio error: {desc[:200]}")
         request.session["tiktok_error"] = f"Snapchat: {desc}"
         return _oauth_redirect(request, admin)
     if packed:
@@ -4782,10 +4813,12 @@ async def snapchat_oauth_callback(request: Request):
     else:
         ok_state = bool(saved_state and state == saved_state)
     if not ok_state:
+        _oauth_debug_log("snapchat", "estado invalido (firma/sesion no coinciden)")
         request.session["tiktok_error"] = i18n.t("servers.oauth_state_invalid", lang)
         return _oauth_redirect(request, admin)
     code = (params.get("code") or "").strip()
     if not code:
+        _oauth_debug_log("snapchat", "callback sin authorization code")
         request.session["tiktok_error"] = i18n.t("servers.snapchat_no_code", lang)
         return _oauth_redirect(request, admin)
     link_name = (packed or {}).get("link_name") or str(
@@ -4804,12 +4837,21 @@ async def snapchat_oauth_callback(request: Request):
             expires_in = token_data.get("expires_in")
             if not access:
                 raise ValueError("No access token in Snapchat response.")
+            _oauth_debug_log(
+                "snapchat",
+                "tokens OK (refresh=%s); consultando perfil publico..."
+                % ("si" if refresh else "no"),
+            )
             profile = snapchat_oauth.fetch_profile(access)
             client_id_val = snapchat_oauth.client_id()
             client_secret_val = snapchat_oauth.client_secret()
         open_id = profile.get("open_id") or ""
         if not open_id:
             raise ValueError("snapchat_no_profile")
+        _oauth_debug_log(
+            "snapchat",
+            f"perfil OK: {profile.get('username') or profile.get('display_name') or open_id}",
+        )
         cid = db.save_oauth_connection(
             platform_id="snapchat",
             open_id=str(open_id),
@@ -4832,9 +4874,13 @@ async def snapchat_oauth_callback(request: Request):
         request.session.pop("snapchat_oauth_user_id", None)
         request.session.pop("oauth_link_target_name", None)
         label = profile.get("username") or profile.get("display_name") or "Snapchat"
+        _oauth_debug_log(
+            "snapchat", f"conexion guardada: cuenta='{link_name or '-'}' perfil='{label}'"
+        )
         request.session["tiktok_ok"] = i18n.t("servers.snapchat_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
         code_err = str(e)
+        _oauth_debug_log("snapchat", f"FALLO: {code_err[:300]}")
         if code_err in ("snapchat_no_profile", "snapchat_need_allowlist"):
             request.session["tiktok_error"] = i18n.t(f"servers.{code_err}", lang)
         else:
