@@ -95,6 +95,28 @@ def oauth_configured() -> bool:
     return bool(client_id() and client_secret() and redirect_uri())
 
 
+def _debug(message: str) -> None:
+    try:
+        from db_engine import DATA_DIR
+
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        with (DATA_DIR / "oauth_debug.log").open("a", encoding="utf-8") as fh:
+            fh.write(f"{stamp} [snapchat] {message}\n")
+    except Exception:
+        pass
+
+
+def _shape(data: dict[str, Any]) -> str:
+    keys = ",".join(sorted(str(k) for k in data.keys())[:20])
+    status = str(data.get("request_status") or data.get("status") or "-")
+    msg = str(data.get("display_message") or data.get("debug_message") or "")[:120]
+    inner = data.get("public_profile")
+    has = "si" if isinstance(inner, dict) and inner else "no"
+    nlist = len(data.get("public_profiles") or []) if isinstance(data.get("public_profiles"), list) else 0
+    return f"status={status} keys={keys} public_profile={has} profiles_n={nlist} msg={msg or '-'}"
+
+
 def _state_secret() -> bytes:
     return (os.environ.get("SESSION_SECRET") or "dev-cambiar-en-produccion").encode(
         "utf-8"
@@ -292,13 +314,22 @@ def revoke_tokens(access_token: str, refresh_token: str | None = None) -> None:
             continue
 
 
+def _unwrap(data: dict[str, Any]) -> dict[str, Any]:
+    inner = data.get("data") if isinstance(data.get("data"), dict) else data
+    return inner if isinstance(inner, dict) else data
+
+
 def _first_profile_dict(data: dict[str, Any]) -> dict[str, Any]:
+    data = _unwrap(data)
     if not isinstance(data, dict):
         return {}
     for key in ("public_profile", "profile", "me"):
         inner = data.get(key)
         if isinstance(inner, dict) and (
-            inner.get("id") or inner.get("profile_id") or inner.get("display_name")
+            inner.get("id")
+            or inner.get("profile_id")
+            or inner.get("snap_user_name")
+            or inner.get("display_name")
         ):
             return inner
     items = data.get("public_profiles")
@@ -306,8 +337,14 @@ def _first_profile_dict(data: dict[str, Any]) -> dict[str, Any]:
         for item in items:
             if not isinstance(item, dict):
                 continue
-            inner = item.get("public_profile") if isinstance(item.get("public_profile"), dict) else item
-            if isinstance(inner, dict) and (inner.get("id") or inner.get("profile_id")):
+            inner = (
+                item.get("public_profile")
+                if isinstance(item.get("public_profile"), dict)
+                else item
+            )
+            if isinstance(inner, dict) and (
+                inner.get("id") or inner.get("profile_id") or inner.get("snap_user_name")
+            ):
                 return inner
     return data if data.get("id") or data.get("profile_id") else {}
 
@@ -315,7 +352,12 @@ def _first_profile_dict(data: dict[str, Any]) -> dict[str, Any]:
 def _as_profile(profile: dict[str, Any]) -> dict[str, str] | None:
     if not isinstance(profile, dict):
         return None
-    open_id = str(profile.get("id") or profile.get("profile_id") or "").strip()
+    open_id = str(
+        profile.get("id")
+        or profile.get("profile_id")
+        or profile.get("public_profile_id")
+        or ""
+    ).strip()
     if not open_id:
         return None
     name = str(
@@ -333,10 +375,12 @@ def _as_profile(profile: dict[str, Any]) -> dict[str, str] | None:
 
 
 def _org_ids(data: dict[str, Any]) -> list[str]:
+    data = _unwrap(data)
     out: list[str] = []
     rows = data.get("organizations")
     if not isinstance(rows, list):
-        rows = data.get("organization") if isinstance(data.get("organization"), list) else []
+        one = data.get("organization")
+        rows = one if isinstance(one, list) else ([one] if isinstance(one, dict) else [])
     for item in rows:
         if not isinstance(item, dict):
             continue
@@ -353,35 +397,50 @@ def fetch_profile(access_token: str) -> dict[str, Any]:
         raise ValueError("missing_token")
     headers = {"Authorization": f"Bearer {token}"}
     last_err = ""
+    cid = (client_id() or "")[:8]
+    _debug(f"fetch_profile client={cid}… scope={oauth_scopes()}")
 
     try:
-        data = _request(PROFILE_URL, headers=headers)
+        data = _unwrap(_request(PROFILE_URL, headers=headers))
+        _debug(f"my_profile {_shape(data)}")
         if str(data.get("request_status") or "").upper() == "ERROR":
             raise ValueError(_api_error(data, "Snapchat profile request failed."))
         parsed = _as_profile(_first_profile_dict(data))
         if parsed:
             return parsed
-        last_err = "my_profile empty"
+        last_err = str(data.get("display_message") or data.get("debug_message") or "my_profile empty")
     except ValueError as e:
         last_err = str(e)
+        _debug(f"my_profile error: {last_err[:180]}")
 
-    try:
-        orgs = _request(ME_ORGS_URL, headers=headers)
-        if str(orgs.get("request_status") or "").upper() == "ERROR":
-            raise ValueError(_api_error(orgs, last_err or "Snapchat organizations failed."))
-        for org_id in _org_ids(orgs):
-            pdata = _request(
-                f"{API}/v1/organizations/{urllib.parse.quote(org_id)}/public_profiles?limit=50",
-                headers=headers,
-            )
-            if str(pdata.get("request_status") or "").upper() == "ERROR":
-                last_err = _api_error(pdata, last_err)
+    for path in (ME_ORGS_URL, f"{API}/v1/me"):
+        try:
+            orgs = _unwrap(_request(path, headers=headers))
+            _debug(f"{path.split('/')[-1]} {_shape(orgs)}")
+            if str(orgs.get("request_status") or "").upper() == "ERROR":
+                last_err = _api_error(orgs, last_err)
                 continue
-            parsed = _as_profile(_first_profile_dict(pdata))
-            if parsed:
-                return parsed
-    except ValueError as e:
-        last_err = str(e)
+            org_ids = _org_ids(orgs)
+            me_id = str((orgs.get("me") or {}).get("id") or orgs.get("id") or "").strip()
+            if me_id and me_id not in org_ids:
+                org_ids.append(me_id)
+            for org_id in org_ids:
+                pdata = _unwrap(
+                    _request(
+                        f"{API}/v1/organizations/{urllib.parse.quote(org_id)}/public_profiles?limit=50",
+                        headers=headers,
+                    )
+                )
+                _debug(f"org {org_id[:8]}… {_shape(pdata)}")
+                if str(pdata.get("request_status") or "").upper() == "ERROR":
+                    last_err = _api_error(pdata, last_err)
+                    continue
+                parsed = _as_profile(_first_profile_dict(pdata))
+                if parsed:
+                    return parsed
+        except ValueError as e:
+            last_err = str(e)
+            _debug(f"orgs error: {last_err[:180]}")
 
     low = (last_err or "").lower()
     if "permission" in low or "allowlist" in low or "not authorized" in low:

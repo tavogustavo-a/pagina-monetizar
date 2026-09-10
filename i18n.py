@@ -621,8 +621,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Snapchat no devolvió un código de autorización.",
     },
     "servers.snapchat_no_profile": {
-        "en": "Snapchat signed in, but did not return a Public Profile. In Snapchat, open Public Profile / Snap Business Manager and create a Public Profile for this account, then connect again.",
-        "es": "Snapchat inició sesión, pero no devolvió un perfil público. En Snapchat abre Perfil público / Snap Business Manager, crea un Public Profile para esa cuenta y vuelve a conectar.",
+        "en": "Snapchat signed in, but did not return a Public Profile. Use the Business Manager OAuth Client ID (not Snap Kit), save it in Servers, then connect while logged in as the owner of that Public Profile (e.g. juancarl1294 / Kirth Melo). Create the Public Profile in Snapchat if it does not exist.",
+        "es": "Snapchat inició sesión, pero no devolvió un perfil público. Usa el Client ID OAuth de Business Manager (no Snap Kit), gúardalo en Servidores y conecta con la cuenta dueña de ese perfil (p. ej. juancarl1294 / Kirth Melo). Si no existe, créalo en Snapchat.",
+    },
+    "servers.snapchat_client_hint": {
+        "en": "Paste the Confidential OAuth Client ID from Snap Business Manager (Business Details), not a Snap Kit Staging ID. The panel already calls the Business Content Management API (businessapi.snapchat.com).",
+        "es": "Pega el Client ID OAuth Confidential de Snap Business Manager (Business Details), no el de Snap Kit Staging. Este panel ya llama a la Content Management API de Business (businessapi.snapchat.com).",
     },
     "servers.snapchat_need_allowlist": {
         "en": "The app is not allowed to read Public Profiles. In Snap Business Manager the OAuth app needs Public Profile API access (allowlist). Send the Client ID to Snap if that toggle is missing, then connect again.",

@@ -4746,6 +4746,11 @@ def snapchat_oauth_connect(request: Request):
     with db.using_credentials_account(link_name):
         ready = snapchat_oauth.oauth_configured()
         ru = snapchat_oauth.redirect_uri(request)
+        _oauth_debug_log(
+            "snapchat",
+            "connect client=%s… scope=%s"
+            % ((snapchat_oauth.client_id() or "")[:8], snapchat_oauth.oauth_scopes()),
+        )
         if not ready:
             request.session["tiktok_error"] = i18n.t("servers.snapchat_oauth_missing", lang)
             return _oauth_redirect(request, admin)
