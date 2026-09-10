@@ -18,7 +18,7 @@ TOKEN_URL = "https://accounts.snapchat.com/login/oauth2/access_token"
 API = "https://businessapi.snapchat.com"
 PROFILE_URL = f"{API}/v1/public_profiles/my_profile"
 ME_ORGS_URL = f"{API}/v1/me/organizations"
-DEFAULT_SCOPES = "snapchat-profile-api snapchat-marketing-api"
+DEFAULT_SCOPES = "snapchat-profile-api"
 
 
 def _from_creds(key: str) -> str:
@@ -67,7 +67,28 @@ def redirect_uri(request=None) -> str:
 
 
 def oauth_scopes() -> str:
-    return (os.environ.get("SNAPCHAT_SCOPES") or DEFAULT_SCOPES).strip()
+    """Solo perfil público por defecto.
+
+    snapchat-marketing-api es de Ads Manager; las apps Snap Kit lo rechazan
+    y la pantalla de autorización no carga. Se puede forzar con
+    SNAPCHAT_INCLUDE_MARKETING_SCOPE=1 si la app sí es de Marketing.
+    """
+    raw = (os.environ.get("SNAPCHAT_SCOPES") or DEFAULT_SCOPES).strip()
+    parts = [p for p in raw.replace(",", " ").split() if p]
+    include_ads = (os.environ.get("SNAPCHAT_INCLUDE_MARKETING_SCOPE") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if include_ads:
+        if "snapchat-marketing-api" not in parts:
+            parts.append("snapchat-marketing-api")
+    else:
+        parts = [p for p in parts if p != "snapchat-marketing-api"]
+    if "snapchat-profile-api" not in parts:
+        parts.insert(0, "snapchat-profile-api")
+    return " ".join(parts)
 
 
 def oauth_configured() -> bool:

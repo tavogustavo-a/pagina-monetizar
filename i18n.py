@@ -609,8 +609,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Guarda primero el Client ID y el Client Secret de Snapchat (Snap Business Manager → Business Details → app OAuth).",
     },
     "servers.snapchat_redirect_hint": {
-        "en": "Paste this exact Redirect URI in Snap Business Manager (SITE_URL/oauth/snapchat/callback).",
-        "es": "Pega esta Redirect URI exacta en Snap Business Manager (SITE_URL/oauth/snapchat/callback).",
+        "en": "Paste this exact Redirect URI in Snap Business Manager (SITE_URL/oauth/snapchat/callback). The connect button only asks for Public Profile (not Marketing/Ads).",
+        "es": "Pega esta Redirect URI exacta en Snap Business Manager (SITE_URL/oauth/snapchat/callback). Conectar solo pide Perfil público (no Marketing/Ads).",
     },
     "servers.snapchat_connected": {
         "en": "Connected {name} successfully.",
@@ -3176,8 +3176,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Si revocan el token, pega uno nuevo.",
     },
     "apidoc.snapchat.step1": {
-        "en": "Snap Business Manager: app with Public Profile API (Stories / Spotlight).",
-        "es": "Snap Business Manager: app con Public Profile API (Stories / Spotlight).",
+        "en": "Snap Kit / Public Profile app (not Marketing/Ads). Scope: snapchat-profile-api only.",
+        "es": "App Snap Kit / Perfil público (no Marketing/Ads). Permiso: solo snapchat-profile-api.",
     },
     "apidoc.snapchat.step2": {
         "en": "Redirect URI: SITE_URL/oauth/snapchat/callback.",
