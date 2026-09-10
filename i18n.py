@@ -609,8 +609,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Guarda primero el Client ID y el Client Secret de Snapchat (Snap Business Manager → Business Details → app OAuth).",
     },
     "servers.snapchat_redirect_hint": {
-        "en": "Paste this exact Redirect URI in Snap Business Manager (SITE_URL/oauth/snapchat/callback). The connect button only asks for Public Profile (not Marketing/Ads).",
-        "es": "Pega esta Redirect URI exacta en Snap Business Manager (SITE_URL/oauth/snapchat/callback). Conectar solo pide Perfil público (no Marketing/Ads).",
+        "en": "Paste this exact Redirect URI in Snap Business Manager (SITE_URL/oauth/snapchat/callback). Connect asks for Public Profile and the Business org (needed to find the Page).",
+        "es": "Pega esta Redirect URI exacta en Snap Business Manager (SITE_URL/oauth/snapchat/callback). Conectar pide Perfil público y la organización Business (hace falta para encontrar la Página).",
     },
     "servers.snapchat_connected": {
         "en": "Connected {name} successfully.",

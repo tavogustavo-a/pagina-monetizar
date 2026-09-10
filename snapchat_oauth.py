@@ -16,9 +16,14 @@ from typing import Any
 AUTH_URL = "https://accounts.snapchat.com/login/oauth2/authorize"
 TOKEN_URL = "https://accounts.snapchat.com/login/oauth2/access_token"
 API = "https://businessapi.snapchat.com"
+ADS_API = "https://adsapi.snapchat.com"
 PROFILE_URL = f"{API}/v1/public_profiles/my_profile"
-ME_ORGS_URL = f"{API}/v1/me/organizations"
-DEFAULT_SCOPES = "snapchat-profile-api"
+ME_ORGS_URLS = (
+    f"{API}/v1/me/organizations",
+    f"{ADS_API}/v1/me/organizations",
+)
+# App Business (Content Management): perfil + orgs. Snap Kit: SNAPCHAT_PROFILE_ONLY=1
+DEFAULT_SCOPES = "snapchat-profile-api snapchat-marketing-api"
 
 
 def _from_creds(key: str) -> str:
@@ -67,25 +72,23 @@ def redirect_uri(request=None) -> str:
 
 
 def oauth_scopes() -> str:
-    """Solo perfil público por defecto.
+    """Business Manager: perfil público + orgs (hace falta para listar Kirth Melo).
 
-    snapchat-marketing-api es de Ads Manager; las apps Snap Kit lo rechazan
-    y la pantalla de autorización no carga. Se puede forzar con
-    SNAPCHAT_INCLUDE_MARKETING_SCOPE=1 si la app sí es de Marketing.
+    Las apps Snap Kit no aceptan marketing-api. En ese caso pon
+    SNAPCHAT_PROFILE_ONLY=1 en el servidor.
     """
     raw = (os.environ.get("SNAPCHAT_SCOPES") or DEFAULT_SCOPES).strip()
     parts = [p for p in raw.replace(",", " ").split() if p]
-    include_ads = (os.environ.get("SNAPCHAT_INCLUDE_MARKETING_SCOPE") or "").strip().lower() in {
+    profile_only = (os.environ.get("SNAPCHAT_PROFILE_ONLY") or "").strip().lower() in {
         "1",
         "true",
         "yes",
         "on",
     }
-    if include_ads:
-        if "snapchat-marketing-api" not in parts:
-            parts.append("snapchat-marketing-api")
-    else:
+    if profile_only:
         parts = [p for p in parts if p != "snapchat-marketing-api"]
+    elif "snapchat-marketing-api" not in parts:
+        parts.append("snapchat-marketing-api")
     if "snapchat-profile-api" not in parts:
         parts.insert(0, "snapchat-profile-api")
     return " ".join(parts)
@@ -319,19 +322,15 @@ def _unwrap(data: dict[str, Any]) -> dict[str, Any]:
     return inner if isinstance(inner, dict) else data
 
 
-def _first_profile_dict(data: dict[str, Any]) -> dict[str, Any]:
+def _profile_candidates(data: dict[str, Any]) -> list[dict[str, Any]]:
     data = _unwrap(data)
+    out: list[dict[str, Any]] = []
     if not isinstance(data, dict):
-        return {}
-    for key in ("public_profile", "profile", "me"):
+        return out
+    for key in ("public_profile", "profile"):
         inner = data.get(key)
-        if isinstance(inner, dict) and (
-            inner.get("id")
-            or inner.get("profile_id")
-            or inner.get("snap_user_name")
-            or inner.get("display_name")
-        ):
-            return inner
+        if isinstance(inner, dict):
+            out.append(inner)
     items = data.get("public_profiles")
     if isinstance(items, list):
         for item in items:
@@ -342,11 +341,17 @@ def _first_profile_dict(data: dict[str, Any]) -> dict[str, Any]:
                 if isinstance(item.get("public_profile"), dict)
                 else item
             )
-            if isinstance(inner, dict) and (
-                inner.get("id") or inner.get("profile_id") or inner.get("snap_user_name")
-            ):
-                return inner
-    return data if data.get("id") or data.get("profile_id") else {}
+            if isinstance(inner, dict):
+                out.append(inner)
+    return out
+
+
+def _parse_any_profile(data: dict[str, Any]) -> dict[str, str] | None:
+    for cand in _profile_candidates(data):
+        parsed = _as_profile(cand)
+        if parsed:
+            return parsed
+    return None
 
 
 def _as_profile(profile: dict[str, Any]) -> dict[str, str] | None:
@@ -405,7 +410,7 @@ def fetch_profile(access_token: str) -> dict[str, Any]:
         _debug(f"my_profile {_shape(data)}")
         if str(data.get("request_status") or "").upper() == "ERROR":
             raise ValueError(_api_error(data, "Snapchat profile request failed."))
-        parsed = _as_profile(_first_profile_dict(data))
+        parsed = _parse_any_profile(data)
         if parsed:
             return parsed
         last_err = str(data.get("display_message") or data.get("debug_message") or "my_profile empty")
@@ -413,7 +418,7 @@ def fetch_profile(access_token: str) -> dict[str, Any]:
         last_err = str(e)
         _debug(f"my_profile error: {last_err[:180]}")
 
-    for path in (ME_ORGS_URL, f"{API}/v1/me"):
+    for path in ME_ORGS_URLS:
         try:
             orgs = _unwrap(_request(path, headers=headers))
             _debug(f"{path.split('/')[-1]} {_shape(orgs)}")
@@ -421,9 +426,7 @@ def fetch_profile(access_token: str) -> dict[str, Any]:
                 last_err = _api_error(orgs, last_err)
                 continue
             org_ids = _org_ids(orgs)
-            me_id = str((orgs.get("me") or {}).get("id") or orgs.get("id") or "").strip()
-            if me_id and me_id not in org_ids:
-                org_ids.append(me_id)
+            _debug(f"orgs n={len(org_ids)}")
             for org_id in org_ids:
                 pdata = _unwrap(
                     _request(
@@ -435,7 +438,7 @@ def fetch_profile(access_token: str) -> dict[str, Any]:
                 if str(pdata.get("request_status") or "").upper() == "ERROR":
                     last_err = _api_error(pdata, last_err)
                     continue
-                parsed = _as_profile(_first_profile_dict(pdata))
+                parsed = _parse_any_profile(pdata)
                 if parsed:
                     return parsed
         except ValueError as e:
