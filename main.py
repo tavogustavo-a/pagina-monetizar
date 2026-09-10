@@ -4693,51 +4693,80 @@ def snapchat_oauth_connect(request: Request):
     except PermissionError:
         return _admin_privileges_redirect_login(request)
     lang = i18n.resolve_lang(request)
-    if not snapchat_oauth.oauth_configured():
-        request.session["tiktok_error"] = i18n.t("servers.snapchat_oauth_missing", lang)
-        return _oauth_redirect(request, admin)
-    state = snapchat_oauth.new_csrf_state()
-    request.session["snapchat_oauth_state"] = state
-    request.session["snapchat_oauth_user_id"] = admin.id
-    _store_oauth_link_target(request)
-    ru = _store_oauth_redirect(request, "snapchat_oauth_redirect_uri", snapchat_oauth)
-    url = snapchat_oauth.build_authorize_url(state=state, redirect_uri_value=ru)
+    link_name = (request.query_params.get("link_name") or "").strip()
+    with db.using_credentials_account(link_name):
+        ready = snapchat_oauth.oauth_configured()
+        ru = snapchat_oauth.redirect_uri(request)
+        if not ready:
+            request.session["tiktok_error"] = i18n.t("servers.snapchat_oauth_missing", lang)
+            return _oauth_redirect(request, admin)
+        _store_oauth_link_target(request)
+        request.session["snapchat_oauth_redirect_uri"] = ru
+        state = snapchat_oauth.sign_connect_state(
+            user_id=admin.id,
+            link_name=link_name,
+            redirect_uri_value=ru,
+        )
+        request.session["snapchat_oauth_state"] = state
+        request.session["snapchat_oauth_user_id"] = admin.id
+        url = snapchat_oauth.build_authorize_url(state=state, redirect_uri_value=ru)
     return RedirectResponse(url=url, status_code=303)
 
 
 @app.get("/oauth/snapchat/callback", name="snapchat_oauth_callback")
 def snapchat_oauth_callback(request: Request):
+    lang = i18n.resolve_lang(request)
+    state = (request.query_params.get("state") or "").strip()
+    packed = snapchat_oauth.read_connect_state(state)
     try:
         admin = require_admin_privileges(request)
     except PermissionError:
-        return _admin_privileges_redirect_login(request)
-    lang = i18n.resolve_lang(request)
-    saved_state = request.session.pop("snapchat_oauth_state", None)
-    linked_by = request.session.pop("snapchat_oauth_user_id", None)
+        admin = None
+        if packed and packed.get("user_id"):
+            admin = db.get_user_by_id(packed["user_id"])
+            if admin and not db.user_has_admin_privileges(admin):
+                admin = None
+        if not admin:
+            return _admin_privileges_redirect_login(request)
+    saved_state = request.session.get("snapchat_oauth_state")
+    linked_by = request.session.get("snapchat_oauth_user_id") or (
+        packed.get("user_id") if packed else None
+    )
     err_param = request.query_params.get("error")
     if err_param:
         desc = request.query_params.get("error_description") or err_param
         request.session["tiktok_error"] = f"Snapchat: {desc}"
         return _oauth_redirect(request, admin)
-    state = (request.query_params.get("state") or "").strip()
-    code = (request.query_params.get("code") or "").strip()
-    if not saved_state or state != saved_state:
+    if packed:
+        ok_state = True
+    else:
+        ok_state = bool(saved_state and state == saved_state)
+    if not ok_state:
         request.session["tiktok_error"] = i18n.t("servers.oauth_state_invalid", lang)
         return _oauth_redirect(request, admin)
+    code = (request.query_params.get("code") or "").strip()
     if not code:
         request.session["tiktok_error"] = i18n.t("servers.snapchat_no_code", lang)
         return _oauth_redirect(request, admin)
+    link_name = (packed or {}).get("link_name") or str(
+        request.session.get("oauth_link_target_name") or ""
+    ).strip()
+    ru = (packed or {}).get("redirect_uri") or _pop_oauth_redirect(
+        request, "snapchat_oauth_redirect_uri", snapchat_oauth
+    )
     try:
-        ru = _pop_oauth_redirect(request, "snapchat_oauth_redirect_uri", snapchat_oauth)
-        token_data = snapchat_oauth.exchange_code_for_tokens(
-            code, redirect_uri_value=ru
-        )
-        access = str(token_data.get("access_token") or "").strip()
-        refresh = str(token_data.get("refresh_token") or "").strip() or None
-        expires_in = token_data.get("expires_in")
-        if not access:
-            raise ValueError("No access token in Snapchat response.")
-        profile = snapchat_oauth.fetch_profile(access)
+        with db.using_credentials_account(link_name):
+            token_data = snapchat_oauth.exchange_code_for_tokens(
+                code, redirect_uri_value=ru
+            )
+            access = str(token_data.get("access_token") or "").strip()
+            refresh = str(token_data.get("refresh_token") or "").strip() or None
+            expires_in = token_data.get("expires_in")
+            if not access:
+                raise ValueError("No access token in Snapchat response.")
+            profile = snapchat_oauth.fetch_profile(access)
+            client_id_val = snapchat_oauth.client_id()
+            client_secret_val = snapchat_oauth.client_secret()
         open_id = profile.get("open_id") or ""
         if not open_id:
             raise ValueError("snapchat_no_profile")
@@ -4750,21 +4779,27 @@ def snapchat_oauth_callback(request: Request):
             refresh_token=refresh,
             expires_in=int(expires_in) if expires_in is not None else 3600,
             scopes=snapchat_oauth.oauth_scopes(),
-            client_id=snapchat_oauth.client_id(),
-            client_secret=snapchat_oauth.client_secret(),
+            client_id=client_id_val,
+            client_secret=client_secret_val,
             redirect_uri=ru,
             linked_by_user_id=str(linked_by) if linked_by else None,
         )
-        _bind_oauth_link_target(request, cid)
+        if link_name:
+            db.bind_oauth_account_name(cid, link_name)
+        else:
+            _bind_oauth_link_target(request, cid)
+        request.session.pop("snapchat_oauth_state", None)
+        request.session.pop("snapchat_oauth_user_id", None)
+        request.session.pop("oauth_link_target_name", None)
         label = profile.get("username") or profile.get("display_name") or "Snapchat"
         request.session["tiktok_ok"] = i18n.t("servers.snapchat_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
-        code = str(e)
-        if code in ("snapchat_no_profile", "snapchat_need_allowlist"):
-            request.session["tiktok_error"] = i18n.t(f"servers.{code}", lang)
+        code_err = str(e)
+        if code_err in ("snapchat_no_profile", "snapchat_need_allowlist"):
+            request.session["tiktok_error"] = i18n.t(f"servers.{code_err}", lang)
         else:
             request.session["tiktok_error"] = i18n.t(
-                "api.snapchat.fail", lang, error=code[:180]
+                "api.snapchat.fail", lang, error=code_err[:180]
             )
     return _oauth_redirect(request, admin)
 

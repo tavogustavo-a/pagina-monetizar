@@ -1,9 +1,13 @@
 """Snapchat Business OAuth 2.0 (Public Profile API). Tokens de cuenta, no pegar access token."""
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import json
 import os
 import secrets
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -68,6 +72,58 @@ def oauth_scopes() -> str:
 
 def oauth_configured() -> bool:
     return bool(client_id() and client_secret() and redirect_uri())
+
+
+def _state_secret() -> bytes:
+    return (os.environ.get("SESSION_SECRET") or "dev-cambiar-en-produccion").encode(
+        "utf-8"
+    )
+
+
+def sign_connect_state(
+    *,
+    user_id: str,
+    link_name: str = "",
+    redirect_uri_value: str = "",
+) -> str:
+    payload = {
+        "u": (user_id or "").strip(),
+        "a": (link_name or "").strip(),
+        "r": (redirect_uri_value or "").strip(),
+        "n": secrets.token_urlsafe(12),
+        "t": int(time.time()),
+    }
+    raw = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode()
+    sig = hmac.new(_state_secret(), raw.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
+    return f"{raw}.{sig}"
+
+
+def read_connect_state(state: str) -> dict[str, str] | None:
+    text = (state or "").strip()
+    if "." not in text:
+        return None
+    raw, sig = text.rsplit(".", 1)
+    expect = hmac.new(_state_secret(), raw.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
+    if not hmac.compare_digest(sig, expect):
+        return None
+    try:
+        pad = "=" * (-len(raw) % 4)
+        data = json.loads(base64.urlsafe_b64decode(raw + pad).decode("utf-8"))
+    except (ValueError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    try:
+        ts = int(data.get("t") or 0)
+    except (TypeError, ValueError):
+        return None
+    if ts <= 0 or abs(time.time() - ts) > 30 * 60:
+        return None
+    return {
+        "user_id": str(data.get("u") or "").strip(),
+        "link_name": str(data.get("a") or "").strip(),
+        "redirect_uri": str(data.get("r") or "").strip(),
+    }
 
 
 def new_csrf_state() -> str:
