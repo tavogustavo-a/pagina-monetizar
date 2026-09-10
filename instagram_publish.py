@@ -211,34 +211,57 @@ def _finish_publish_later(
 ) -> None:
     """Registra un chequeo en segundo plano: publica cuando Instagram acepte el video."""
     import publish_pending
-    from i18n import t
+
+    payload = {
+        "user_id": user_id,
+        "token": token,
+        "container_id": container_id,
+        "lang": lang,
+        "is_photo": bool(is_photo),
+    }
 
     def _check() -> tuple[str, str]:
-        data = _graph_get(container_id, token, {"fields": "status_code,status"})
-        code = str(data.get("status_code") or "").upper()
-        detail = str(data.get("status") or code)
-        if code in {"ERROR", "EXPIRED"}:
-            return "fail", t("pub.instagram.upload_fail", lang, error=detail[:180])
-        if code == "PUBLISHED":
+        return resume_pending(payload)
+
+    publish_pending.mark(_check, platform="instagram", payload=payload)
+
+
+def resume_pending(payload: dict[str, Any]) -> tuple[str, str]:
+    from i18n import t
+
+    user_id = str(payload.get("user_id") or "").strip()
+    token = str(payload.get("token") or "").strip()
+    container_id = str(payload.get("container_id") or "").strip()
+    lang = str(payload.get("lang") or "es")
+    is_photo = bool(payload.get("is_photo"))
+    if not (user_id and token and container_id):
+        return "fail", t("pub.instagram.no_token", lang)
+    data = _graph_get(container_id, token, {"fields": "status_code,status"})
+    code = str(data.get("status_code") or "").upper()
+    detail = str(data.get("status") or code)
+    if code in {"ERROR", "EXPIRED"}:
+        return "fail", t("pub.instagram.upload_fail", lang, error=detail[:180])
+    if code == "PUBLISHED":
+        key = "pub.instagram.photo_ok" if is_photo else "pub.instagram.reel_ok"
+        return "ok", t(key, lang, id=container_id)
+    if code != "FINISHED":
+        return "pending", ""
+    try:
+        data2 = _graph_post(
+            f"{user_id}/media_publish", token, {"creation_id": container_id}
+        )
+    except ValueError as e:
+        msg = str(e)
+        low = msg.lower()
+        if "not ready" in low or "9007" in msg:
+            return "pending", ""
+        if "already" in low or "published" in low:
             key = "pub.instagram.photo_ok" if is_photo else "pub.instagram.reel_ok"
             return "ok", t(key, lang, id=container_id)
-        if code != "FINISHED":
-            return "pending", ""
-        try:
-            data2 = _graph_post(
-                f"{user_id}/media_publish", token, {"creation_id": container_id}
-            )
-        except ValueError as e:
-            msg = str(e)
-            # "Media no está listo" → seguir esperando; otros errores → fallo real.
-            if "not ready" in msg.lower() or "9007" in msg:
-                return "pending", ""
-            return "fail", t("pub.instagram.upload_fail", lang, error=msg[:180])
-        media_id = str(data2.get("id") or container_id)
-        key = "pub.instagram.photo_ok" if is_photo else "pub.instagram.reel_ok"
-        return "ok", t(key, lang, id=media_id)
-
-    publish_pending.mark(_check)
+        return "fail", t("pub.instagram.upload_fail", lang, error=msg[:180])
+    media_id = str(data2.get("id") or container_id)
+    key = "pub.instagram.photo_ok" if is_photo else "pub.instagram.reel_ok"
+    return "ok", t(key, lang, id=media_id)
 
 
 def _create_photo_container(user_id: str, token: str, image_url: str, caption: str) -> str:

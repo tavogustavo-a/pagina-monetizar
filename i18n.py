@@ -500,6 +500,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Paste this exact URI in Meta App Dashboard (SITE_URL/oauth/facebook/callback).",
         "es": "Pega esta URI exacta en Meta App Dashboard (SITE_URL/oauth/facebook/callback).",
     },
+    "servers.facebook_dev_hint": {
+        "en": "If publish fails after a successful connect: the app is still in Development. Tap the info icon for how to switch it to Live and reconnect.",
+        "es": "Si al publicar falla aunque la cuenta esté Conectada: la app sigue en Desarrollo. Pulsa el icono i para ver cómo pasarla a En vivo y reconectar.",
+    },
     "servers.facebook_connected": {
         "en": "Connected {n} Facebook Page(s).",
         "es": "Se conectaron {n} página(s) de Facebook.",
@@ -1585,8 +1589,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Video publicado en la Página de Facebook ({id}).",
     },
     "pub.facebook.upload_fail": {
-        "en": "Facebook publish failed: {error}",
-        "es": "Falló la publicación en Facebook: {error}",
+        "en": "Facebook: {error}",
+        "es": "Facebook: {error}",
+    },
+    "pub.facebook.err_dev_mode": {
+        "en": "Meta blocked the Page: the app is in Development. Switch it to Live in developers.facebook.com, or add the Page owner as app admin/tester. Then Disconnect and Connect with Facebook again. Tap the Facebook info icon for the steps.",
+        "es": "Meta bloqueó la Página: la app está en Desarrollo. Pásala a En vivo en developers.facebook.com, o añade al dueño de la Página como administrador/tester de la app. Luego Desconectar y Conectar con Facebook otra vez. Pulsa el icono i de Facebook para los pasos.",
+    },
+    "pub.facebook.err_generic": {
+        "en": "Facebook rejected the post. Check the Page connection in Servers and the Facebook info icon.",
+        "es": "Facebook rechazó la publicación. Revisa la conexión de la Página en Servidores y el icono i de Facebook.",
     },
     "pub.facebook.no_token": {
         "en": "Connect a Facebook Page from Servers (Connect with Facebook).",
@@ -1900,6 +1912,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Sent. {n} platform(s) accepted the video and are still processing/reviewing it. The log will update automatically when they accept it.",
         "es": "Enviado. {n} plataforma(s) aceptaron el video y siguen procesándolo/revisándolo. El registro se actualizará solo cuando lo acepten.",
     },
+    "pub.pending_timeout": {
+        "en": "The platform accepted the video but did not finish reviewing it in time. Check the app (YouTube Studio / Instagram) and the info icon.",
+        "es": "La plataforma aceptó el video pero no terminó de revisarlo a tiempo. Revisa la app (YouTube Studio / Instagram) y el icono i.",
+    },
     "pub.flash.partial": {
         "en": "Saved locally. {ok} OK, {fail} still pending — an admin can republish or cancel below.",
         "es": "Guardado localmente. {ok} OK, {fail} pendientes — un admin puede republicar o cancelar abajo.",
@@ -1916,9 +1932,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "These videos stay available until an admin republishes the remaining platforms or cancels.",
         "es": "Estos videos siguen disponibles hasta que un admin republica en las plataformas restantes o cancela.",
     },
+    "pub.pending_col_user": {"en": "User", "es": "Usuario"},
     "pub.pending_col_actions": {"en": "Actions", "es": "Acciones"},
-    "pub.retry_btn": {"en": "Republish remaining", "es": "Republicar restantes"},
-    "pub.cancel_pending_btn": {"en": "Cancel remaining", "es": "Cancelar restantes"},
+    "pub.retry_btn": {"en": "Republish", "es": "Republicar"},
+    "pub.cancel_pending_btn": {"en": "Cancel", "es": "Cancelar"},
     "pub.cancel_pending_confirm": {
         "en": "Cancel the remaining platforms for this video?",
         "es": "¿Cancelar las plataformas restantes de este video?",
@@ -2724,8 +2741,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Hasta 10–12 videos/día por Página, con 20+ minutos de separación. Si publicas Reels por API, no pases de ~25/24 h.",
     },
     "cond.facebook.detail": {
-        "en": "Page quality and spam filters can still block bursts even with quota left. Photos and long videos share the Page; space everything. Tokens are Page tokens, renewed automatically in this panel.",
-        "es": "La calidad de la Página y el anti-spam pueden bloquear ráfagas aunque quede cupo. Fotos y videos largos comparten la Página; espacia todo. Los tokens son de Página; este panel los renueva solo.",
+        "en": "Page quality and spam filters can still block bursts even with quota left. Photos and long videos share the Page; space everything. Tokens are Page tokens, renewed automatically in this panel. If publish fails with “cannot call API for app”: the Meta app is in Development mode. Switch it to Live in developers.facebook.com (privacy policy URL required), request App Review for pages_manage_posts and pages_read_engagement, or add the Page owner as App admin/tester. Then Disconnect and Connect with Facebook again in Servers.",
+        "es": "La calidad de la Página y el anti-spam pueden bloquear ráfagas aunque quede cupo. Fotos y videos largos comparten la Página; espacia todo. Los tokens son de Página; este panel los renueva solo. Si falla con “cannot call API for app”: la app de Meta está en modo Desarrollo. En developers.facebook.com pásala a En vivo (pide URL de política de privacidad), pide revisión de pages_manage_posts y pages_read_engagement, o añade al dueño de la Página como administrador/tester de la app. Luego Desconectar y Conectar con Facebook otra vez en Servidores.",
     },
     "cond.x.cap": {
         "en": "POST /2/tweets: 10,000/24 h per app and 100/15 min per user (some docs also cite 300 posts+reposts / 3 h). Unverified X accounts: about 50 original posts/day on the platform (API + manual). Paid API access is required.",
@@ -3083,8 +3100,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Servidores: guarda App ID/Secret → Conectar con Facebook → elige Páginas.",
     },
     "apidoc.facebook.extra": {
-        "en": "Pages only, not personal profiles.",
-        "es": "Solo Páginas, no perfiles personales.",
+        "en": "Pages only, not personal profiles. App must be Live (or the Page owner must be an app admin/tester) or Meta returns “cannot call API for app”.",
+        "es": "Solo Páginas, no perfiles personales. La app debe estar En vivo (o el dueño de la Página ser admin/tester de la app); si no, Meta responde “cannot call API for app”.",
     },
     "apidoc.threads.step1": {
         "en": "VMOS: cloud phone, install Threads, copy Access Key, Secret and padCode.",
@@ -4012,6 +4029,15 @@ _PROVIDER_ERROR_HINTS: tuple[tuple[tuple[str, ...], tuple[str, ...], str], ...] 
         "pub.dailymotion.err_v2_auth",
     ),
     (("youtube",), ("invalid credentials", "401"), "pub.youtube.err_creds"),
+    (
+        ("facebook",),
+        (
+            "cannot call api for app",
+            "on behalf of user",
+            "cannot call this api",
+        ),
+        "pub.facebook.err_dev_mode",
+    ),
 )
 
 

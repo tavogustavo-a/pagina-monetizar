@@ -258,38 +258,56 @@ def _watch_processing(
 ) -> None:
     """YouTube aceptó la subida pero aún procesa/revisa. Vigila y cierra el estado."""
     import publish_pending
-    from i18n import t
 
-    ok_key = "pub.youtube.shorts_ok" if is_short else "pub.youtube.video_ok"
+    payload = {
+        "token": token,
+        "video_id": video_id,
+        "lang": lang,
+        "is_short": bool(is_short),
+        "requested_privacy": requested_privacy,
+    }
 
     def _check() -> tuple[str, str]:
-        data = _video_status(token, video_id)
-        items = data.get("items") or []
-        if not items:
-            return "fail", t(
-                "pub.youtube.upload_fail", lang, error="video not found on channel"
-            )
-        st = items[0].get("status") or {}
-        proc = items[0].get("processingDetails") or {}
-        upload_status = str(st.get("uploadStatus") or "").lower()
-        proc_status = str(proc.get("processingStatus") or "").lower()
-        if upload_status in {"rejected", "failed"} or proc_status == "failed":
-            reason = str(
-                st.get("rejectionReason")
-                or st.get("failureReason")
-                or upload_status
-                or proc_status
-            )
-            return "fail", t("pub.youtube.upload_fail", lang, error=reason[:180])
-        if upload_status != "processed" and proc_status != "succeeded":
-            return "pending", ""
-        privacy = str(st.get("privacyStatus") or "").lower()
-        if requested_privacy == "public" and privacy == "private":
-            # Google bloquea en privado las subidas de proyectos API sin verificar.
-            return "fail", t("pub.youtube.locked_private", lang, id=video_id)
-        return "ok", t(ok_key, lang, id=video_id)
+        return resume_pending(payload)
 
-    publish_pending.mark(_check)
+    publish_pending.mark(_check, platform="youtube", payload=payload)
+
+
+def resume_pending(payload: dict[str, Any]) -> tuple[str, str]:
+    from i18n import t
+
+    token = str(payload.get("token") or "").strip()
+    video_id = str(payload.get("video_id") or "").strip()
+    lang = str(payload.get("lang") or "es")
+    is_short = bool(payload.get("is_short"))
+    requested_privacy = str(payload.get("requested_privacy") or "public")
+    ok_key = "pub.youtube.shorts_ok" if is_short else "pub.youtube.video_ok"
+    if not (token and video_id):
+        return "fail", t("pub.youtube.no_token", lang)
+    data = _video_status(token, video_id)
+    items = data.get("items") or []
+    if not items:
+        return "fail", t(
+            "pub.youtube.upload_fail", lang, error="video not found on channel"
+        )
+    st = items[0].get("status") or {}
+    proc = items[0].get("processingDetails") or {}
+    upload_status = str(st.get("uploadStatus") or "").lower()
+    proc_status = str(proc.get("processingStatus") or "").lower()
+    if upload_status in {"rejected", "failed"} or proc_status == "failed":
+        reason = str(
+            st.get("rejectionReason")
+            or st.get("failureReason")
+            or upload_status
+            or proc_status
+        )
+        return "fail", t("pub.youtube.upload_fail", lang, error=reason[:180])
+    if upload_status != "processed" and proc_status != "succeeded":
+        return "pending", ""
+    privacy = str(st.get("privacyStatus") or "").lower()
+    if requested_privacy == "public" and privacy == "private":
+        return "fail", t("pub.youtube.locked_private", lang, id=video_id)
+    return "ok", t(ok_key, lang, id=video_id)
 
 
 def publish_video(

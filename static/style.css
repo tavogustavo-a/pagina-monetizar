@@ -1930,6 +1930,11 @@ input:focus {
   font-size: 0.875rem;
 }
 
+.servers-flash {
+  margin-top: 0;
+  margin-bottom: 0.85rem;
+}
+
 .admin-layout {
   width: 100%;
   padding: 0.85rem 0.75rem 1.5rem;
@@ -2478,6 +2483,16 @@ input:focus {
   line-height: 1.55;
   color: rgba(255, 255, 255, 0.88);
   white-space: pre-wrap;
+}
+
+.servers-facebook-dev-hint {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-start;
+}
+
+.servers-facebook-dev-hint .servers-info-btn {
+  margin-top: 0.12rem;
 }
 
 .panel-smtp-status--ok {
@@ -7716,6 +7731,17 @@ form.server-modal__body.api-form .panel-api-test-msg {
 .dashboard--pub .pub-pending-section .pub-scheduled-table th:first-child,
 .dashboard--pub .pub-pending-section .pub-scheduled-table td:first-child {
   text-align: center;
+}
+
+.pub-pending-section__head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.pub-pending-section__head h2 {
+  margin: 0;
 }
 
 .pub-pending-section__hint {

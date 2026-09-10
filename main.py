@@ -74,6 +74,7 @@ import filehost  # noqa: E402
 import chain  # noqa: E402
 import x_funding  # noqa: E402
 import publish_schedule  # noqa: E402
+import publish_pending  # noqa: E402
 import proxy_util  # noqa: E402
 import membership  # noqa: E402
 import video_temp_util  # noqa: E402
@@ -130,6 +131,7 @@ async def lifespan(app: FastAPI):
                     publish_schedule.process_due_scheduled_publications,
                     upload_dir=UPLOAD_DIR,
                 )
+                await asyncio.to_thread(publish_pending.process_saved_jobs)
             except Exception:
                 pass
             await asyncio.sleep(60)

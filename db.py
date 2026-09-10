@@ -818,6 +818,7 @@ def _init_db_schema() -> None:
     _ensure_scheduled_publications_table()
     _ensure_videos_file_hash_column()
     _ensure_publish_file_locks_table()
+    _ensure_publish_pending_jobs_table()
     _ensure_platform_credentials_name_column()
     _ensure_platform_credentials_owner_column()
     _ensure_account_platform_credentials_table()
@@ -3302,6 +3303,24 @@ def _ensure_publish_file_locks_table() -> None:
         conn.close()
 
 
+def _ensure_publish_pending_jobs_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS publish_pending_jobs (
+                log_id TEXT PRIMARY KEY,
+                platform_id TEXT NOT NULL,
+                payload_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 # Tope seguro por cuenta (YouTube y Bilibili son las más sensibles).
 ACCOUNT_DAILY_VIDEO_CAP = 5
 ACCOUNT_SPACING_MINUTES = 20
@@ -3353,12 +3372,14 @@ def next_account_publish_slot(
         pending = conn.execute(pending_sql, pending_params).fetchall()
         published = conn.execute(
             """
-            SELECT created_at
+            SELECT COALESCE(NULLIF(video_id, ''), id) AS vid,
+                   MIN(created_at) AS created_at
             FROM publication_log
             WHERE account_link_id = ?
               AND status IN ('ok', 'pending')
               AND created_at >= ?
-            ORDER BY created_at ASC
+            GROUP BY COALESCE(NULLIF(video_id, ''), id)
+            ORDER BY MIN(created_at) ASC
             """,
             (lid, window_start.isoformat()),
         ).fetchall()
@@ -7998,6 +8019,107 @@ def update_publication_log_entry(log_id: str, *, status: str, message: str) -> N
         conn.close()
 
 
+def finalize_publication_log_pending(log_id: str, *, status: str, message: str) -> bool:
+    """Cierra un pending una sola vez (ok o fail). Evita doble publicación."""
+    if status not in ("ok", "fail"):
+        return False
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            """
+            UPDATE publication_log
+            SET status = ?, message = ?
+            WHERE id = ? AND status = 'pending'
+            """,
+            (status, (message or "")[:1000], str(log_id)),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def save_publish_pending_job(
+    *, log_id: str, platform_id: str, payload: dict[str, Any]
+) -> None:
+    import json
+
+    lid = (log_id or "").strip()
+    pid = (platform_id or "").strip()
+    if not lid or not pid:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    body = json.dumps(payload or {}, ensure_ascii=False)
+    conn = _connect()
+    try:
+        conn.execute("DELETE FROM publish_pending_jobs WHERE log_id = ?", (lid,))
+        conn.execute(
+            """
+            INSERT INTO publish_pending_jobs (log_id, platform_id, payload_json, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (lid, pid, body, now),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def delete_publish_pending_job(log_id: str) -> None:
+    lid = (log_id or "").strip()
+    if not lid:
+        return
+    conn = _connect()
+    try:
+        conn.execute("DELETE FROM publish_pending_jobs WHERE log_id = ?", (lid,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def list_publish_pending_jobs() -> list[dict[str, Any]]:
+    import json
+
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT j.log_id, j.platform_id, j.payload_json, j.created_at, pl.status
+            FROM publish_pending_jobs j
+            LEFT JOIN publication_log pl ON pl.id = j.log_id
+            ORDER BY j.created_at ASC
+            """
+        ).fetchall()
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            status = str(row["status"] or "")
+            if status and status != "pending":
+                conn.execute(
+                    "DELETE FROM publish_pending_jobs WHERE log_id = ?",
+                    (str(row["log_id"]),),
+                )
+                continue
+            try:
+                payload = json.loads(str(row["payload_json"] or "{}"))
+            except json.JSONDecodeError:
+                payload = {}
+            if not isinstance(payload, dict):
+                payload = {}
+            out.append(
+                {
+                    "log_id": str(row["log_id"] or ""),
+                    "platform_id": str(row["platform_id"] or ""),
+                    "payload": payload,
+                    "created_at": str(row["created_at"] or ""),
+                }
+            )
+        conn.commit()
+        return out
+    finally:
+        conn.close()
+
+
 def create_scheduled_publication(
     *,
     user_id: str,
@@ -8238,11 +8360,13 @@ def list_awaiting_retry_publications(
             f"""
             SELECT sp.*, v.title AS video_title,
                    COALESCE(NULLIF(TRIM(u.username), ''), u.display_name, '') AS user_username,
-                   COALESCE(NULLIF(TRIM(vu.username), ''), vu.display_name, '') AS uploader_username
+                   COALESCE(NULLIF(TRIM(vu.username), ''), vu.display_name, '') AS uploader_username,
+                   COALESCE(NULLIF(TRIM(al.name), ''), '') AS account_name
             FROM scheduled_publications sp
             LEFT JOIN videos v ON v.id = sp.video_id
             LEFT JOIN users u ON u.id = sp.user_id
             LEFT JOIN users vu ON vu.id = v.user_id
+            LEFT JOIN server_account_links al ON al.id = sp.account_link_id
             WHERE {where}
             ORDER BY sp.created_at DESC
             LIMIT ?

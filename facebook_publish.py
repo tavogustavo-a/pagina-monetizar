@@ -203,7 +203,7 @@ def publish_media(
     lang: str,
     account_link_id: str | None = None,
 ) -> tuple[bool, str]:
-    from i18n import t
+    from i18n import explain_provider_error, t
 
     path = Path(file_path)
     if not path.is_file() or path.stat().st_size <= 0:
@@ -251,6 +251,14 @@ def publish_media(
     except ValueError as e:
         if str(e) == "missing_token":
             return False, t("pub.facebook.no_token", lang)
-        return False, t("pub.facebook.upload_fail", lang, error=str(e)[:180])
+        return False, t(
+            "pub.facebook.upload_fail",
+            lang,
+            error=explain_provider_error("facebook", str(e), lang),
+        )
     except Exception as e:
-        return False, t("pub.facebook.upload_fail", lang, error=str(e)[:180])
+        return False, t(
+            "pub.facebook.upload_fail",
+            lang,
+            error=explain_provider_error("facebook", str(e), lang),
+        )

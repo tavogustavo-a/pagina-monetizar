@@ -1,19 +1,18 @@
 """Publicaciones aceptadas por la plataforma pero aún en procesamiento/revisión.
 
-YouTube e Instagram aceptan el video y lo procesan/revisan por su cuenta durante
-minutos. En vez de bloquear la petición o marcar un fallo falso, la publicación
-queda en el registro con estado "pending" y un hilo en segundo plano consulta a
-la plataforma hasta que acepte (→ ok) o rechace (→ fail) el video.
+YouTube e Instagram aceptan el video y lo procesan minutos. La petición HTTP
+termina enseguida (estado pending). Un hilo y el worker del servidor consultan
+hasta que la red acepte (ok) o rechace (fail). El trabajo se guarda en la base
+para que recargar la página o subir otro video no lo borre.
 """
 from __future__ import annotations
 
 import threading
 import time
-from typing import Callable
+from typing import Any, Callable
 
 import db
 
-# Devuelve ("ok"|"fail"|"pending", mensaje final para el registro).
 CheckFn = Callable[[], tuple[str, str]]
 
 CHECK_INTERVAL_SECONDS = 30.0
@@ -24,27 +23,50 @@ _local = threading.local()
 
 def clear() -> None:
     _local.check = None
+    _local.job = None
 
 
-def mark(check: CheckFn) -> None:
-    """Lo llama el módulo de la plataforma cuando el envío quedó aceptado pero en revisión."""
+def mark(
+    check: CheckFn,
+    *,
+    platform: str = "",
+    payload: dict[str, Any] | None = None,
+) -> None:
     _local.check = check
+    _local.job = {
+        "platform": (platform or "").strip(),
+        "payload": dict(payload or {}),
+    }
 
 
 def has_pending() -> bool:
     return getattr(_local, "check", None) is not None
 
 
-def pop() -> CheckFn | None:
+def pop() -> tuple[CheckFn | None, dict[str, Any] | None]:
     check = getattr(_local, "check", None)
+    job = getattr(_local, "job", None)
     _local.check = None
-    return check
+    _local.job = None
+    return check, job
 
 
 def attach(log_id: str) -> None:
-    """Tras insertar la fila 'pending' del registro, vigila y actualiza el estado solo."""
-    check = pop()
-    if not check or not (log_id or "").strip():
+    """Tras insertar la fila pending: guarda el trabajo y vigila en segundo plano."""
+    check, job = pop()
+    lid = (log_id or "").strip()
+    if not lid:
+        return
+    if job and job.get("platform") and job.get("payload"):
+        try:
+            db.save_publish_pending_job(
+                log_id=lid,
+                platform_id=str(job["platform"]),
+                payload=job["payload"],
+            )
+        except Exception:
+            pass
+    if not check:
         return
 
     def _run() -> None:
@@ -56,14 +78,76 @@ def attach(log_id: str) -> None:
             except Exception:
                 continue
             if status in ("ok", "fail"):
-                try:
-                    db.update_publication_log_entry(
-                        log_id, status=status, message=message
-                    )
-                except Exception:
-                    pass
+                _finish(lid, status, message)
                 return
 
     threading.Thread(
-        target=_run, daemon=True, name=f"pending-pub-{log_id[:8]}"
+        target=_run, daemon=True, name=f"pending-pub-{lid[:8]}"
     ).start()
+
+
+def _finish(log_id: str, status: str, message: str) -> None:
+    try:
+        db.finalize_publication_log_pending(
+            log_id, status=status, message=message
+        )
+    except Exception:
+        pass
+    try:
+        db.delete_publish_pending_job(log_id)
+    except Exception:
+        pass
+
+
+def resume_job(platform_id: str, payload: dict[str, Any]) -> tuple[str, str]:
+    pid = (platform_id or "").strip()
+    data = payload if isinstance(payload, dict) else {}
+    if pid == "instagram":
+        import instagram_publish
+
+        return instagram_publish.resume_pending(data)
+    if pid == "youtube":
+        import youtube_publish
+
+        return youtube_publish.resume_pending(data)
+    return "pending", ""
+
+
+def process_saved_jobs() -> int:
+    """El worker retoma pendientes si el hilo se perdió (reinicio) o sigue en curso."""
+    from datetime import datetime, timezone
+
+    from i18n import t
+
+    done = 0
+    now = datetime.now(timezone.utc)
+    for job in db.list_publish_pending_jobs():
+        log_id = str(job.get("log_id") or "")
+        if not log_id:
+            continue
+        created = None
+        raw = str(job.get("created_at") or "")
+        try:
+            created = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+        except ValueError:
+            created = None
+        age = (now - created).total_seconds() if created else 0
+        payload = job.get("payload") if isinstance(job.get("payload"), dict) else {}
+        lang = str(payload.get("lang") or "es")
+        if age > MAX_WAIT_SECONDS:
+            _finish(log_id, "fail", t("pub.pending_timeout", lang))
+            done += 1
+            continue
+        try:
+            status, message = resume_job(
+                str(job.get("platform_id") or ""),
+                payload,
+            )
+        except Exception:
+            continue
+        if status in ("ok", "fail"):
+            _finish(log_id, status, message)
+            done += 1
+    return done
