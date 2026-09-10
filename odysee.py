@@ -19,6 +19,7 @@ VIDEO_EXT = {".mp4", ".mov", ".avi", ".wmv", ".flv", ".mkv", ".webm", ".m4v"}
 PHOTO_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 TUS_CHUNK = 50 * 1024 * 1024
 FILE_PATH_RE = re.compile(r"^https?://([^/]+)/.+/([a-zA-Z0-9+_.\-]{32,})$")
+CLAIM_ID_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
 class OdyseeError(ValueError):
@@ -107,25 +108,103 @@ def status_ok() -> tuple[bool, str]:
     return ok, state or (body.decode("utf-8", errors="replace")[:120] if body else f"HTTP {code}")
 
 
+def _inner_data(data: dict[str, Any]) -> dict[str, Any]:
+    inner = data.get("data") if isinstance(data.get("data"), dict) else data
+    return inner if isinstance(inner, dict) else {}
+
+
+def _raise_if_api_error(data: dict[str, Any], fallback: str) -> None:
+    err = data.get("error")
+    if err:
+        raise OdyseeError(str(err)[:280])
+    if data.get("success") is False:
+        raise OdyseeError(str(data.get("message") or fallback)[:280])
+
+
+def _guest_auth_token() -> str:
+    """Odysee exige un auth_token anónimo (user/new) antes de user/signin."""
+    app_id = ("tuyaho" + uuid.uuid4().hex)[:66]
+    data = _form(
+        f"{INTERNAL}/user/new",
+        {"language": "en", "app_id": app_id, "auth_token": ""},
+    )
+    _raise_if_api_error(data, "user/new failed")
+    token = str(_inner_data(data).get("auth_token") or data.get("auth_token") or "").strip()
+    if not token:
+        raise OdyseeError("user/new did not return auth_token")
+    return token
+
+
 def signin(email: str, password: str) -> tuple[str, str]:
     em = (email or "").strip()
     pw = (password or "").strip()
     if not em or not pw:
         raise OdyseeError("email_password_required")
-    data = _form(f"{INTERNAL}/user/signin", {"email": em, "password": pw})
-    err = data.get("error")
-    if err:
-        raise OdyseeError(str(err)[:280])
-    inner = data.get("data") if isinstance(data.get("data"), dict) else data
-    token = str((inner or {}).get("auth_token") or data.get("auth_token") or "").strip()
+    guest = _guest_auth_token()
+    data = _form(
+        f"{INTERNAL}/user/signin",
+        {"email": em, "password": pw, "auth_token": guest},
+        headers={"X-Lbry-Auth-Token": guest},
+    )
+    _raise_if_api_error(data, "signin failed")
+    inner = _inner_data(data)
+    token = str(inner.get("auth_token") or data.get("auth_token") or guest).strip()
     if not token:
         raise OdyseeError(str(data.get("message") or "signin failed")[:280])
-    name = str(
-        (inner or {}).get("name")
-        or (inner or {}).get("primary_email")
-        or em
-    ).strip()
+    name = str(inner.get("name") or inner.get("primary_email") or em).strip()
     return token, name
+
+
+def _resolve_channel_claim_id(channel_name: str) -> str:
+    name = (channel_name or "").strip()
+    if not name:
+        return ""
+    if not name.startswith("@"):
+        name = "@" + name.lstrip("@")
+    payload = {"method": "resolve", "params": {"urls": f"lbry://{name}"}}
+    code, data, _ = _json(f"{SDK}/api/v1/proxy", payload, method="POST", timeout=25)
+    result = data.get("result") if isinstance(data.get("result"), dict) else {}
+    if code >= 400 or not result:
+        return ""
+    for value in result.values():
+        if not isinstance(value, dict):
+            continue
+        cid = str(value.get("claim_id") or "").strip()
+        if CLAIM_ID_RE.fullmatch(cid) and str(value.get("value_type") or "") == "channel":
+            return cid.lower()
+        if CLAIM_ID_RE.fullmatch(cid):
+            return cid.lower()
+    return ""
+
+
+def normalize_channel_id(extra: str) -> str:
+    """Acepta claim_id de 40 hex, URL de Odysee o @canal; devuelve claim_id."""
+    raw = (extra or "").strip()
+    if not raw:
+        return ""
+    if CLAIM_ID_RE.fullmatch(raw):
+        return raw.lower()
+    text = raw
+    lower = text.lower()
+    if "odysee.com/" in lower:
+        text = text.split("odysee.com/", 1)[1]
+    text = text.split("?")[0].strip().strip("/")
+    if text.startswith("lbry://"):
+        text = text[7:]
+    if "#" in text:
+        hid = text.split("#")[-1]
+        if CLAIM_ID_RE.fullmatch(hid):
+            return hid.lower()
+        text = text.split("#", 1)[0]
+    if ":" in text:
+        left, right = text.rsplit(":", 1)
+        if CLAIM_ID_RE.fullmatch(right):
+            return right.lower()
+        text = left
+    name = text.strip()
+    if not name:
+        return ""
+    return _resolve_channel_claim_id(name)
 
 
 def user_me(auth_token: str) -> dict[str, Any]:
@@ -428,7 +507,7 @@ def publish_video(
         return False, t("pub.odysee.file_missing", lang)
     if path.suffix.lower() not in VIDEO_EXT:
         return False, t("pub.odysee.bad_video", lang)
-    channel = str(account.get("extra") or "").strip()
+    channel = normalize_channel_id(str(account.get("extra") or "").strip())
     if not str(account.get("secret") or "").strip() and not str(account.get("auth_token") or "").strip():
         return False, t("pub.odysee.no_account", lang)
     try:

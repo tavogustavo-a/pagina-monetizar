@@ -386,8 +386,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Conectar {platform}",
     },
     "servers.chain_hint_odysee": {
-        "en": "Sign in with your Odysee email and password. The panel stores them and renews the auth token automatically when it expires. Channel claim ID is optional.",
-        "es": "Entra con el email y la contraseña de Odysee. El panel los guarda y renueva el auth token automáticamente cuando caduca. El claim ID del canal es opcional.",
+        "en": "Sign in with the email and password of odysee.com (not Google-only login). The panel stores them and renews the auth token when it expires. Channel is optional: paste the 40-character claim ID, or @channel / the Odysee URL; @name is not the claim ID.",
+        "es": "Entra con el email y la contraseña de odysee.com (no vale si solo usas Google). El panel los guarda y renueva el auth token cuando caduca. El canal es opcional: pega el claim ID de 40 caracteres, o @canal / la URL de Odysee; @nombre no es el claim ID.",
     },
     "servers.chain_hint_dtube": {
         "en": "",
@@ -401,8 +401,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "servers.chain_field_hive": {"en": "DTube username", "es": "Usuario de DTube"},
     "servers.chain_field_wif": {"en": "Posting key", "es": "Clave posting"},
     "servers.chain_field_channel": {
-        "en": "Channel claim ID (optional)",
-        "es": "Claim ID del canal (opcional)",
+        "en": "Channel claim ID or @channel (optional)",
+        "es": "Claim ID del canal o @canal (opcional)",
     },
     "servers.chain_save": {"en": "Save account", "es": "Guardar cuenta"},
     "servers.chain_saved": {
@@ -1027,6 +1027,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "api.chain.fail": {
         "en": "Connection error: {error}",
         "es": "Error de conexión: {error}",
+    },
+    "odysee.err_auth": {
+        "en": "Odysee rejected the login. Use the email and password from odysee.com (Accounts → set a password if you signed in with Google). The @channel field is not used for this test.",
+        "es": "Odysee rechazó el login. Usa el email y la contraseña de odysee.com (en Accounts pon una contraseña si entras con Google). El campo @canal no se usa en esta prueba.",
     },
     "api.chain.need_account": {
         "en": "Connect this network in Servers first.",
@@ -3007,8 +3011,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Crea una cuenta en odysee.com (no hay OAuth público).",
     },
     "apidoc.odysee.step2": {
-        "en": "Servers → Connect with email/password. The panel stores the auth token. Channel claim ID is optional.",
-        "es": "Servidores → Conectar con email y contraseña. El panel guarda el auth token. El claim ID del canal es opcional.",
+        "en": "Servers → Connect with email/password of odysee.com. Optional channel: 40-char claim ID or @handle. The panel stores the auth token.",
+        "es": "Servidores → Conectar con email/contraseña de odysee.com. Canal opcional: claim ID de 40 caracteres o @canal. El panel guarda el auth token.",
     },
     "apidoc.odysee.step3": {
         "en": "Publish: TUS upload (50 MB chunks) then stream_create. Needs LBC in the wallet for the bid.",

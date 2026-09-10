@@ -961,6 +961,12 @@
       } catch (err) {}
     }
 
+    document.addEventListener("click", function (e) {
+      var a = e.target.closest("a.js-oauth-connect");
+      if (!a) return;
+      rememberAccountPickerRestore();
+    });
+
     function releaseModalFocus(modalEl, returnFocusEl) {
       var active = document.activeElement;
       if (!active || !modalEl || !modalEl.contains(active)) return;
@@ -2741,22 +2747,74 @@
       });
     }
 
-    var restorePicker = null;
-    try {
-      var restoreRaw = sessionStorage.getItem("tuyahoRestoreAccountPicker");
-      if (restoreRaw) {
-        sessionStorage.removeItem("tuyahoRestoreAccountPicker");
-        var restore = JSON.parse(restoreRaw);
-        if (restore && restore.name) restorePicker = restore;
+    function restoreAccountPickerHint() {
+      var restorePicker = null;
+      try {
+        var restoreRaw = sessionStorage.getItem("tuyahoRestoreAccountPicker");
+        if (restoreRaw) {
+          sessionStorage.removeItem("tuyahoRestoreAccountPicker");
+          var restore = JSON.parse(restoreRaw);
+          if (restore && restore.name) restorePicker = restore;
+        }
+      } catch (err) {}
+      try {
+        var openAccount = new URLSearchParams(window.location.search).get("open_account");
+        if (openAccount && !(restorePicker && restorePicker.name)) {
+          restorePicker = { name: openAccount, key: "", link_id: "" };
+        }
+      } catch (err) {}
+      return restorePicker;
+    }
+
+    function openRestoredAccountPicker(restorePicker) {
+      if (!restorePicker || !restorePicker.name) return;
+      var name = String(restorePicker.name || "").trim();
+      var key = String(restorePicker.key || "").trim() || name.toLowerCase();
+      var linkId = restorePicker.link_id || restorePicker.linkId || "";
+      var finish = function (group) {
+        openAccountGroupModal(
+          group || { key: key, name: name, link_id: linkId },
+          null
+        );
+        try {
+          if (window.history && window.history.replaceState) {
+            window.history.replaceState({}, "", "/admin/servidores");
+          }
+        } catch (err) {}
+      };
+      if (linkId) {
+        finish({ key: key, name: name, link_id: linkId });
+        return;
       }
-    } catch (err) {}
+      var params = new URLSearchParams();
+      params.set("q", name);
+      params.set("page", "1");
+      params.set("per_page", "50");
+      fetch("/admin/api/server-account-groups?" + params.toString(), {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          var groups = (j && j.ok && j.groups) || [];
+          var want = name.toLowerCase();
+          var found = null;
+          for (var i = 0; i < groups.length; i++) {
+            if (String(groups[i].name || "").trim().toLowerCase() === want) {
+              found = groups[i];
+              break;
+            }
+          }
+          finish(found);
+        })
+        .catch(function () {
+          finish(null);
+        });
+    }
+
+    var restorePicker = restoreAccountPickerHint();
     Promise.resolve(reloadServerAccounts()).then(function () {
-      if (!restorePicker) return;
-      openAccountGroupModal({
-        key: restorePicker.key || "",
-        name: restorePicker.name,
-        link_id: restorePicker.link_id || restorePicker.linkId || "",
-      }, null);
+      openRestoredAccountPicker(restorePicker);
     });
   })();
 </script>

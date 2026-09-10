@@ -6,7 +6,7 @@ import os
 import uuid
 import urllib.error
 import urllib.request
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -3887,14 +3887,22 @@ def admin_tiktokers_redirect():
     return RedirectResponse(url="/admin/servidores", status_code=301)
 
 
-def _tiktok_oauth_return_path(user: db.User) -> str:
-    return _oauth_return_path(user)
+def _tiktok_oauth_return_path(user: db.User, request: Request | None = None) -> str:
+    return _oauth_return_path(user, request)
 
 
-def _oauth_return_path(user: db.User) -> str:
-    if db.user_can_access_servers(user):
-        return "/admin/servidores"
-    return "/admin/panel"
+def _oauth_return_path(user: db.User, request: Request | None = None) -> str:
+    if not db.user_can_access_servers(user):
+        if request is not None:
+            request.session.pop("oauth_restore_picker_name", None)
+        return "/admin/panel"
+    name = ""
+    if request is not None:
+        name = str(request.session.pop("oauth_restore_picker_name", "") or "").strip()
+        name = name.replace("\x00", "")[:200]
+    if name:
+        return "/admin/servidores?open_account=" + quote(name, safe="")
+    return "/admin/servidores"
 
 
 def _store_oauth_redirect(request: Request, session_key: str, oauth_mod) -> str:
@@ -3913,8 +3921,10 @@ def _store_oauth_link_target(request: Request) -> None:
     name = (request.query_params.get("link_name") or "").strip()
     if name:
         request.session["oauth_link_target_name"] = name
+        request.session["oauth_restore_picker_name"] = name
     else:
         request.session.pop("oauth_link_target_name", None)
+        request.session.pop("oauth_restore_picker_name", None)
 
 
 def _pop_oauth_link_target(request: Request) -> str:
@@ -3966,7 +3976,7 @@ def _revoke_oauth_remote_inner(pid: str, access: str, refresh: str, row: dict) -
 
 
 def _oauth_redirect(request: Request, user: db.User) -> RedirectResponse:
-    return RedirectResponse(url=_oauth_return_path(user), status_code=303)
+    return RedirectResponse(url=_oauth_return_path(user, request), status_code=303)
 
 
 PANEL_API_PLATFORM_IDS = frozenset(
@@ -4176,7 +4186,7 @@ def tiktok_oauth_callback(request: Request):
         return _admin_privileges_redirect_login(request)
     saved_state = request.session.pop("tiktok_oauth_state", None)
     linked_by = request.session.pop("tiktok_oauth_user_id", None) or admin.id
-    nxt = _tiktok_oauth_return_path(admin)
+    nxt = _tiktok_oauth_return_path(admin, request)
     err_param = request.query_params.get("error")
     if err_param:
         request.session["tiktok_error"] = f"TikTok authorization denied: {err_param}"
@@ -4751,10 +4761,10 @@ def snapchat_oauth_connect(request: Request):
             "connect client=%s… scope=%s"
             % ((snapchat_oauth.client_id() or "")[:8], snapchat_oauth.oauth_scopes()),
         )
+        _store_oauth_link_target(request)
         if not ready:
             request.session["tiktok_error"] = i18n.t("servers.snapchat_oauth_missing", lang)
             return _oauth_redirect(request, admin)
-        _store_oauth_link_target(request)
         request.session["snapchat_oauth_redirect_uri"] = ru
         state = snapchat_oauth.sign_connect_state(
             user_id=admin.id,
@@ -5081,6 +5091,17 @@ def api_filehost_delete(request: Request, account_id: str):
     return {"ok": True}
 
 
+def _chain_fail_error(lang: str, platform_id: str, detail: str) -> str:
+    pid = (platform_id or "").strip()
+    msg = (detail or "").strip()
+    low = msg.lower()
+    if pid == "odysee" and "authentication required" in low:
+        return i18n.t("odysee.err_auth", lang)
+    if pid == "odysee" and msg in {"email_password_required", "missing_fields"}:
+        return i18n.t("servers.chain_missing", lang)
+    return i18n.t("api.chain.fail", lang, error=msg or "error")
+
+
 @app.post("/admin/api/chain")
 def api_chain_save(request: Request, body: ChainAccountBody):
     deny = _require_server_admin_json(request)
@@ -5102,12 +5123,14 @@ def api_chain_save(request: Request, body: ChainAccountBody):
             login = login or str(raw.get("login") or "")
             secret = secret or str(raw.get("secret") or "")
             extra = extra or str(raw.get("extra") or "")
+    if pid == "odysee" and extra:
+        extra = odysee.normalize_channel_id(extra) or extra
     ok, detail = chain.probe_account(pid, login, secret, extra)
     if not ok:
         return JSONResponse(
             {
                 "ok": False,
-                "error": i18n.t("api.chain.fail", lang, error=detail),
+                "error": _chain_fail_error(lang, pid, detail),
             },
             status_code=400,
         )
@@ -5164,7 +5187,7 @@ def api_chain_test(request: Request, body: ChainAccountBody):
     ok, detail = chain.probe_account(body.platform_id, login, secret, extra)
     if not ok:
         return JSONResponse(
-            {"ok": False, "error": i18n.t("api.chain.fail", lang, error=detail)},
+            {"ok": False, "error": _chain_fail_error(lang, body.platform_id, detail)},
             status_code=400,
         )
     return {"ok": True, "message": i18n.t("api.chain.ok", lang, name=detail)}
