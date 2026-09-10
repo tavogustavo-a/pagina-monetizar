@@ -11,8 +11,10 @@ from typing import Any
 
 AUTH_URL = "https://accounts.snapchat.com/login/oauth2/authorize"
 TOKEN_URL = "https://accounts.snapchat.com/login/oauth2/access_token"
-PROFILE_URL = "https://businessapi.snapchat.com/v1/public_profiles/my_profile"
-DEFAULT_SCOPES = "snapchat-profile-api"
+API = "https://businessapi.snapchat.com"
+PROFILE_URL = f"{API}/v1/public_profiles/my_profile"
+ME_ORGS_URL = f"{API}/v1/me/organizations"
+DEFAULT_SCOPES = "snapchat-profile-api snapchat-marketing-api"
 
 
 def _from_creds(key: str) -> str:
@@ -107,7 +109,11 @@ def _request(
     headers: dict[str, str] | None = None,
     timeout: int = 45,
 ) -> dict[str, Any]:
-    hdrs = {"Accept": "application/json", **(headers or {})}
+    hdrs = {
+        "Accept": "application/json",
+        "User-Agent": "Tuyaho/1.0 (Snapchat OAuth)",
+        **(headers or {}),
+    }
     req = urllib.request.Request(url, data=data, method=method, headers=hdrs)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -141,19 +147,26 @@ def _form_post(url: str, fields: dict[str, str]) -> dict[str, Any]:
     )
 
 
+def _token_payload(data: dict[str, Any]) -> dict[str, Any]:
+    inner = data.get("data") if isinstance(data.get("data"), dict) else data
+    return inner if isinstance(inner, dict) else data
+
+
 def exchange_code_for_tokens(
     code: str, *, redirect_uri_value: str | None = None
 ) -> dict[str, Any]:
     ru = (redirect_uri_value or "").strip() or redirect_uri()
-    data = _form_post(
-        TOKEN_URL,
-        {
-            "grant_type": "authorization_code",
-            "client_id": client_id(),
-            "client_secret": client_secret(),
-            "code": (code or "").strip(),
-            "redirect_uri": ru,
-        },
+    data = _token_payload(
+        _form_post(
+            TOKEN_URL,
+            {
+                "grant_type": "authorization_code",
+                "client_id": client_id(),
+                "client_secret": client_secret(),
+                "code": (code or "").strip(),
+                "redirect_uri": ru,
+            },
+        )
     )
     if not data.get("access_token"):
         raise ValueError(_api_error(data, "Snapchat did not return an access token."))
@@ -164,14 +177,16 @@ def refresh_access_token(refresh_token: str) -> dict[str, Any]:
     token = (refresh_token or "").strip()
     if not token:
         raise ValueError("Snapchat refresh token is missing.")
-    data = _form_post(
-        TOKEN_URL,
-        {
-            "grant_type": "refresh_token",
-            "client_id": client_id(),
-            "client_secret": client_secret(),
-            "refresh_token": token,
-        },
+    data = _token_payload(
+        _form_post(
+            TOKEN_URL,
+            {
+                "grant_type": "refresh_token",
+                "client_id": client_id(),
+                "client_secret": client_secret(),
+                "refresh_token": token,
+            },
+        )
     )
     if not data.get("access_token"):
         raise ValueError(_api_error(data, "Snapchat token refresh failed."))
@@ -200,23 +215,32 @@ def revoke_tokens(access_token: str, refresh_token: str | None = None) -> None:
             continue
 
 
-def _unwrap_profile(data: dict[str, Any]) -> dict[str, Any]:
+def _first_profile_dict(data: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        return {}
     for key in ("public_profile", "profile", "me"):
         inner = data.get(key)
-        if isinstance(inner, dict) and (inner.get("id") or inner.get("display_name")):
+        if isinstance(inner, dict) and (
+            inner.get("id") or inner.get("profile_id") or inner.get("display_name")
+        ):
             return inner
-    return data
+    items = data.get("public_profiles")
+    if isinstance(items, list):
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            inner = item.get("public_profile") if isinstance(item.get("public_profile"), dict) else item
+            if isinstance(inner, dict) and (inner.get("id") or inner.get("profile_id")):
+                return inner
+    return data if data.get("id") or data.get("profile_id") else {}
 
 
-def fetch_profile(access_token: str) -> dict[str, Any]:
-    data = _request(
-        PROFILE_URL,
-        headers={"Authorization": f"Bearer {(access_token or '').strip()}"},
-    )
-    if str(data.get("request_status") or "").upper() == "ERROR":
-        raise ValueError(_api_error(data, "Snapchat profile request failed."))
-    profile = _unwrap_profile(data)
-    open_id = str(profile.get("id") or data.get("id") or "").strip()
+def _as_profile(profile: dict[str, Any]) -> dict[str, str] | None:
+    if not isinstance(profile, dict):
+        return None
+    open_id = str(profile.get("id") or profile.get("profile_id") or "").strip()
+    if not open_id:
+        return None
     name = str(
         profile.get("display_name")
         or profile.get("name")
@@ -224,12 +248,65 @@ def fetch_profile(access_token: str) -> dict[str, Any]:
         or ""
     ).strip()
     username = str(profile.get("snap_user_name") or profile.get("username") or name).strip()
-    if not open_id:
-        raise ValueError(
-            "Snapchat did not return a public profile. Create one in Snap Business Manager."
-        )
     return {
         "open_id": open_id,
         "username": username or open_id,
         "display_name": name or username or open_id,
     }
+
+
+def _org_ids(data: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    rows = data.get("organizations")
+    if not isinstance(rows, list):
+        rows = data.get("organization") if isinstance(data.get("organization"), list) else []
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        org = item.get("organization") if isinstance(item.get("organization"), dict) else item
+        oid = str((org or {}).get("id") or "").strip()
+        if oid:
+            out.append(oid)
+    return out
+
+
+def fetch_profile(access_token: str) -> dict[str, Any]:
+    token = (access_token or "").strip()
+    if not token:
+        raise ValueError("missing_token")
+    headers = {"Authorization": f"Bearer {token}"}
+    last_err = ""
+
+    try:
+        data = _request(PROFILE_URL, headers=headers)
+        if str(data.get("request_status") or "").upper() == "ERROR":
+            raise ValueError(_api_error(data, "Snapchat profile request failed."))
+        parsed = _as_profile(_first_profile_dict(data))
+        if parsed:
+            return parsed
+        last_err = "my_profile empty"
+    except ValueError as e:
+        last_err = str(e)
+
+    try:
+        orgs = _request(ME_ORGS_URL, headers=headers)
+        if str(orgs.get("request_status") or "").upper() == "ERROR":
+            raise ValueError(_api_error(orgs, last_err or "Snapchat organizations failed."))
+        for org_id in _org_ids(orgs):
+            pdata = _request(
+                f"{API}/v1/organizations/{urllib.parse.quote(org_id)}/public_profiles?limit=50",
+                headers=headers,
+            )
+            if str(pdata.get("request_status") or "").upper() == "ERROR":
+                last_err = _api_error(pdata, last_err)
+                continue
+            parsed = _as_profile(_first_profile_dict(pdata))
+            if parsed:
+                return parsed
+    except ValueError as e:
+        last_err = str(e)
+
+    low = (last_err or "").lower()
+    if "permission" in low or "allowlist" in low or "not authorized" in low:
+        raise ValueError("snapchat_need_allowlist")
+    raise ValueError("snapchat_no_profile")

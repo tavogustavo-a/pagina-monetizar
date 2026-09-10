@@ -616,6 +616,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Snapchat did not return an authorization code.",
         "es": "Snapchat no devolvió un código de autorización.",
     },
+    "servers.snapchat_no_profile": {
+        "en": "Snapchat signed in, but did not return a Public Profile. In Snapchat, open Public Profile / Snap Business Manager and create a Public Profile for this account, then connect again.",
+        "es": "Snapchat inició sesión, pero no devolvió un perfil público. En Snapchat abre Perfil público / Snap Business Manager, crea un Public Profile para esa cuenta y vuelve a conectar.",
+    },
+    "servers.snapchat_need_allowlist": {
+        "en": "The app is not allowed to read Public Profiles. In Snap Business Manager the OAuth app needs Public Profile API access (allowlist). Send the Client ID to Snap if that toggle is missing, then connect again.",
+        "es": "La app no tiene permiso para leer perfiles públicos. En Snap Business Manager la app OAuth necesita acceso a Public Profile API (allowlist). Si no aparece esa opción, envía el Client ID a Snap y vuelve a conectar.",
+    },
     "servers.disconnect_error": {
         "en": "Could not disconnect.",
         "es": "No se pudo desconectar.",

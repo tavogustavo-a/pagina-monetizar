@@ -3879,8 +3879,8 @@ def _bind_oauth_link_target(request: Request, oauth_account_id: str) -> None:
         return
     try:
         db.bind_oauth_account_name(oauth_account_id, name)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"bind_oauth_account_name failed: {e}", flush=True)
 
 
 def _revoke_oauth_remote(row: dict) -> None:
@@ -4740,7 +4740,7 @@ def snapchat_oauth_callback(request: Request):
         profile = snapchat_oauth.fetch_profile(access)
         open_id = profile.get("open_id") or ""
         if not open_id:
-            raise ValueError("Snapchat did not return a public profile id.")
+            raise ValueError("snapchat_no_profile")
         cid = db.save_oauth_connection(
             platform_id="snapchat",
             open_id=str(open_id),
@@ -4759,7 +4759,13 @@ def snapchat_oauth_callback(request: Request):
         label = profile.get("username") or profile.get("display_name") or "Snapchat"
         request.session["tiktok_ok"] = i18n.t("servers.snapchat_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
-        request.session["tiktok_error"] = str(e)
+        code = str(e)
+        if code in ("snapchat_no_profile", "snapchat_need_allowlist"):
+            request.session["tiktok_error"] = i18n.t(f"servers.{code}", lang)
+        else:
+            request.session["tiktok_error"] = i18n.t(
+                "api.snapchat.fail", lang, error=code[:180]
+            )
     return _oauth_redirect(request, admin)
 
 
