@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 import time
@@ -123,16 +124,24 @@ def _raise_if_api_error(data: dict[str, Any], fallback: str) -> None:
 
 def _guest_auth_token() -> str:
     """Odysee exige un auth_token anónimo (user/new) antes de user/signin."""
-    app_id = ("tuyaho" + uuid.uuid4().hex)[:66]
-    data = _form(
-        f"{INTERNAL}/user/new",
+    # LBRY installation_id: 40 hex. Un prefijo tipo "tuyaho…" no es un app_id válido.
+    app_id = hashlib.sha1(uuid.uuid4().bytes).hexdigest()
+    last_err: OdyseeError | None = None
+    for fields in (
         {"language": "en", "app_id": app_id, "auth_token": ""},
-    )
-    _raise_if_api_error(data, "user/new failed")
-    token = str(_inner_data(data).get("auth_token") or data.get("auth_token") or "").strip()
-    if not token:
-        raise OdyseeError("user/new did not return auth_token")
-    return token
+        {"language": "en", "auth_token": ""},
+    ):
+        data = _form(f"{INTERNAL}/user/new", fields)
+        try:
+            _raise_if_api_error(data, "user/new failed")
+        except OdyseeError as e:
+            last_err = e
+            continue
+        token = str(_inner_data(data).get("auth_token") or data.get("auth_token") or "").strip()
+        if token:
+            return token
+        last_err = OdyseeError("user/new did not return auth_token")
+    raise last_err or OdyseeError("user/new did not return auth_token")
 
 
 def signin(email: str, password: str) -> tuple[str, str]:

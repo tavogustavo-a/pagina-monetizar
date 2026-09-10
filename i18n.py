@@ -1029,8 +1029,24 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Error de conexión: {error}",
     },
     "odysee.err_auth": {
-        "en": "Odysee rejected the login. Use the email and password from odysee.com (Accounts → set a password if you signed in with Google). The @channel field is not used for this test.",
-        "es": "Odysee rechazó el login. Usa el email y la contraseña de odysee.com (en Accounts pon una contraseña si entras con Google). El campo @canal no se usa en esta prueba.",
+        "en": "Odysee did not accept this email and password. Use the password from odysee.com (set one in Accounts if you only sign in with Google). The channel field is not used for this test.",
+        "es": "Odysee no aceptó este email y contraseña. Usa la de odysee.com (en Accounts pon una si solo entras con Google). El campo del canal no se usa en esta prueba.",
+    },
+    "odysee.err_app_id": {
+        "en": "Odysee blocked the test before checking your password (invalid install ID). Reload Servers and try again.",
+        "es": "Odysee cortó la prueba antes de revisar tu contraseña (identificador de instalación no válido). Recarga Servidores y vuelve a Probar API.",
+    },
+    "odysee.err_user": {
+        "en": "Odysee does not have an account with that email.",
+        "es": "Odysee no tiene una cuenta con ese email.",
+    },
+    "odysee.err_password": {
+        "en": "The Odysee password is not correct.",
+        "es": "La contraseña de Odysee no es correcta.",
+    },
+    "odysee.err_generic": {
+        "en": "Odysee could not verify the account. Check the email and password on odysee.com and try again.",
+        "es": "Odysee no pudo verificar la cuenta. Revisa el email y la contraseña en odysee.com y vuelve a probar.",
     },
     "api.chain.need_account": {
         "en": "Connect this network in Servers first.",

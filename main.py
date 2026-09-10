@@ -5095,11 +5095,19 @@ def _chain_fail_error(lang: str, platform_id: str, detail: str) -> str:
     pid = (platform_id or "").strip()
     msg = (detail or "").strip()
     low = msg.lower()
-    if pid == "odysee" and "authentication required" in low:
-        return i18n.t("odysee.err_auth", lang)
-    if pid == "odysee" and msg in {"email_password_required", "missing_fields"}:
+    if pid != "odysee":
+        return i18n.t("api.chain.fail", lang, error=msg or "error")
+    if msg in {"email_password_required", "missing_fields"}:
         return i18n.t("servers.chain_missing", lang)
-    return i18n.t("api.chain.fail", lang, error=msg or "error")
+    if "authentication required" in low:
+        return i18n.t("odysee.err_auth", lang)
+    if "invalid application" in low or "app_id" in low:
+        return i18n.t("odysee.err_app_id", lang)
+    if "user not found" in low or "does not exist" in low:
+        return i18n.t("odysee.err_user", lang)
+    if "password" in low:
+        return i18n.t("odysee.err_password", lang)
+    return i18n.t("odysee.err_generic", lang)
 
 
 @app.post("/admin/api/chain")
