@@ -2151,8 +2151,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pub.pending_col_actions": {"en": "Actions", "es": "Acciones"},
     "pub.retry_btn": {"en": "Republish", "es": "Republicar"},
     "pub.retry_modal_title": {
-        "en": "Republish remaining platforms",
-        "es": "Republicar plataformas restantes",
+        "en": "Platforms to republish",
+        "es": "Plataformas a republicar",
     },
     "pub.retry_remove": {
         "en": "Do not republish {name}",
