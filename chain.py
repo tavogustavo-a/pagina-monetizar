@@ -1,27 +1,38 @@
-"""Odysee (LBRY) y DTube (Hive): cuentas en Servidores, no hosts PPV."""
+"""Odysee (LBRY), DTube (Hive) y Bilibili.tv (navegador): cuentas en Servidores."""
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
+import bilibili_tv
 import dtube
 import odysee
 
-PLATFORM_IDS = frozenset({"odysee", "dtube"})
+PLATFORM_IDS = frozenset({"odysee", "dtube", "bilibili_tv"})
 
-API_KIND = {"odysee": "lbry", "dtube": "hive"}
+API_KIND = {"odysee": "lbry", "dtube": "hive", "bilibili_tv": "browser"}
+
+NO_TEST_IDS = frozenset({"odysee", "bilibili_tv"})
 
 
 def extra_field(platform_id: str) -> str:
     return "channel" if (platform_id or "").strip() == "odysee" else ""
 
 
-def probe_account(platform_id: str, login: str, secret: str, extra: str = "") -> tuple[bool, str]:
+def probe_account(
+    platform_id: str,
+    login: str,
+    secret: str,
+    extra: str = "",
+    account_id: str = "",
+) -> tuple[bool, str]:
     pid = (platform_id or "").strip()
     if pid == "odysee":
         return odysee.probe_account(login, secret, extra)
     if pid == "dtube":
         return dtube.probe_account(login, secret, extra)
+    if pid == "bilibili_tv":
+        return bilibili_tv.probe_account(login, secret, extra, account_id=account_id)
     return False, "unknown_platform"
 
 
@@ -75,4 +86,6 @@ def publish_video(
         )
     from i18n import t
 
+    if pid == "bilibili_tv":
+        return False, t("pub.bilibili_tv.not_wired", lang)
     return False, t("api.unknown_platform", lang)

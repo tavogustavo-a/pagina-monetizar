@@ -29,7 +29,7 @@
 
           <p id="configx-msg" class="configx-msg" hidden></p>
 
-          <!-- Cuenta que recarga -->
+          <!-- App de X que publica por las demás -->
           <div class="configx-card">
             <h2 class="configx-card__title">
               {{ t('configx.sources_title') }}
@@ -59,13 +59,9 @@
                   {% endfor %}
                 </select>
               </label>
-              <label class="field configx-field">
-                <span>{{ t('configx.cost_label') }}</span>
-                <input type="text" id="configx-source-cost" inputmode="decimal" placeholder="0.00" />
-              </label>
               <button type="submit" class="btn btn-accent btn-sm">{{ t('configx.save') }}</button>
             </form>
-            <p class="sub configx-hint">{{ t('configx.cost_hint') }}</p>
+            <p class="sub configx-hint">{{ t('configx.sources_form_hint') }}</p>
             {% endif %}
 
             {% if sources %}
@@ -80,26 +76,12 @@
                   </span>
                 </div>
                 <div class="configx-source__stats">
-                  <span>{{ t('configx.recharged_label') }}: <strong>{{ fmt_money(src.recharged_cents) }}</strong></span>
-                  <span>{{ t('configx.spent_label') }}: <strong>{{ fmt_money(src.spent_cents) }}</strong></span>
-                  <span>{{ t('configx.available_label') }}: <strong>{{ fmt_money(src.available_cents) }}</strong></span>
-                  <span>{{ t('configx.cost_label') }}: <strong>{{ fmt_money(src.cost_per_post_cents) }}</strong></span>
                   <span>{{ t('configx.posts_24h_label') }}: <strong>{{ src.posts_24h }} / {{ src.posts_cap }}</strong></span>
                   {% if src.posts_left <= 0 %}
                   <span class="configx-badge configx-badge--off">{{ t('configx.cap_badge') }}</span>
-                  {% elif src.recharged_cents > 0 and src.available_cents <= (src.recharged_cents * 0.15)|int %}
-                  <span class="configx-badge configx-badge--off">{{ t('configx.low_badge') }}</span>
                   {% endif %}
                 </div>
                 <div class="configx-source__actions">
-                  <input
-                    type="text"
-                    class="configx-recharge-amount"
-                    inputmode="decimal"
-                    placeholder="{{ t('configx.recharge_ph') }}"
-                    aria-label="{{ t('configx.recharge_ph') }}"
-                  />
-                  <button type="button" class="btn btn-accent btn-sm js-configx-recharge">{{ t('configx.recharge_btn') }}</button>
                   <button type="button" class="btn btn-ghost btn-sm btn-user-delete js-configx-delete">{% include '_icon_trash.html' %}</button>
                 </div>
               </li>
@@ -184,7 +166,6 @@
                     <th>{{ t('configx.col_date') }}</th>
                     <th>{{ t('configx.col_account') }}</th>
                     <th>{{ t('configx.col_video') }}</th>
-                    <th>{{ t('configx.col_cost') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -193,7 +174,6 @@
                     <td>{{ row.created_at[:16].replace('T', ' ') }}</td>
                     <td>{{ row.account or '—' }}</td>
                     <td>{{ row.video_title or '—' }}</td>
-                    <td>{{ fmt_money(row.cost_cents) }}</td>
                   </tr>
                   {% endfor %}
                 </tbody>
@@ -241,11 +221,9 @@
       sourceForm.addEventListener("submit", function (ev) {
         ev.preventDefault();
         var account = document.getElementById("configx-source-account").value;
-        var cost = document.getElementById("configx-source-cost").value;
         if (!account) return;
         postJson("/admin/api/xconfig/source", {
           oauth_account_id: account,
-          cost_per_post: cost,
           active: true,
         }).then(function (data) {
           if (data.ok) window.location.reload();
@@ -253,21 +231,6 @@
         });
       });
     }
-
-    document.querySelectorAll(".js-configx-recharge").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var li = btn.closest("[data-source-id]");
-        if (!li) return;
-        var amount = li.querySelector(".configx-recharge-amount").value;
-        postJson("/admin/api/xconfig/recharge", {
-          source_id: li.getAttribute("data-source-id"),
-          amount: amount,
-        }).then(function (data) {
-          if (data.ok) window.location.reload();
-          else showMsg(data.error || i18n.genericFail, true);
-        });
-      });
-    });
 
     document.querySelectorAll(".js-configx-delete").forEach(function (btn) {
       btn.addEventListener("click", function () {

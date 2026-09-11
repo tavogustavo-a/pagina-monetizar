@@ -1224,6 +1224,7 @@ def _test_chain(platform_id: str, lang: str) -> tuple[bool, str]:
         str(raw.get("login") or ""),
         str(raw.get("secret") or ""),
         str(raw.get("extra") or ""),
+        account_id=str(raw.get("id") or ""),
     )
     if ok:
         return True, t("api.chain.ok", lang, name=detail)

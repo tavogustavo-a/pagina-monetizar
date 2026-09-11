@@ -236,6 +236,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "platform.x": {"en": "X", "es": "X"},
     "platform.dailymotion": {"en": "Dailymotion", "es": "Dailymotion"},
     "platform.bilibili": {"en": "Bilibili", "es": "Bilibili"},
+    "platform.bilibili_tv": {"en": "Bilibili.tv", "es": "Bilibili.tv"},
     "platform.rumble": {"en": "Rumble", "es": "Rumble"},
     "platform.snapchat": {"en": "Snapchat", "es": "Snapchat"},
     "platform.odysee": {"en": "Odysee", "es": "Odysee"},
@@ -389,6 +390,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Sign in with the email and password of odysee.com (not Google-only login). The panel stores them and renews the auth token when it expires. Channel is optional: paste the 40-character claim ID, or @channel / the Odysee URL; @name is not the claim ID.",
         "es": "Entra con el email y la contraseña de odysee.com (no vale si solo usas Google). El panel los guarda y renueva el auth token cuando caduca. El canal es opcional: pega el claim ID de 40 caracteres, o @canal / la URL de Odysee; @nombre no es el claim ID.",
     },
+    "servers.chain_hint_bilibili_tv": {
+        "en": "Sign in with the email and password of bilibili.tv (not Bilibili.com OAuth). Each account gets its own browser profile. If the site asks for captcha or SMS, complete it yourself; the panel will not guess. Keep-alive runs at 3:00 (panel time), one account after another. Studio upload is not wired yet.",
+        "es": "Entra con el email y la contraseña de bilibili.tv (no es el OAuth de Bilibili.com). Cada cuenta tiene su propio perfil de navegador. Si pide captcha o SMS, lo haces tú; el panel no lo adivina. A las 3:00 (hora del panel) visita las cuentas una detrás de otra. La subida al estudio aún no está cableada.",
+    },
     "servers.chain_hint_dtube": {
         "en": "",
         "es": "",
@@ -397,6 +402,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "servers.chain_field_password": {
         "en": "Odysee password",
         "es": "Contraseña de Odysee",
+    },
+    "servers.chain_field_email_tv": {"en": "Bilibili.tv email", "es": "Email de Bilibili.tv"},
+    "servers.chain_field_password_tv": {
+        "en": "Bilibili.tv password",
+        "es": "Contraseña de Bilibili.tv",
     },
     "servers.chain_field_hive": {"en": "DTube username", "es": "Usuario de DTube"},
     "servers.chain_field_wif": {"en": "Posting key", "es": "Clave posting"},
@@ -410,13 +420,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Cuenta guardada ({name}).",
     },
     "servers.chain_missing": {
-        "en": "Odysee needs email and password. DTube needs username and posting key.",
-        "es": "Odysee pide email y contraseña. DTube pide usuario de DTube y clave posting.",
+        "en": "Odysee and Bilibili.tv need email and password. DTube needs username and posting key.",
+        "es": "Odysee y Bilibili.tv piden email y contraseña. DTube pide usuario de DTube y clave posting.",
     },
     "servers.chain_test": {"en": "Test API", "es": "Probar API"},
     "servers.chain_badge_odysee": {"en": "LBRY", "es": "LBRY"},
     "servers.chain_badge_dtube": {"en": "Hive", "es": "Hive"},
+    "servers.chain_badge_bilibili_tv": {"en": "Browser", "es": "Navegador"},
     "servers.chain_badge": {"en": "Chain", "es": "Cadena"},
+    "servers.chain_session_ok": {"en": "Session active", "es": "Sesión activa"},
+    "servers.chain_session_bad": {"en": "Session expired", "es": "Sesión caducada"},
     "servers.vmos_field_remark": {"en": "Remark", "es": "Nota"},
     "servers.oauth_missing": {
         "en": "Save the TikTok Client Key and Client Secret first, then connect an account.",
@@ -525,8 +538,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Guarda el Client ID y el Secret de esta cuenta, o conéctala con la API de Config X (la cuenta que paga la API).",
     },
     "servers.x_api_inherit_hint": {
-        "en": "X is the exception: other names can connect with the Config X app (the account that pays for the API). Only save Client ID and Secret here if this name should spend from its own X API when you uncheck “Use Config X balance” at publish time.",
-        "es": "X es la excepción: los demás nombres pueden conectarse con la app de Config X (la cuenta que paga la API). Guarda Client ID y Secret aquí solo si este nombre debe gastar de su propia API de X cuando desmarques «Usar saldo de Config X» al publicar.",
+        "en": "X is the exception: other names can connect with the Config X app (the account whose membership pays for the API). Only save Client ID and Secret here if this name should use its own X API when you uncheck “Use Config X” at publish time.",
+        "es": "X es la excepción: los demás nombres pueden conectarse con la app de Config X (la cuenta cuya membresía paga la API). Guarda Client ID y Secret aquí solo si este nombre debe usar su propia API de X cuando desmarques «Usar Config X» al publicar.",
     },
     "servers.x_redirect_hint": {
         "en": "Paste this exact Callback URI in the X developer portal (SITE_URL/oauth/x/callback).",
@@ -766,8 +779,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Solo video. Conecta una cuenta de Dailymotion; las subidas van a ese canal.",
     },
     "limits.note.bilibili": {
-        "en": "Videos only (稿件). Connect a Bilibili account. Needs ffmpeg for the cover.",
-        "es": "Solo video (稿件). Conecta una cuenta de Bilibili. Hace falta ffmpeg para la portada.",
+        "en": "Videos only (稿件). Connect a Bilibili.com account. Needs ffmpeg for the cover.",
+        "es": "Solo video (稿件). Conecta una cuenta de Bilibili.com. Hace falta ffmpeg para la portada.",
+    },
+    "limits.note.bilibili_tv": {
+        "en": "Bilibili.tv (international). Sign in from Servers with email and password. The panel keeps a private browser profile per account and visits it daily at 3:00 (panel time). Studio upload is not wired yet: a post is never marked sent.",
+        "es": "Bilibili.tv (internacional). En Servidores entra con email y contraseña. El panel guarda un perfil de navegador por cuenta y lo visita a las 3:00 (hora del panel). La subida al estudio aún no está cableada: el post no se marca como enviado.",
     },
     "limits.note.rumble": {
         "en": "No public OAuth. Partner Upload API: access token + Channel ID. Videos only.",
@@ -1063,6 +1080,46 @@ MESSAGES: dict[str, dict[str, str]] = {
     "api.chain.need_account": {
         "en": "Connect this network in Servers first.",
         "es": "Primero conecta esta red en Servidores.",
+    },
+    "bilibili_tv.err_playwright": {
+        "en": "Playwright/Chromium is not installed on this server. Run: pip install -r requirements.txt && playwright install chromium",
+        "es": "Playwright/Chromium no está instalado en este servidor. Ejecuta: pip install -r requirements.txt && playwright install chromium",
+    },
+    "bilibili_tv.err_website": {
+        "en": "Bilibili.tv login page does not match what this panel expects. The site may have changed; the session was not renewed and nothing was marked as sent.",
+        "es": "La página de login de Bilibili.tv no coincide con lo que espera este panel. Puede que hayan cambiado la web; no se renovó la sesión y no se marcó nada como enviado.",
+    },
+    "bilibili_tv.err_captcha": {
+        "en": "Bilibili.tv asked for captcha or SMS. Complete that check yourself; the panel will not guess codes. Then save the account again.",
+        "es": "Bilibili.tv pidió captcha o SMS. Completa esa comprobación tú; el panel no adivina códigos. Luego vuelve a guardar la cuenta.",
+    },
+    "bilibili_tv.err_session": {
+        "en": "The Bilibili.tv session expired. Open Servers, save the account again, and complete login if the site asks.",
+        "es": "La sesión de Bilibili.tv caducó. Abre Servidores, vuelve a guardar la cuenta y completa el login si la web lo pide.",
+    },
+    "bilibili_tv.err_login": {
+        "en": "Bilibili.tv did not accept this email and password.",
+        "es": "Bilibili.tv no aceptó este email y contraseña.",
+    },
+    "bilibili_tv.err_busy": {
+        "en": "The internal browser is already in use (another Bilibili.tv account). Wait a minute and try again.",
+        "es": "El navegador interno ya está ocupado (otra cuenta de Bilibili.tv). Espera un minuto y reintenta.",
+    },
+    "bilibili_tv.err_browser": {
+        "en": "The internal browser could not open Bilibili.tv. The post was not sent.",
+        "es": "El navegador interno no pudo abrir Bilibili.tv. El post no se envió.",
+    },
+    "bilibili_tv.saved_captcha": {
+        "en": "Account saved. Bilibili.tv asked for captcha or SMS — the session is not active until you complete that check.",
+        "es": "Cuenta guardada. Bilibili.tv pidió captcha o SMS: la sesión no está activa hasta que completes esa comprobación.",
+    },
+    "bilibili_tv.alert_subject": {
+        "en": "[{site}] Bilibili.tv session: {login}",
+        "es": "[{site}] Sesión Bilibili.tv: {login}",
+    },
+    "bilibili_tv.alert_body": {
+        "en": "Bilibili.tv account {login}:\n\n{detail}\n\nOpen Servers, reconnect if needed. Nothing was marked as published.",
+        "es": "Cuenta de Bilibili.tv {login}:\n\n{detail}\n\nAbre Servidores y vuelve a conectar si hace falta. No se marcó nada como publicado.",
     },
     "api.snapchat.ok": {
         "en": "Snapchat public profile works ({name}).",
@@ -1677,8 +1734,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Esta cuenta de X está marcada para gastar de su propia API. Guarda primero su Client ID y Secret en Servidores.",
     },
     "pub.x.need_funding_api": {
-        "en": "No Config X app is available (no keys, no balance, or the 9,900 posts / 24 h cap was reached). Add another app or wait.",
-        "es": "No hay app de Config X disponible (sin claves, sin saldo o se llegó a 9.900 posts / 24 h). Añade otra app o espera.",
+        "en": "No Config X app is available (no keys, or the 9,900 posts / 24 h cap was reached). Add another app or wait.",
+        "es": "No hay app de Config X disponible (sin claves o se llegó a 9.900 posts / 24 h). Añade otra app o espera.",
     },
     "pub.x.file_missing": {
         "en": "The media file was not found on the server.",
@@ -1823,6 +1880,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pub.chain.no_account": {
         "en": "Connect this network in Servers first.",
         "es": "Primero conecta esta red en Servidores.",
+    },
+    "pub.bilibili_tv.not_wired": {
+        "en": "Bilibili.tv is connected (browser session), but studio upload is not wired yet. The post was not sent.",
+        "es": "Bilibili.tv está conectado (sesión del navegador), pero la subida al estudio aún no está cableada. El post no se envió.",
     },
     "pub.odysee.ok": {
         "en": "Published on Odysee: {url}",
@@ -2680,6 +2741,26 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Connect in Servers with Odysee email and password. The panel stores the LBRY auth token. Optional channel claim ID. Video only. Linked proxies are used. Stats/comments in this panel stay local.",
         "es": "En Servidores conecta con email y contraseña de Odysee. El panel guarda el auth token de LBRY. Claim ID de canal opcional. Solo video. Se usa el proxy vinculado. Estadísticas y comentarios de este panel siguen siendo locales.",
     },
+    "cond.bilibili_tv.cap": {
+        "en": "No public daily quota. Limited by Bilibili.tv anti-bot and creator-studio rules.",
+        "es": "Sin cuota diaria pública. Limitan el anti-bot de Bilibili.tv y las reglas del estudio.",
+    },
+    "cond.bilibili_tv.window": {
+        "en": "Keep-alive at 3:00 panel time (UTC-5), one account after another. Sessions often last about 2–3 days.",
+        "es": "Keep-alive a las 3:00 hora del panel (UTC-5), una cuenta detrás de otra. La sesión suele durar unos 2–3 días.",
+    },
+    "cond.bilibili_tv.rate": {
+        "en": "One Chromium at a time. Do not open several Bilibili.tv logins at once.",
+        "es": "Un Chromium a la vez. No abras varios logins de Bilibili.tv a la vez.",
+    },
+    "cond.bilibili_tv.safe": {
+        "en": "Do not mark sent until studio upload is wired. If captcha appears, stop and complete it by hand.",
+        "es": "No marques enviado hasta que la subida al estudio esté cableada. Si sale captcha, para y complétalo a mano.",
+    },
+    "cond.bilibili_tv.detail": {
+        "en": "This is Bilibili.tv, not Bilibili.com. Email/password in Servers. Isolated browser profile per account. VMOS is not used. Upload is not wired.",
+        "es": "Esto es Bilibili.tv, no Bilibili.com. Email/contraseña en Servidores. Perfil de navegador aislado por cuenta. VMOS no se usa. La subida no está cableada.",
+    },
     "cond.dtube.cap": {
         "en": "Hive resource credits (RC) plus IPFS cluster capacity. No PPV host quota.",
         "es": "Resource credits (RC) de Hive más la capacidad del cluster IPFS. No hay cuota de host PPV.",
@@ -2944,6 +3025,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Member level usually caps uploads (often ~5/day on lower levels). China calendar day. Safe: 3–5/day until that account’s level is confirmed.",
         "es": "El nivel de miembro suele limitar (a menudo ~5/día en niveles bajos). Día natural de China. Uso seguro: 3–5/día hasta confirmar el nivel de esa cuenta.",
     },
+    "apidoc.limits.bilibili_tv": {
+        "en": "No public daily quota. Safe: few videos/day when studio upload is wired. Keep-alive at 3:00; never mark sent yet.",
+        "es": "Sin cuota diaria pública. Uso seguro: pocos videos/día cuando la subida esté cableada. Keep-alive a las 3:00; aún no marques enviado.",
+    },
     "apidoc.limits.rumble": {
         "en": "No public daily video quota. Safe: 8–10/day, one upload at a time.",
         "es": "No hay cupo diario público. Uso seguro: 8–10/día, una subida a la vez.",
@@ -2969,8 +3054,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "No se pudo arrancar ffmpeg. Ejecuta pip install -r requirements.txt (incluye imageio-ffmpeg).",
     },
     "apidoc.intro": {
-        "en": "What each server needs so publishing works. Official OAuth (or Rumble’s partner API) is the default. Saving Client ID/Secret only stores the app: the server stays unlinked until you click Connect and sign in; Disconnect or Remove API unlinks it, and connecting another account on the same card replaces the previous one. Register SITE_URL/oauth/{platform}/callback in each developer console. VMOS Cloud is an alternative for TikTok, Instagram, Facebook, YouTube, X and Snapchat: connect from Servers without pasting social access tokens. Dailymotion, Bilibili and Rumble stay on their APIs. Odysee signs in with email/password (LBRY auth token, TUS). API type, video, photo and token renewal are on Servers.",
-        "es": "Qué hay que hacer en cada servidor para que la publicación funcione. El camino por defecto es OAuth oficial (o la API de partners de Rumble). Guardar Client ID/Secret solo guarda la app: el servidor sigue sin vincular hasta que pulses Conectar e inicies sesión; Desconectar o Quitar API lo desvincula, y conectar otra cuenta en la misma ficha reemplaza la anterior. Registra SITE_URL/oauth/{plataforma}/callback en cada consola de desarrollador. VMOS Cloud es una alternativa para TikTok, Instagram, Facebook, YouTube, X y Snapchat: se conecta desde Servidores sin pegar tokens de esas redes. Dailymotion, Bilibili y Rumble siguen por su API. Odysee entra con email/contraseña (auth token LBRY, TUS). El tipo de API, video, foto y renovación de token se ven en Servidores.",
+        "en": "What each server needs so publishing works. Official OAuth (or Rumble’s partner API) is the default. Saving Client ID/Secret only stores the app: the server stays unlinked until you click Connect and sign in; Disconnect or Remove API unlinks it, and connecting another account on the same card replaces the previous one. Register SITE_URL/oauth/{platform}/callback in each developer console. VMOS Cloud is an alternative for TikTok, Instagram, Facebook, YouTube, X and Snapchat: connect from Servers without pasting social access tokens. Dailymotion, Bilibili.com and Rumble stay on their APIs. Bilibili.tv uses an isolated browser session (email/password). Odysee signs in with email/password (LBRY auth token, TUS). API type, video, photo and token renewal are on Servers.",
+        "es": "Qué hay que hacer en cada servidor para que la publicación funcione. El camino por defecto es OAuth oficial (o la API de partners de Rumble). Guardar Client ID/Secret solo guarda la app: el servidor sigue sin vincular hasta que pulses Conectar e inicies sesión; Desconectar o Quitar API lo desvincula, y conectar otra cuenta en la misma ficha reemplaza la anterior. Registra SITE_URL/oauth/{plataforma}/callback en cada consola de desarrollador. VMOS Cloud es una alternativa para TikTok, Instagram, Facebook, YouTube, X y Snapchat: se conecta desde Servidores sin pegar tokens de esas redes. Dailymotion, Bilibili.com y Rumble siguen por su API. Bilibili.tv usa un navegador interno (email/contraseña). Odysee entra con email/contraseña (auth token LBRY, TUS). El tipo de API, video, foto y renovación de token se ven en Servidores.",
     },
     "apidoc.col_server": {"en": "Server", "es": "Servidor"},
     "apidoc.col_api": {"en": "API", "es": "API"},
@@ -2986,6 +3071,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "apidoc.api.filehost": {"en": "Host API (PPV)", "es": "API del host (PPV)"},
     "apidoc.api.lbry": {"en": "LBRY / Odysee", "es": "LBRY / Odysee"},
     "apidoc.api.hive": {"en": "Hive + IPFS", "es": "Hive + IPFS"},
+    "apidoc.api.browser": {"en": "Internal browser", "es": "Navegador interno"},
     "apidoc.token.auto": {"en": "Automatic", "es": "Automático"},
     "apidoc.token.manual": {"en": "Manual", "es": "Manual"},
     "apidoc.token.none": {"en": "Not used", "es": "No aplica"},
@@ -3160,8 +3246,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Servidores: guarda Client ID/Secret → Conectar con X.",
     },
     "apidoc.x.extra": {
-        "en": "Needs a paid write API plan. Config X: one recharge account, cost per post; daily 4 AM check for follower threshold.",
-        "es": "Hace falta plan de pago con escritura. Config X: una cuenta de recarga y costo por post; a las 4 am se marcan las que ya cumplen seguidores.",
+        "en": "Needs a paid write API plan. Config X: mark the account whose membership publishes for the others; daily 4 AM check for follower threshold.",
+        "es": "Hace falta plan de pago con escritura. Config X: marca la cuenta cuya membresía publica por las demás; a las 4 am se marcan las que ya cumplen seguidores.",
     },
     "apidoc.dailymotion.step1": {
         "en": "Get API Key and Secret from Dailymotion (partner / developer app).",
@@ -3192,8 +3278,24 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Servidores: guarda Client ID/Secret → Conectar con Bilibili.",
     },
     "apidoc.bilibili.extra": {
-        "en": "ffmpeg is required for the cover. Optional: BILIBILI_TID and BILIBILI_TAG in .env.",
-        "es": "ffmpeg hace falta para la portada. Opcional: BILIBILI_TID y BILIBILI_TAG en .env.",
+        "en": "ffmpeg is required for the cover. Optional: BILIBILI_TID and BILIBILI_TAG in .env. This is Bilibili.com, not Bilibili.tv.",
+        "es": "ffmpeg hace falta para la portada. Opcional: BILIBILI_TID y BILIBILI_TAG en .env. Esto es Bilibili.com, no Bilibili.tv.",
+    },
+    "apidoc.bilibili_tv.step1": {
+        "en": "Create an account on bilibili.tv (international site, not member.bilibili.com).",
+        "es": "Crea una cuenta en bilibili.tv (web internacional, no member.bilibili.com).",
+    },
+    "apidoc.bilibili_tv.step2": {
+        "en": "Servers → Connect with email/password. The panel stores an isolated Chromium profile per account.",
+        "es": "Servidores → Conectar con email/contraseña. Cada cuenta tiene un perfil Chromium aislado.",
+    },
+    "apidoc.bilibili_tv.step3": {
+        "en": "Keep-alive at 3:00 panel time, one account at a time. If captcha/SMS appears, complete it yourself.",
+        "es": "Keep-alive a las 3:00 hora del panel, una cuenta a la vez. Si pide captcha/SMS, lo completas tú.",
+    },
+    "apidoc.bilibili_tv.extra": {
+        "en": "Studio upload is not wired: publishing will not be marked sent. Needs: pip install playwright && playwright install chromium.",
+        "es": "La subida al estudio no está cableada: no se marca como enviado. Hace falta: pip install playwright && playwright install chromium.",
     },
     "apidoc.rumble.step1": {
         "en": "No public OAuth. Apply for the partner Upload API.",
@@ -3614,12 +3716,12 @@ MESSAGES: dict[str, dict[str, str]] = {
     "nav.proxys": {"en": "Proxies", "es": "Proxys"},
     "nav.config_x": {"en": "Config X", "es": "Config X"},
     # ------------------------------------------------------------------
-    # Config X (cuenta X que recarga y paga la API por las demás)
+    # Config X (app de X con membresía que publica por las demás)
     # ------------------------------------------------------------------
     "configx.title": {"en": "Config X", "es": "Config X"},
     "configx.intro": {
-        "en": "Add one or more X accounts whose apps pay for publishing. Posts are split across those apps. Each app stops near 9,900 posts in 24 hours (X’s cap is 10,000). Recharge balances; the panel emails admins when a balance is running low. A daily check at 4 AM (panel time) shows which X accounts already meet the follower threshold to start earning.",
-        "es": "Añade una o varias cuentas de X cuyas apps pagan las publicaciones. Los posts se reparte entre esas apps. Cada app se corta cerca de 9.900 posts en 24 horas (el tope de X es 10.000). Recarga el saldo; el panel avisa a los admins cuando se está acabando. Un chequeo diario a las 4 am (hora del panel) muestra qué cuentas de X ya cumplen el mínimo de seguidores para empezar a ganar.",
+        "en": "Mark the connected X account whose paid developer app publishes for the others. Posts using Config X go through that app. Each app stops near 9,900 posts in 24 hours (X’s cap is 10,000). A daily check at 4 AM (panel time) shows which X accounts already meet the follower threshold to start earning.",
+        "es": "Marca la cuenta de X conectada cuya app de desarrollador (membresía de pago) publica por las demás. Los posts con Config X salen por esa app. Cada app se corta cerca de 9.900 posts en 24 horas (el tope de X es 10.000). Un chequeo diario a las 4 am (hora del panel) muestra qué cuentas ya cumplen el mínimo de seguidores para empezar a ganar.",
     },
     "configx.info_btn": {"en": "About Config X", "es": "Acerca de Config X"},
     "configx.sources_title": {
@@ -3631,14 +3733,13 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Acerca de la cuenta que paga la API",
     },
     "configx.sources_hint": {
-        "en": "Add every connected X account whose developer app should pay. Publishing with the Config X checkbox splits posts across these apps (the one with the most posts left in 24 hours is used first). Each app stops at 9,900 posts / 24 h.",
-        "es": "Añade cada cuenta de X conectada cuya app de desarrollador debe pagar. Al publicar con el checkbox de Config X, los posts se reparte entre estas apps (se usa primero la que más hueco tenga en 24 h). Cada app se corta a 9.900 posts / 24 h.",
+        "en": "Add the connected X account whose developer app has the paid write plan. Publishing with the Config X checkbox uses that app (if you add more than one, the one with the most posts left in 24 hours is used first). Each app stops at 9,900 posts / 24 h.",
+        "es": "Añade la cuenta de X conectada cuya app de desarrollador tiene el plan de pago. Al publicar con Config X, los posts salen por esa app (si hay varias, se usa primero la que más hueco tenga en 24 h). Cada app se corta a 9.900 posts / 24 h.",
     },
     "configx.account_label": {"en": "X account", "es": "Cuenta de X"},
-    "configx.cost_label": {"en": "Cost per post (USD)", "es": "Costo por publicación (USD)"},
-    "configx.cost_hint": {
-        "en": "Set the cost each post deducts from the balance. Use 0 if you only want to count posts without deducting money.",
-        "es": "Define cuánto descuenta del saldo cada publicación. Usa 0 si solo quieres contar publicaciones sin descontar dinero.",
+    "configx.sources_form_hint": {
+        "en": "Choose the account whose X developer membership should publish for the others. There is no internal wallet: X already billed the app plan.",
+        "es": "Elige la cuenta cuya membresía de desarrollador de X publica por las demás. No hay saldo interno: el plan de la app ya lo cobró X.",
     },
     "configx.save": {"en": "Save", "es": "Guardar"},
     "configx.saved": {"en": "Saved.", "es": "Guardado."},
@@ -3648,29 +3749,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "configx.active": {"en": "Active", "es": "Activa"},
     "configx.inactive": {"en": "Inactive", "es": "Inactiva"},
-    "configx.recharged_label": {"en": "Recharged", "es": "Recargado"},
-    "configx.spent_label": {"en": "Spent", "es": "Gastado"},
-    "configx.available_label": {"en": "Available", "es": "Disponible"},
     "configx.posts_24h_label": {"en": "Posts (24 h)", "es": "Posts (24 h)"},
-    "configx.low_badge": {"en": "Low balance", "es": "Saldo bajo"},
     "configx.cap_badge": {"en": "Daily cap reached", "es": "Tope diario alcanzado"},
-    "configx.low_balance_subject": {
-        "en": "Config X: low balance on {name}",
-        "es": "Config X: saldo bajo en {name}",
-    },
-    "configx.low_balance_body": {
-        "en": "The Config X app {name} is running low.\nAvailable: {available}\nRecharged: {recharged}\nRecharge it in Config X so publishing on X does not stop.",
-        "es": "La app de Config X {name} se está quedando sin saldo.\nDisponible: {available}\nRecargado: {recharged}\nRecárgala en Config X para que no se detengan las publicaciones en X.",
-    },
-    "configx.recharge_ph": {"en": "Amount (USD)", "es": "Monto (USD)"},
-    "configx.recharge_btn": {"en": "Recharge", "es": "Recargar"},
-    "configx.recharged": {
-        "en": "Recharge of {amount} applied to {name}.",
-        "es": "Recarga de {amount} aplicada a {name}.",
-    },
     "configx.delete_confirm": {
-        "en": "Remove this recharge account? Its balance history is deleted too.",
-        "es": "¿Quitar esta cuenta de recarga? Su historial de saldo también se elimina.",
+        "en": "Remove this app from Config X? It will no longer be used to publish for the other accounts.",
+        "es": "¿Quitar esta app de Config X? Ya no se usará para publicar por las demás cuentas.",
     },
     "configx.err.bad_amount": {
         "en": "Enter a valid amount.",
@@ -3721,19 +3804,19 @@ MESSAGES: dict[str, dict[str, str]] = {
     "configx.meets_yes": {"en": "Qualifies ✔", "es": "Ya cumple ✔"},
     "configx.meets_no": {"en": "Not yet", "es": "Aún no"},
     "configx.never_checked": {"en": "Never", "es": "Nunca"},
-    "configx.source_badge": {"en": "Recharges", "es": "Recarga"},
-    "configx.usage_title": {"en": "Recent spending", "es": "Consumo reciente"},
+    "configx.source_badge": {"en": "Pays API", "es": "Paga la API"},
+    "configx.usage_title": {"en": "Recent Config X posts", "es": "Posts recientes de Config X"},
     "configx.usage_empty": {
-        "en": "No posts have used the Config X balance yet.",
-        "es": "Ninguna publicación ha usado el saldo de Config X todavía.",
+        "en": "No posts have used Config X yet.",
+        "es": "Ninguna publicación ha usado Config X todavía.",
     },
     "pub.x_use_funding": {
         "en": "Use Config X apps ({name}) for this X post",
         "es": "Usar apps de Config X ({name}) para esta publicación en X",
     },
     "pub.x_use_funding_hint": {
-        "en": "Checked: this post uses a Config X developer app (balance shared, posts split across apps, 9,900 / 24 h per app). Uncheck it only if this account has its own X API keys.",
-        "es": "Marcado: esta publicación usa una app de Config X (saldo compartido, posts repartidos entre apps, 9.900 / 24 h por app). Desmárcalo solo si esta cuenta tiene su propia API de X.",
+        "en": "Checked: this post uses a Config X developer app (posts split across those apps, 9,900 / 24 h per app). Uncheck it only if this account has its own X API keys.",
+        "es": "Marcado: esta publicación usa una app de Config X (posts repartidos entre esas apps, 9.900 / 24 h por app). Desmárcalo solo si esta cuenta tiene su propia API de X.",
     },
     "nav.membresias": {"en": "Pricing", "es": "Precio"},
     "nav.pagos": {"en": "Payments", "es": "Pagos"},

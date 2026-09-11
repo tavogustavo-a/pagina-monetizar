@@ -163,8 +163,8 @@ def publish_failure_alert_jobs(
     return jobs
 
 
-def send_x_funding_low_alert(src: dict[str, Any], *, lang: str = "es") -> bool:
-    """Avisa a admins cuando el saldo de una app de Config X está bajo."""
+def send_bilibili_tv_session_alert(*, login: str, code: str, lang: str = "es") -> bool:
+    """Avisa a admins si la sesión de Bilibili.tv caducó o cambió la web."""
     if not smtp_configured():
         return False
     import db
@@ -173,17 +173,16 @@ def send_x_funding_low_alert(src: dict[str, Any], *, lang: str = "es") -> bool:
     emails = db.list_admin_notification_emails()
     if not emails:
         return False
-    name = str(src.get("name") or "X")
-    available = int(src.get("available_cents") or 0)
-    recharged = int(src.get("recharged_cents") or 0)
-    subject = t("configx.low_balance_subject", lang, name=name)
-    body = t(
-        "configx.low_balance_body",
-        lang,
-        name=name,
-        available=f"${available / 100:,.2f}",
-        recharged=f"${recharged / 100:,.2f}",
-    )
+    err_key = {
+        "website_changed": "bilibili_tv.err_website",
+        "captcha": "bilibili_tv.err_captcha",
+        "session_dead": "bilibili_tv.err_session",
+        "login_failed": "bilibili_tv.err_login",
+        "browser_error": "bilibili_tv.err_browser",
+    }.get(code, "bilibili_tv.err_session")
+    detail = t(err_key, lang)
+    subject = t("bilibili_tv.alert_subject", lang, site=site_config.SITE_NAME, login=login)
+    body = t("bilibili_tv.alert_body", lang, login=login, detail=detail)
     sent_any = False
     for to in emails:
         if send_plain_email(to=to, subject=subject, body=body):

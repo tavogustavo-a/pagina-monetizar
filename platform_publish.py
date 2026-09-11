@@ -18,6 +18,7 @@ TITLE_PLATFORMS = frozenset(
         "facebook",
         "dailymotion",
         "bilibili",
+        "bilibili_tv",
         "rumble",
         "odysee",
         "dtube",

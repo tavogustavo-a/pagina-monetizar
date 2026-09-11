@@ -9,7 +9,11 @@
   >
     <div class="tiktok-config-card__main">
       <div class="tiktok-config-card__head">
+        {% if platform.id == 'bilibili_tv' and not c.session_ok %}
+        <span class="badge">{{ t('servers.chain_session_bad') }}</span>
+        {% else %}
         <span class="badge badge-active">{{ t('servers.connected') }}</span>
+        {% endif %}
       </div>
       {% if c.name %}
       <p class="tiktok-config-card__meta sub">{{ c.name }}</p>

@@ -156,23 +156,40 @@ async def lifespan(app: FastAPI):
                 pass
             await asyncio.sleep(300)
 
+    async def bilibili_tv_worker() -> None:
+        """A las 3 am (hora del panel) mantiene vivas las sesiones de Bilibili.tv."""
+        while True:
+            try:
+                import bilibili_tv
+
+                await asyncio.to_thread(bilibili_tv.run_daily_keep_alive_if_due)
+            except Exception:
+                pass
+            await asyncio.sleep(300)
+
     worker = None
     extractor_task = None
     x_check_task = None
+    bilibili_tv_task = None
     _SCHEDULER_LOCK_FH = _try_hold_scheduler_lock()
     if _SCHEDULER_LOCK_FH is not None:
         worker = asyncio.create_task(scheduled_worker())
         extractor_task = asyncio.create_task(extractor_worker())
         x_check_task = asyncio.create_task(x_monetize_worker())
+        bilibili_tv_task = asyncio.create_task(bilibili_tv_worker())
     try:
         yield
     finally:
-        for task in (worker, extractor_task, x_check_task):
+        for task in (worker, extractor_task, x_check_task, bilibili_tv_task):
             if task is not None:
                 task.cancel()
         if worker is not None:
             await asyncio.gather(
-                worker, extractor_task, x_check_task, return_exceptions=True
+                worker,
+                extractor_task,
+                x_check_task,
+                bilibili_tv_task,
+                return_exceptions=True,
             )
         if _SCHEDULER_LOCK_FH is not None:
             try:
@@ -5090,6 +5107,22 @@ def _chain_fail_error(lang: str, platform_id: str, detail: str) -> str:
     pid = (platform_id or "").strip()
     msg = (detail or "").strip()
     low = msg.lower()
+    if pid == "bilibili_tv":
+        key = {
+            "email_password_required": "servers.chain_missing",
+            "missing_fields": "servers.chain_missing",
+            "playwright_missing": "bilibili_tv.err_playwright",
+            "website_changed": "bilibili_tv.err_website",
+            "captcha": "bilibili_tv.err_captcha",
+            "session_dead": "bilibili_tv.err_session",
+            "login_failed": "bilibili_tv.err_login",
+            "browser_busy": "bilibili_tv.err_busy",
+            "browser_error": "bilibili_tv.err_browser",
+            "need_saved_account": "servers.chain_missing",
+        }.get(msg)
+        if key:
+            return i18n.t(key, lang)
+        return i18n.t("api.chain.fail", lang, error=msg or "error")
     if pid != "odysee":
         return i18n.t("api.chain.fail", lang, error=msg or "error")
     if msg in {"email_password_required", "missing_fields"}:
@@ -5134,6 +5167,66 @@ def api_chain_save(request: Request, body: ChainAccountBody):
             extra = extra or str(raw.get("extra") or "")
     if pid == "odysee" and extra:
         extra = odysee.normalize_channel_id(extra) or extra
+    if pid == "bilibili_tv":
+        import bilibili_tv
+
+        ready, err = bilibili_tv.playwright_ready()
+        if not ready:
+            return JSONResponse(
+                {"ok": False, "error": _chain_fail_error(lang, pid, err)},
+                status_code=400,
+            )
+        try:
+            row = db.upsert_chain_account(
+                account_id=body.id,
+                platform_id=pid,
+                name=body.name or login,
+                login=login,
+                secret=body.secret,
+                extra="",
+                link_name=body.link_name,
+            )
+        except ValueError as e:
+            code = str(e)
+            if code == "missing_fields":
+                return JSONResponse(
+                    {"ok": False, "error": i18n.t("servers.chain_missing", lang)},
+                    status_code=400,
+                )
+            if code == "unknown_platform":
+                return JSONResponse({"ok": False, "error": "Unknown platform."}, status_code=404)
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=404)
+        stored = db.get_chain_account_raw(str(row.get("id") or "")) or {}
+        probe_secret = secret
+        if probe_secret in ("unchanged", "x" * 19) or not probe_secret:
+            probe_secret = str(stored.get("secret") or "")
+        ok, detail = chain.probe_account(
+            pid, login, probe_secret, "", account_id=str(row.get("id") or "")
+        )
+        now = datetime.now(timezone.utc).isoformat()
+        prev_ok = str(stored.get("last_ok_at") or "")
+        db.update_chain_browser_session(
+            str(row.get("id") or ""),
+            session_ok=ok,
+            last_ok_at=now if ok else prev_ok,
+            last_error="" if ok else str(detail or ""),
+        )
+        if ok:
+            return {
+                "ok": True,
+                "account": row,
+                "message": i18n.t("servers.chain_saved", lang, name=detail or login),
+            }
+        if str(detail or "") == "captcha":
+            return {
+                "ok": True,
+                "account": row,
+                "message": i18n.t("bilibili_tv.saved_captcha", lang),
+            }
+        return JSONResponse(
+            {"ok": False, "error": _chain_fail_error(lang, pid, detail)},
+            status_code=400,
+        )
     ok, detail = chain.probe_account(pid, login, secret, extra)
     unverified = pid == "odysee" and (
         "email_unverified" in str(detail or "").lower()
@@ -5197,7 +5290,13 @@ def api_chain_test(request: Request, body: ChainAccountBody):
             login = login or str(raw.get("login") or "")
             secret = secret or str(raw.get("secret") or "")
             extra = extra or str(raw.get("extra") or "")
-    ok, detail = chain.probe_account(body.platform_id, login, secret, extra)
+    ok, detail = chain.probe_account(
+        body.platform_id,
+        login,
+        secret,
+        extra,
+        account_id=body.id or "",
+    )
     if not ok:
         return JSONResponse(
             {"ok": False, "error": _chain_fail_error(lang, body.platform_id, detail)},
@@ -5216,22 +5315,6 @@ def api_chain_delete(request: Request, account_id: str):
     except ValueError:
         return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
     return {"ok": True}
-
-
-def _parse_money_cents(raw: str) -> int:
-    """Convierte '10', '10.5' o '10,50' (USD) a centavos. Lanza ValueError si no es válido."""
-    text = (raw or "").strip().replace("$", "").replace(",", ".")
-    if not text:
-        raise ValueError("bad_amount")
-    value = float(text)
-    cents = round(value * 100)
-    if cents < 0:
-        raise ValueError("bad_amount")
-    return cents
-
-
-def _fmt_money(cents: int) -> str:
-    return f"${cents / 100:,.2f}"
 
 
 @app.get("/admin/config-x", name="admin_config_x")
@@ -5274,20 +5357,13 @@ def admin_config_x(request: Request):
             "usage": db.list_x_funding_usage(limit=30),
             "min_followers": x_funding.min_followers(),
             "last_check": (db.get_app_setting(x_funding.LAST_CHECK_KEY) or ""),
-            "fmt_money": _fmt_money,
         },
     )
 
 
 class XFundingSourceBody(BaseModel):
     oauth_account_id: str = ""
-    cost_per_post: str = ""
     active: bool = True
-
-
-class XFundingRechargeBody(BaseModel):
-    source_id: str = ""
-    amount: str = ""
 
 
 class XFundingSettingsBody(BaseModel):
@@ -5301,15 +5377,8 @@ def api_xconfig_source_save(request: Request, body: XFundingSourceBody):
         return deny
     lang = i18n.resolve_lang(request)
     try:
-        cost = _parse_money_cents(body.cost_per_post) if body.cost_per_post.strip() else 0
-    except ValueError:
-        return JSONResponse(
-            {"ok": False, "error": i18n.t("configx.err.bad_amount", lang)}, status_code=400
-        )
-    try:
         src = db.upsert_x_funding_source(
             oauth_account_id=body.oauth_account_id,
-            cost_per_post_cents=cost,
             active=bool(body.active),
         )
     except ValueError:
@@ -5318,37 +5387,6 @@ def api_xconfig_source_save(request: Request, body: XFundingSourceBody):
             status_code=400,
         )
     return {"ok": True, "source": src, "message": i18n.t("configx.saved", lang)}
-
-
-@app.post("/admin/api/xconfig/recharge")
-def api_xconfig_recharge(request: Request, body: XFundingRechargeBody):
-    deny = _require_server_admin_json(request)
-    if deny:
-        return deny
-    lang = i18n.resolve_lang(request)
-    try:
-        amount = _parse_money_cents(body.amount)
-        if amount <= 0:
-            raise ValueError("bad_amount")
-    except ValueError:
-        return JSONResponse(
-            {"ok": False, "error": i18n.t("configx.err.bad_amount", lang)}, status_code=400
-        )
-    try:
-        src = db.add_x_funding_recharge(body.source_id, amount)
-        db.set_app_setting(f"x_funding_low_alert:{src['id']}", "")
-    except ValueError:
-        return JSONResponse(
-            {"ok": False, "error": i18n.t("configx.err.account_not_found", lang)},
-            status_code=404,
-        )
-    return {
-        "ok": True,
-        "source": src,
-        "message": i18n.t(
-            "configx.recharged", lang, amount=_fmt_money(amount), name=src["name"]
-        ),
-    }
 
 
 @app.delete("/admin/api/xconfig/source/{source_id}")

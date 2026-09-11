@@ -68,7 +68,7 @@
                     </td>
                     <td data-label="{{ t('apidoc.col_api') }}">
                       {% set ak = platform.api_kind or 'none' %}
-                      <span class="cap {% if ak == 'oauth' %}cap--yes{% elif ak in ['partner', 'vmos', 'filehost', 'lbry', 'hive'] %}cap--limited{% else %}cap--no{% endif %}">{{ platform.api_label or t('apidoc.api.' ~ ak) }}</span>
+                      <span class="cap {% if ak == 'oauth' %}cap--yes{% elif ak in ['partner', 'vmos', 'filehost', 'lbry', 'hive', 'browser'] %}cap--limited{% else %}cap--no{% endif %}">{{ platform.api_label or t('apidoc.api.' ~ ak) }}</span>
                     </td>
                     <td data-label="{{ t('apidoc.col_video') }}">
                       <span class="cap cap--{{ platform.video }}">{{ t('cap.' ~ platform.video) }}</span>
@@ -357,7 +357,7 @@
       <p class="sub js-chain-form-msg" hidden></p>
       <div class="server-modal__actions">
         <button type="submit" class="btn btn-accent">{{ t('servers.chain_save') }}</button>
-        <button type="button" class="btn btn-ghost" id="chain-test-btn">⚡ {{ t('servers.chain_test') }}</button>
+        <button type="button" class="btn btn-ghost js-chain-test-btn" id="chain-test-btn" hidden>⚡ {{ t('servers.chain_test') }}</button>
       </div>
     </form>
   </div>
@@ -926,7 +926,8 @@
     var chainTitleTpl = {{ t('servers.chain_title', platform='__NAME__') | tojson }};
     var chainHints = {
       odysee: {{ t('servers.chain_hint_odysee') | tojson }},
-      dtube: {{ t('servers.chain_hint_dtube') | tojson }}
+      dtube: {{ t('servers.chain_hint_dtube') | tojson }},
+      bilibili_tv: {{ t('servers.chain_hint_bilibili_tv') | tojson }}
     };
     var chainLabels = {
       email: {{ t('servers.chain_field_email') | tojson }},
@@ -1398,6 +1399,11 @@
         fillSecretInput(form.querySelector('input[name="secret"]'), chainData.secret || "");
         var extraIn = form.querySelector('input[name="extra"]');
         if (extraIn) extraIn.value = chainData.extra || "";
+        var testBtnHide = form.querySelector(".js-chain-test-btn");
+        if (testBtnHide) {
+          var pid = (form.getAttribute("data-platform-id") || (form.querySelector('[name="platform_id"]') || {}).value || "");
+          testBtnHide.hidden = pid === "odysee" || pid === "bilibili_tv";
+        }
         bindSecretToggles(form);
 
         form.addEventListener("submit", function (e) {

@@ -320,6 +320,10 @@ def _ensure_chain_accounts_table() -> None:
         conn.close()
     _ensure_column("chain_accounts", "auth_token", "TEXT NOT NULL DEFAULT ''")
     _ensure_column("chain_accounts", "imap_json", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column("chain_accounts", "session_ok", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column("chain_accounts", "last_ok_at", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column("chain_accounts", "last_error", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column("chain_accounts", "last_alert_at", "TEXT NOT NULL DEFAULT ''")
 
 
 def _ensure_x_funding_tables() -> None:
@@ -375,7 +379,6 @@ def _ensure_x_funding_tables() -> None:
 
 # Tope de la app de X: 10.000 posts/24 h. Cortamos en 9.900 para no rozar el techo.
 X_APP_DAILY_POST_CAP = 9900
-X_FUNDING_LOW_BALANCE_RATIO = 0.15
 
 
 def _ensure_filehost_accounts_table() -> None:
@@ -3122,6 +3125,10 @@ def _delete_chain_account_on_conn(conn: sqlite3.Connection, account_id: str) -> 
     oid = (account_id or "").strip()
     if not oid:
         return
+    pid_row = conn.execute(
+        "SELECT platform_id FROM chain_accounts WHERE id = ?", (oid,)
+    ).fetchone()
+    pid = str(pid_row["platform_id"] or "") if pid_row else ""
     member_cols = {
         r[1] for r in conn.execute("PRAGMA table_info(server_group_members)").fetchall()
     }
@@ -3141,6 +3148,10 @@ def _delete_chain_account_on_conn(conn: sqlite3.Connection, account_id: str) -> 
         (oid,),
     )
     conn.execute("DELETE FROM chain_accounts WHERE id = ?", (oid,))
+    if pid == "bilibili_tv":
+        import bilibili_tv
+
+        bilibili_tv.remove_profile(oid)
 
 
 def _delete_server_account_on_conn(conn: sqlite3.Connection, account_id: str) -> None:
@@ -5652,6 +5663,13 @@ def delete_filehost_account(account_id: str) -> None:
 def _chain_public_row(r: Any) -> dict[str, Any]:
     login = str(r["login"] or "")
     extra = str(r["extra"] or "")
+    keys = r.keys()
+    session_ok = 0
+    last_error = ""
+    if "session_ok" in keys:
+        session_ok = int(r["session_ok"] or 0)
+    if "last_error" in keys:
+        last_error = str(r["last_error"] or "")
     return {
         "id": r["id"],
         "platform_id": r["platform_id"],
@@ -5661,6 +5679,8 @@ def _chain_public_row(r: Any) -> dict[str, Any]:
         "secret": str(r["secret"] or ""),
         "extra": extra,
         "extra_mask": _mask_secret(extra) if extra else "",
+        "session_ok": bool(session_ok),
+        "last_error": last_error,
         "updated_at": r["updated_at"],
     }
 
@@ -5712,6 +5732,74 @@ def get_chain_account_raw(account_id: str) -> dict[str, Any] | None:
             "SELECT * FROM chain_accounts WHERE id = ?", (oid,)
         ).fetchone()
         return {k: row[k] for k in row.keys()} if row else None
+    finally:
+        conn.close()
+
+
+def list_chain_accounts_raw(platform_id: str = "") -> list[dict[str, Any]]:
+    seed_admin_if_missing()
+    pid = (platform_id or "").strip()
+    conn = _connect()
+    try:
+        if pid:
+            rows = conn.execute(
+                """
+                SELECT * FROM chain_accounts
+                WHERE platform_id = ?
+                ORDER BY updated_at DESC
+                """,
+                (pid,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM chain_accounts ORDER BY platform_id, updated_at DESC"
+            ).fetchall()
+        return [{k: r[k] for k in r.keys()} for r in rows]
+    finally:
+        conn.close()
+
+
+def update_chain_browser_session(
+    account_id: str,
+    *,
+    session_ok: bool,
+    last_ok_at: str = "",
+    last_error: str = "",
+    last_alert_at: str | None = None,
+) -> None:
+    oid = (account_id or "").strip()
+    if not oid:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        if last_alert_at is None:
+            conn.execute(
+                """
+                UPDATE chain_accounts
+                SET session_ok = ?, last_ok_at = ?, last_error = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (1 if session_ok else 0, last_ok_at or "", last_error or "", now, oid),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE chain_accounts
+                SET session_ok = ?, last_ok_at = ?, last_error = ?, last_alert_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    1 if session_ok else 0,
+                    last_ok_at or "",
+                    last_error or "",
+                    last_alert_at,
+                    now,
+                    oid,
+                ),
+            )
+        conn.commit()
     finally:
         conn.close()
 
@@ -5880,11 +5968,6 @@ def delete_chain_account(account_id: str) -> None:
 
 
 def _x_funding_source_row(conn: sqlite3.Connection, r: Any) -> dict[str, Any]:
-    spent_row = conn.execute(
-        "SELECT COALESCE(SUM(cost_cents), 0) AS spent FROM x_funding_usage WHERE source_id = ?",
-        (r["id"],),
-    ).fetchone()
-    spent = int(spent_row["spent"] or 0)
     acc = conn.execute(
         "SELECT username, display_name, account_name, active FROM oauth_accounts WHERE id = ?",
         (r["oauth_account_id"],),
@@ -5897,7 +5980,6 @@ def _x_funding_source_row(conn: sqlite3.Connection, r: Any) -> dict[str, Any]:
             or str(acc["display_name"] or "").strip()
             or (f"@{uname}" if uname else "")
         )
-    recharged = int(r["recharged_cents"] or 0)
     posts_24h = int(
         conn.execute(
             """
@@ -5914,10 +5996,6 @@ def _x_funding_source_row(conn: sqlite3.Connection, r: Any) -> dict[str, Any]:
         "name": label or "X",
         "username": uname,
         "connected": bool(acc),
-        "cost_per_post_cents": int(r["cost_per_post_cents"] or 0),
-        "recharged_cents": recharged,
-        "spent_cents": spent,
-        "available_cents": recharged - spent,
         "active": bool(r["active"]),
         "posts_24h": posts_24h,
         "posts_cap": X_APP_DAILY_POST_CAP,
@@ -5941,7 +6019,6 @@ def list_x_funding_sources() -> list[dict[str, Any]]:
 def upsert_x_funding_source(
     *,
     oauth_account_id: str,
-    cost_per_post_cents: int,
     active: bool = True,
 ) -> dict[str, Any]:
     seed_admin_if_missing()
@@ -5961,19 +6038,18 @@ def upsert_x_funding_source(
         ).fetchone()
         sid = existing["id"] if existing else str(uuid.uuid4())
         created = existing["created_at"] if existing else now
-        recharged = int(existing["recharged_cents"] or 0) if existing else 0
         conn.execute(
             """
             INSERT INTO x_funding_sources (
                 id, oauth_account_id, cost_per_post_cents, recharged_cents,
                 active, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, 0, 0, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
-                cost_per_post_cents = excluded.cost_per_post_cents,
+                cost_per_post_cents = 0,
                 active = excluded.active,
                 updated_at = excluded.updated_at
             """,
-            (sid, oid, max(0, int(cost_per_post_cents)), recharged, 1 if active else 0, created, now),
+            (sid, oid, 1 if active else 0, created, now),
         )
         conn.commit()
         row = conn.execute(
@@ -5999,45 +6075,13 @@ def delete_x_funding_source(source_id: str) -> None:
         conn.close()
 
 
-def add_x_funding_recharge(source_id: str, amount_cents: int) -> dict[str, Any]:
-    sid = (source_id or "").strip()
-    amount = int(amount_cents)
-    if not sid:
-        raise ValueError("not_found")
-    if amount <= 0:
-        raise ValueError("bad_amount")
-    now = datetime.now(timezone.utc).isoformat()
-    conn = _connect()
-    try:
-        cur = conn.execute(
-            """
-            UPDATE x_funding_sources
-            SET recharged_cents = recharged_cents + ?, updated_at = ?
-            WHERE id = ?
-            """,
-            (amount, now, sid),
-        )
-        if cur.rowcount == 0:
-            raise ValueError("not_found")
-        conn.commit()
-        row = conn.execute(
-            "SELECT * FROM x_funding_sources WHERE id = ?", (sid,)
-        ).fetchone()
-        return _x_funding_source_row(conn, row)
-    finally:
-        conn.close()
-
-
 def list_usable_x_funding_sources() -> list[dict[str, Any]]:
-    """Fuentes activas con saldo y hueco bajo el tope de 9.900 posts/24 h."""
+    """Apps activas con hueco bajo el tope de 9.900 posts/24 h."""
     out: list[dict[str, Any]] = []
     for src in list_x_funding_sources():
         if not src["active"] or not src["connected"]:
             continue
         if int(src.get("posts_left") or 0) <= 0:
-            continue
-        cost = max(0, int(src["cost_per_post_cents"] or 0))
-        if cost > 0 and int(src["available_cents"] or 0) < cost:
             continue
         out.append(src)
     return out
@@ -6048,7 +6092,7 @@ def resolve_active_x_funding_source() -> dict[str, Any] | None:
     usable = list_usable_x_funding_sources()
     if not usable:
         return None
-    usable.sort(key=lambda s: (-int(s.get("posts_left") or 0), -int(s.get("available_cents") or 0)))
+    usable.sort(key=lambda s: -int(s.get("posts_left") or 0))
     return usable[0]
 
 
@@ -6057,7 +6101,7 @@ def record_x_funding_usage(
     account_link_id: str | None = None,
     video_title: str = "",
 ) -> bool:
-    """Descuenta un post del saldo de la fuente activa. Devuelve False si no hay fuente."""
+    """Cuenta un post de Config X contra el tope de 24 h. Devuelve False si no hay app."""
     src = resolve_active_x_funding_source()
     if not src:
         return False
@@ -6076,52 +6120,14 @@ def record_x_funding_usage(
                 src["id"],
                 oid,
                 (video_title or "").strip()[:200],
-                int(src["cost_per_post_cents"] or 0),
+                0,
                 now,
             ),
         )
         conn.commit()
     finally:
         conn.close()
-    maybe_alert_x_funding_source(src["id"])
     return True
-
-
-def x_funding_source_is_low(src: dict[str, Any]) -> bool:
-    recharged = max(0, int(src.get("recharged_cents") or 0))
-    available = int(src.get("available_cents") or 0)
-    cost = max(0, int(src.get("cost_per_post_cents") or 0))
-    if recharged <= 0:
-        return False
-    if available <= 0:
-        return True
-    if cost > 0 and available < cost:
-        return True
-    return available <= int(recharged * X_FUNDING_LOW_BALANCE_RATIO)
-
-
-def maybe_alert_x_funding_source(source_id: str) -> None:
-    """Avisa a los admins si el saldo de esa app está bajo (una vez por umbral)."""
-    sid = (source_id or "").strip()
-    if not sid:
-        return
-    src = next((s for s in list_x_funding_sources() if s["id"] == sid), None)
-    if not src:
-        return
-    if not x_funding_source_is_low(src):
-        set_app_setting(f"x_funding_low_alert:{sid}", "")
-        return
-    key = f"x_funding_low_alert:{sid}"
-    if (get_app_setting(key) or "").strip() == "1":
-        return
-    try:
-        import notify
-        from i18n import t
-
-        notify.send_x_funding_low_alert(src, lang="es")
-    except Exception:
-        return
-    set_app_setting(key, "1")
 
 
 def list_x_funding_usage(limit: int = 30) -> list[dict[str, Any]]:
