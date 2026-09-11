@@ -46,6 +46,23 @@ def _api_error(data: dict[str, Any], fallback: str) -> str:
     return (fallback or "X API error")[:220]
 
 
+def _is_credits_error(err: str) -> bool:
+    low = (err or "").lower()
+    return "credit" in low or "usagecap" in low or "usage cap" in low or "429" in low
+    if data.get("detail"):
+        return str(data.get("detail"))[:220]
+    if data.get("title"):
+        return str(data.get("title"))[:220]
+    errs = data.get("errors")
+    if isinstance(errs, list) and errs:
+        first = errs[0]
+        if isinstance(first, dict):
+            msg = str(first.get("message") or first.get("detail") or "").strip()
+            if msg:
+                return msg[:220]
+    return (fallback or "X API error")[:220]
+
+
 def _parse_json(raw: str) -> dict[str, Any]:
     try:
         data = json.loads(raw) if raw else {}
@@ -340,6 +357,8 @@ def publish_media(
             tweet_id = _create_tweet(token, text, media_id)
         except ValueError as e:
             msg = str(e).lower()
+            if _is_credits_error(msg):
+                raise
             if "unauthorized" in msg or "expired" in msg or "token" in msg or "401" in msg:
                 row = _refresh_row(row)
                 token = str(row.get("access_token") or "").strip()
@@ -353,6 +372,8 @@ def publish_media(
     except ValueError as e:
         if str(e) == "missing_token":
             return False, t("pub.x.no_token", lang)
+        if _is_credits_error(str(e)):
+            return False, t("pub.x.credits_depleted", lang)
         return False, t("pub.x.upload_fail", lang, error=str(e)[:180])
     except Exception as e:
         return False, t("pub.x.upload_fail", lang, error=str(e)[:180])

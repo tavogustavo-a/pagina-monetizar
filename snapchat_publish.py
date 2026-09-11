@@ -195,6 +195,24 @@ def _encrypt_file(src: Path) -> tuple[Path, str, str]:
     key = os.urandom(32)
     iv = os.urandom(16)
     dest = Path(tempfile.gettempdir()) / f"snap_enc_{uuid.uuid4().hex}.bin"
+    try:
+        _encrypt_aes_cbc(src, dest, key, iv)
+    except ImportError:
+        dest.unlink(missing_ok=True)
+        _encrypt_file_openssl(src, dest, key, iv)
+    except Exception:
+        dest.unlink(missing_ok=True)
+        try:
+            _encrypt_file_openssl(src, dest, key, iv)
+        except ValueError:
+            raise
+    if not dest.is_file() or dest.stat().st_size <= 0:
+        dest.unlink(missing_ok=True)
+        raise ValueError("need_openssl")
+    return dest, base64.b64encode(key).decode("ascii"), base64.b64encode(iv).decode("ascii")
+
+
+def _encrypt_file_openssl(src: Path, dest: Path, key: bytes, iv: bytes) -> None:
     cmd = [
         "openssl",
         "enc",
@@ -218,9 +236,21 @@ def _encrypt_file(src: Path) -> tuple[Path, str, str]:
     except (subprocess.SubprocessError, OSError) as e:
         dest.unlink(missing_ok=True)
         raise ValueError(str(e)[:180]) from e
-    if not dest.is_file() or dest.stat().st_size <= 0:
-        raise ValueError("need_openssl")
-    return dest, base64.b64encode(key).decode("ascii"), base64.b64encode(iv).decode("ascii")
+
+
+def _encrypt_aes_cbc(src: Path, dest: Path, key: bytes, iv: bytes) -> None:
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from cryptography.hazmat.primitives.padding import PKCS7
+
+    padder = PKCS7(128).padder()
+    encryptor = Cipher(algorithms.AES(key), modes.CBC(iv)).encryptor()
+    with src.open("rb") as inf, dest.open("wb") as out:
+        while True:
+            chunk = inf.read(1024 * 1024)
+            if not chunk:
+                break
+            out.write(encryptor.update(padder.update(chunk)))
+        out.write(encryptor.update(padder.finalize()) + encryptor.finalize())
 
 
 def _create_media(token: str, profile_id: str, media_type: str, name: str, key_b64: str, iv_b64: str) -> dict[str, Any]:

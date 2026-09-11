@@ -413,8 +413,10 @@
     var jobsEl = document.getElementById("pub-bg-jobs");
     var publishUrl = form ? form.getAttribute("action") || "/admin/videos" : "/admin/videos";
     var currentUploadJob = null;
+    var afterTempUpload = null;
     var uploadI18n = {
       uploading: {{ t('pub.captions_uploading') | tojson }},
+      waitUpload: {{ t('pub.flash.wait_upload') | tojson }},
       uploadFail: {{ t('pub.captions_upload_fail') | tojson }},
       fileTooLarge: {{ t('pub.flash.file_too_large', max_mb=max_upload_mb) | tojson }},
       maxUploadBytes: {{ max_upload_bytes | tojson }},
@@ -485,6 +487,7 @@
         currentUploadJob = null;
         uploadGen += 1;
         uploadPromise = null;
+        afterTempUpload = null;
         heldFile = null;
         clearTempLocal();
         clearFileInput();
@@ -492,6 +495,8 @@
         setThumbSrc("");
         if (fname) fname.textContent = "";
         setPreviewVisible(false);
+        var submitBtn = document.getElementById("publish-submit");
+        if (submitBtn) submitBtn.disabled = false;
       }
       removePubJob(job);
     }
@@ -722,11 +727,10 @@
 
     function startTempUpload(file) {
         if (currentUploadJob) cancelPubJob(currentUploadJob);
+        heldFile = file;
         clearFileInput();
-        revokePreviewUrl();
-        setThumbSrc("");
-        if (fname) fname.textContent = "";
-        setPreviewVisible(false);
+        if (fname) fname.textContent = file.name || "";
+        setPreviewVisible(true);
         var gen = ++uploadGen;
         var ac = new AbortController();
         var job = addPubJob("");
@@ -755,15 +759,23 @@
             var data = res.data;
             setTempToken(data.token, data.url, data.name || file.name);
             job.token = data.token;
+            if (afterTempUpload) {
+              var next = afterTempUpload;
+              afterTempUpload = null;
+              next();
+            }
           })
           .catch(function (err) {
             if (gen !== uploadGen || job.aborted) return;
             if (err && err.name === "AbortError") return;
             resetSelectedMedia();
+            afterTempUpload = null;
             finishPubJob(job, false, (err && err.message && err.message !== "upload")
               ? err.message
               : uploadI18n.uploadFail);
             if (currentUploadJob === job) currentUploadJob = null;
+            var submitBtn = document.getElementById("publish-submit");
+            if (submitBtn) submitBtn.disabled = false;
             throw err;
           })
           .finally(function () {
@@ -840,7 +852,9 @@
           fileToSend = input.files[0];
         }
         if (!token && !fileToSend) {
-          alert(msgFile);
+          if (currentUploadJob && currentUploadJob.text) {
+            currentUploadJob.text.textContent = uploadI18n.waitUpload;
+          }
           return;
         }
         if (publisherOnlyVideo && fileToSend && !isVideoFile(fileToSend)) {
@@ -920,7 +934,8 @@
         var desc = form.querySelector('textarea[name="description"]');
         var title = form.querySelector('input[name="title"]');
         var scheduledAt = document.getElementById("scheduled-at");
-        var hasFile = !!heldFile || !!tempToken || (input.files && input.files.length > 0);
+        var uploading = !!(uploadPromise || (currentUploadJob && !tempToken));
+        var hasFile = !!heldFile || !!tempToken || (input.files && input.files.length > 0) || uploading;
         var hasTitle = title && (title.value || "").trim().length > 0;
 
         if (!hasFile) {
@@ -945,22 +960,23 @@
         }
 
         var waitJob = currentUploadJob;
+        var submitBtn = document.getElementById("publish-submit");
         function go() {
+          afterTempUpload = null;
+          if (submitBtn) submitBtn.disabled = false;
           if (!tempToken && !heldFile && !(input.files && input.files.length)) {
-            alert(msgFile);
-            if (waitJob && waitJob.text) waitJob.text.textContent = msgFile;
+            if (waitJob && waitJob.text) waitJob.text.textContent = uploadI18n.waitUpload;
             return;
           }
           sendPublish(waitJob);
         }
-        if (uploadPromise) {
-          if (waitJob && waitJob.text) waitJob.text.textContent = uploadI18n.uploading;
-          uploadPromise.then(go).catch(function (err) {
-            if (err && err.name === "AbortError") return;
-          });
-        } else {
-          go();
+        if (uploading) {
+          afterTempUpload = go;
+          if (waitJob && waitJob.text) waitJob.text.textContent = uploadI18n.waitUpload;
+          if (submitBtn) submitBtn.disabled = true;
+          return;
         }
+        go();
       });
     }
   })();

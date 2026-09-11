@@ -281,6 +281,7 @@ def _ensure_session(page, email: str, password: str) -> tuple[bool, str]:
     except Exception:
         return False, "website_changed"
     page.wait_for_timeout(1200)
+    _dismiss_noise(page)
     if _looks_logged_in(page):
         return True, email
     if _looks_captcha(page):
@@ -292,7 +293,7 @@ def _ensure_session(page, email: str, password: str) -> tuple[bool, str]:
         return False, "captcha"
     if not _fill_credentials(page, email, password):
         return False, "website_changed"
-    page.wait_for_timeout(2500)
+    page.wait_for_timeout(2800)
     if _looks_captcha(page):
         return False, "captcha"
     if _looks_logged_in(page):
@@ -515,12 +516,28 @@ def _pick_first_category(page) -> None:
     )
 
 
+def _dismiss_noise(page) -> None:
+    _click_first(
+        page,
+        [
+            'button:has-text("Accept")',
+            'button:has-text("Agree")',
+            'button:has-text("I agree")',
+            'button:has-text("Got it")',
+            'button:has-text("OK")',
+            '[aria-label="Close"]',
+            'button:has-text("Close")',
+        ],
+    )
+
+
 def _open_login(page) -> bool:
     for url in LOGIN_URLS:
         try:
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_timeout(700)
-            if _email_input(page) is not None:
+            _dismiss_noise(page)
+            if _reveal_email_login(page):
                 return True
         except Exception:
             continue
@@ -528,7 +545,9 @@ def _open_login(page) -> bool:
         page.goto(HOME_URL, wait_until="domcontentloaded")
     except Exception:
         return False
-    clicked = _click_first(
+    page.wait_for_timeout(800)
+    _dismiss_noise(page)
+    _click_first(
         page,
         [
             'a[href*="login"]',
@@ -539,19 +558,52 @@ def _open_login(page) -> bool:
             'a:has-text("Sign in")',
         ],
     )
-    if clicked:
-        page.wait_for_timeout(1000)
+    page.wait_for_timeout(900)
+    _reveal_email_login(page)
+    return _email_input(page) is not None or _password_input(page) is not None
+
+
+def _reveal_email_login(page) -> bool:
+    if _email_input(page) is not None or _password_input(page) is not None:
+        return True
+    _click_first(
+        page,
+        [
+            'button:has-text("Log in with Email")',
+            'button:has-text("Login with Email")',
+            'button:has-text("Sign in with Email")',
+            'a:has-text("Log in with Email")',
+            'button:has-text("Email")',
+            'a:has-text("Email")',
+            '[class*="email"]',
+        ],
+    )
+    page.wait_for_timeout(800)
     return _email_input(page) is not None or _password_input(page) is not None
 
 
 def _fill_credentials(page, email: str, password: str) -> bool:
     email_el = _email_input(page)
     pwd_el = _password_input(page)
-    if email_el is None or pwd_el is None:
+    if email_el is None and pwd_el is None:
         return False
     try:
-        email_el.click()
-        email_el.fill(email)
+        if email_el is not None:
+            email_el.click()
+            email_el.fill(email)
+        if pwd_el is None:
+            _click_first(
+                page,
+                [
+                    'button:has-text("Continue")',
+                    'button:has-text("Next")',
+                    'button[type="submit"]',
+                ],
+            )
+            page.wait_for_timeout(900)
+            pwd_el = _password_input(page)
+        if pwd_el is None:
+            return False
         pwd_el.click()
         pwd_el.fill(password)
     except Exception:
@@ -579,12 +631,13 @@ def _email_input(page):
         page,
         [
             'input[type="email"]',
-            'input[name="username"]',
             'input[name="email"]',
+            'input[name="username"]',
             'input[name="account"]',
             'input[autocomplete="username"]',
             'input[placeholder*="mail" i]',
             'input[placeholder*="phone" i]',
+            'input[type="text"]',
         ],
     )
 
@@ -601,16 +654,22 @@ def _password_input(page):
 
 
 def _first_visible(page, selectors: list[str]):
-    for sel in selectors:
-        try:
-            loc = page.locator(sel)
-            n = loc.count()
-            for i in range(min(n, 6)):
-                el = loc.nth(i)
-                if el.is_visible():
-                    return el
-        except Exception:
-            continue
+    scopes = [page]
+    try:
+        scopes.extend(list(page.frames))
+    except Exception:
+        pass
+    for scope in scopes:
+        for sel in selectors:
+            try:
+                loc = scope.locator(sel)
+                n = loc.count()
+                for i in range(min(n, 6)):
+                    el = loc.nth(i)
+                    if el.is_visible():
+                        return el
+            except Exception:
+                continue
     return None
 
 

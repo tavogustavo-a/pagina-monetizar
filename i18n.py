@@ -1187,8 +1187,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Playwright/Chromium no está instalado en este servidor. Ejecuta: pip install -r requirements.txt && playwright install chromium",
     },
     "bilibili_tv.err_website": {
-        "en": "Bilibili.tv login page does not match what this panel expects. The site may have changed; the session was not renewed and nothing was marked as sent.",
-        "es": "La página de login de Bilibili.tv no coincide con lo que espera este panel. Puede que hayan cambiado la web; no se renovó la sesión y no se marcó nada como enviado.",
+        "en": "Could not find Bilibili.tv email login with the saved email and password (the form is behind “Log in with Email”). Nothing was marked as sent. Try again; if captcha appears, complete it in Servers.",
+        "es": "No se pudo abrir el login por email de Bilibili.tv con el email y la contraseña guardados (el formulario está detrás de «Log in with Email»). No se marcó como enviado. Reintenta; si sale captcha, lo completas en Servidores.",
     },
     "bilibili_tv.err_captcha": {
         "en": "Bilibili.tv asked for captcha or SMS. Complete that check yourself; the panel will not guess codes. Then save the account again.",
@@ -1293,8 +1293,12 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pub.remove_file": {"en": "Remove file", "es": "Quitar archivo"},
     "pub.cancel_job": {"en": "Cancel this video", "es": "Cancelar este video"},
     "pub.captions_uploading": {
-        "en": "Uploading temporary video…",
-        "es": "Subiendo video temporal…",
+        "en": "Wait, the video is still uploading…",
+        "es": "Espera, el video se está subiendo…",
+    },
+    "pub.flash.wait_upload": {
+        "en": "Wait, the video is still uploading. It will publish when the upload finishes.",
+        "es": "Espera, el video se está subiendo. Se publicará cuando termine la subida.",
     },
     "pub.publishing_job": {
         "en": "Publishing “{title}”…",
@@ -1822,9 +1826,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Published video to X ({id}).",
         "es": "Video publicado en X ({id}).",
     },
-    "pub.x.upload_fail": {
-        "en": "X publish failed: {error}",
-        "es": "Falló la publicación en X: {error}",
+    "pub.x.credits_depleted": {
+        "en": "The X developer app used for this post ran out of monthly write credits (X bills the app, not Tuyaho). Wait for the next billing cycle or add another app in Config X.",
+        "es": "La app de desarrollador de X que usó este post se quedó sin créditos de escritura del mes (los cobra X a esa app, no es saldo de Tuyaho). Espera al siguiente ciclo de facturación o añade otra app en Config X.",
     },
     "pub.x.no_token": {
         "en": "Connect an X account from Servers (Connect with X).",
@@ -2107,8 +2111,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "El video de Snapchat debe medir al menos 540×960 px.",
     },
     "pub.snapchat.need_openssl": {
-        "en": "OpenSSL is required to encrypt media for the Snapchat Public Profile API.",
-        "es": "Hace falta OpenSSL para cifrar el media de la Public Profile API de Snapchat.",
+        "en": "Could not encrypt the Snapchat video (AES-256-CBC). Install the Python package cryptography on the server.",
+        "es": "No se pudo cifrar el vídeo de Snapchat (AES-256-CBC). Instala el paquete Python cryptography en el servidor.",
     },
     "pub.flash.no_platforms": {
         "en": "Select at least one platform.",

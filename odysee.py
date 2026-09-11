@@ -136,7 +136,16 @@ def _form(url: str, fields: dict[str, str], *, headers: dict[str, str] | None = 
     if code == 417:
         raise OdyseeError("2fa_required")
     if code == 409:
-        raise OdyseeError("email_unverified")
+        msg = (
+            _flatten_error(data.get("error"))
+            or _flatten_error(data.get("message"))
+            or raw[:180]
+            or "HTTP 409"
+        )
+        low = msg.lower()
+        if "verif" in low or "unverified" in low or "confirm" in low:
+            raise OdyseeError("email_unverified")
+        raise OdyseeError(msg)
     if code >= 400:
         msg = (
             _flatten_error(data.get("error"))
@@ -625,6 +634,13 @@ def publish_video(
         url = _watch_url(result, name)
         return True, t("pub.odysee.ok", lang, url=url)
     except OdyseeError as e:
-        return False, t("pub.odysee.upload_fail", lang, error=str(e)[:180])
+        code = str(e)
+        if code == "email_unverified":
+            return False, t("odysee.err_unverified", lang)
+        if code == "2fa_required":
+            return False, t("odysee.err_2fa", lang)
+        if code == "session_expired_reconnect":
+            return False, t("odysee.err_auth", lang)
+        return False, t("pub.odysee.upload_fail", lang, error=code[:180])
     except Exception as e:
         return False, t("pub.odysee.upload_fail", lang, error=str(e)[:180])
