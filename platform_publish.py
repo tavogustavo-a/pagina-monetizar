@@ -33,6 +33,8 @@ def texts_for_platform(platform_id: str, title: str, description: str) -> tuple[
     desc = str(description or "").strip()
     if pid == "youtube":
         return label, desc
+    if pid in {"bilibili", "bilibili_tv"}:
+        return label, desc
     if pid in TITLE_PLATFORMS:
         return label, ""
     return "", ""
@@ -203,9 +205,16 @@ def _publish_bilibili(
         )
     qr = db.resolve_chain_account_for_publish("bilibili", account_link_id)
     if qr:
-        from i18n import t
+        import bilibili_web
 
-        return False, t("pub.bilibili_qr.not_wired", lang)
+        return bilibili_web.publish_video(
+            file_path=file_path,
+            content_type=content_type,
+            title=title,
+            description=description,
+            lang=lang,
+            account=qr,
+        )
     return bilibili_publish.publish_video(
         file_path=file_path,
         content_type=content_type,

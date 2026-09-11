@@ -100,7 +100,23 @@ def publish_video(
     from i18n import t
 
     if pid == "bilibili_tv":
-        return False, t("pub.bilibili_tv.not_wired", lang)
+        return bilibili_tv.publish_video(
+            file_path=file_path,
+            content_type=content_type,
+            title=title,
+            description=description,
+            lang=lang,
+            account=account,
+        )
     if pid == "bilibili_qr":
-        return False, t("pub.bilibili_qr.not_wired", lang)
+        import bilibili_web
+
+        return bilibili_web.publish_video(
+            file_path=file_path,
+            content_type=content_type,
+            title=title,
+            description=description,
+            lang=lang,
+            account=account,
+        )
     return False, t("api.unknown_platform", lang)

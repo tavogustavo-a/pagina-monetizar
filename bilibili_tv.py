@@ -16,6 +16,10 @@ import publish_schedule
 
 PLATFORM_ID = "bilibili_tv"
 HOME_URL = "https://www.bilibili.tv/"
+STUDIO_NEW_URL = "https://studio.bilibili.tv/archive/new"
+VIDEO_EXT = {".mp4", ".flv", ".avi", ".wmv", ".mov", ".mkv", ".webm"}
+UPLOAD_WAIT_S = 15 * 60
+PUBLISH_LOCK_S = 20 * 60
 LOGIN_URLS = (
     "https://www.bilibili.tv/en/account/login",
     "https://www.bilibili.tv/en/login",
@@ -88,6 +92,61 @@ def keep_alive_account(account: dict[str, Any]) -> tuple[bool, str]:
     if not oid:
         return False, "need_saved_account"
     return _with_browser(oid, lambda page: _ensure_session(page, em, pw))
+
+
+def publish_video(
+    *,
+    file_path: Path,
+    content_type: str,
+    title: str,
+    description: str,
+    lang: str,
+    account: dict[str, Any],
+) -> tuple[bool, str]:
+    from i18n import t
+
+    if content_type == "photo" or Path(file_path).suffix.lower() in {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp",
+        ".gif",
+    }:
+        return False, t("pub.bilibili.no_photo", lang)
+    path = Path(file_path)
+    if not path.is_file() or path.stat().st_size <= 0:
+        return False, t("pub.bilibili.file_missing", lang)
+    if path.suffix.lower() not in VIDEO_EXT:
+        return False, t("pub.bilibili.bad_video", lang)
+    oid = str(account.get("id") or "").strip()
+    em = str(account.get("login") or "").strip()
+    pw = str(account.get("secret") or "").strip()
+    if not oid or not em or not pw:
+        return False, t("pub.chain.no_account", lang)
+    label = (title or "").strip() or path.stem
+    desc = (description or "").strip()
+
+    def body(page) -> tuple[bool, str]:
+        ok, code = _ensure_session(page, em, pw)
+        if not ok:
+            return False, code
+        return _studio_upload(page, path, label, desc)
+
+    ok, code = _with_browser(oid, body, lock_wait_s=PUBLISH_LOCK_S)
+    if ok and code and code not in {"ok", "email"}:
+        return True, t("pub.bilibili_tv.ok", lang, id=code)
+    key = {
+        "session_dead": "bilibili_tv.err_session",
+        "captcha": "bilibili_tv.err_captcha",
+        "website_changed": "bilibili_tv.err_website",
+        "browser_busy": "bilibili_tv.err_busy",
+        "browser_error": "bilibili_tv.err_browser",
+        "playwright_missing": "bilibili_tv.err_playwright",
+        "login_failed": "bilibili_tv.err_login",
+    }.get((code or "").strip())
+    if key:
+        return False, t(key, lang)
+    return False, t("pub.bilibili.upload_fail", lang, error=(code or "upload")[:180])
 
 
 def schedule_next_visit(account_id: str, *, soon: bool = False) -> str:
@@ -205,14 +264,15 @@ def _record_session(
     )
 
 
-def _with_browser(account_id: str, fn) -> tuple[bool, str]:
+def _with_browser(account_id: str, fn, *, lock_wait_s: int | None = None) -> tuple[bool, str]:
     proxy_url = db.get_active_proxy_url_for_source("chain", account_id)
-    return playwright_session.with_persistent_browser(
-        profile_dir(account_id),
-        fn,
-        proxy_url=proxy_url,
-        locale="en-US",
-    )
+    kwargs: dict[str, Any] = {
+        "proxy_url": proxy_url,
+        "locale": "en-US",
+    }
+    if lock_wait_s is not None:
+        kwargs["lock_wait_s"] = lock_wait_s
+    return playwright_session.with_persistent_browser(profile_dir(account_id), fn, **kwargs)
 
 
 def _ensure_session(page, email: str, password: str) -> tuple[bool, str]:
@@ -249,6 +309,210 @@ def _ensure_session(page, email: str, password: str) -> tuple[bool, str]:
     if _looks_captcha(page):
         return False, "captcha"
     return False, "session_dead"
+
+
+def _studio_upload(page, path: Path, title: str, description: str) -> tuple[bool, str]:
+    found: dict[str, str] = {"id": ""}
+
+    def on_response(resp) -> None:
+        url = (resp.url or "").lower()
+        if not any(x in url for x in ("submit", "publish", "add/v3", "/add", "archive/add")):
+            return
+        try:
+            data = resp.json()
+        except Exception:
+            return
+        vid = _id_from_payload(data)
+        if vid:
+            found["id"] = vid
+
+    try:
+        page.on("response", on_response)
+    except Exception:
+        pass
+    try:
+        page.goto(STUDIO_NEW_URL, wait_until="domcontentloaded")
+    except Exception:
+        return False, "website_changed"
+    page.wait_for_timeout(1500)
+    if _looks_captcha(page):
+        return False, "captcha"
+    file_input = None
+    try:
+        loc = page.locator("input[type='file']")
+        if loc.count():
+            file_input = loc.first
+    except Exception:
+        file_input = None
+    if file_input is None:
+        return False, "website_changed"
+    try:
+        file_input.set_input_files(str(path))
+    except Exception:
+        return False, "website_changed"
+    if not _wait_upload_ready(page):
+        return False, "website_changed"
+    _fill_studio_title(page, title)
+    if description:
+        _fill_studio_desc(page, description)
+    _attach_cover(page, path)
+    _pick_first_category(page)
+    found["id"] = ""
+    if not _click_first(
+        page,
+        [
+            'button:has-text("Publish")',
+            'button:has-text("Submit")',
+            'button:has-text("Post")',
+            'button:has-text("发布")',
+            'button:has-text("投稿")',
+            'button[type="submit"]',
+        ],
+    ):
+        return False, "website_changed"
+    deadline = datetime.now(timezone.utc).timestamp() + 90
+    while datetime.now(timezone.utc).timestamp() < deadline:
+        if found["id"]:
+            return True, found["id"]
+        url = (page.url or "").lower()
+        m = re.search(r"/video/(\d+)", url)
+        if m:
+            return True, m.group(1)
+        if "archive-list" in url and found["id"]:
+            return True, found["id"]
+        page.wait_for_timeout(1500)
+    if found["id"]:
+        return True, found["id"]
+    return False, "website_changed"
+
+
+def _id_from_payload(data: Any) -> str:
+    if not isinstance(data, dict):
+        return ""
+    inner = data.get("data")
+    blobs: list[dict[str, Any]] = [data]
+    if isinstance(inner, dict):
+        blobs.append(inner)
+    for blob in blobs:
+        for key in ("bvid", "aid", "avid", "resource_id", "video_id"):
+            val = str(blob.get(key) or "").strip()
+            if val and val.lower() not in {"0", "ok", "success", "true"}:
+                return val
+        val = str(blob.get("id") or "").strip()
+        if val.isdigit() and len(val) >= 6:
+            return val
+    code = data.get("code")
+    if code not in (None, 0, "0"):
+        return ""
+    return ""
+
+
+def _wait_upload_ready(page) -> bool:
+    deadline = datetime.now(timezone.utc).timestamp() + UPLOAD_WAIT_S
+    while datetime.now(timezone.utc).timestamp() < deadline:
+        if _looks_captcha(page):
+            return False
+        try:
+            body = (page.inner_text("body") or "")[:4000]
+        except Exception:
+            body = ""
+        low = body.lower()
+        if any(x in low for x in ("100%", "upload complete", "uploaded", "processing", "cover")):
+            if _studio_title_box(page) is not None:
+                return True
+        if _studio_title_box(page) is not None and not re.search(r"\b([1-9]\d?%)\b", low):
+            return True
+        page.wait_for_timeout(2000)
+    return _studio_title_box(page) is not None
+
+
+def _studio_title_box(page):
+    return _first_visible(
+        page,
+        [
+            'input[placeholder*="title" i]',
+            'textarea[placeholder*="title" i]',
+            'input[name="title"]',
+            'textarea[name="title"]',
+            'input[maxlength="80"]',
+            'input[maxlength="100"]',
+        ],
+    )
+
+
+def _fill_studio_title(page, title: str) -> None:
+    el = _studio_title_box(page)
+    if el is None:
+        return
+    try:
+        el.click()
+        el.fill(title[:80])
+    except Exception:
+        pass
+
+
+def _fill_studio_desc(page, description: str) -> None:
+    el = _first_visible(
+        page,
+        [
+            'textarea[placeholder*="desc" i]',
+            'textarea[placeholder*="intro" i]',
+            'textarea[name="description"]',
+            'textarea[name="desc"]',
+        ],
+    )
+    if el is None:
+        return
+    try:
+        el.fill(description[:2000])
+    except Exception:
+        pass
+
+
+def _attach_cover(page, video_path: Path) -> None:
+    try:
+        from bilibili_publish import _extract_cover
+    except Exception:
+        return
+    try:
+        cover = _extract_cover(video_path)
+    except Exception:
+        cover = None
+    if not cover:
+        return
+    try:
+        loc = page.locator(
+            "input[type='file'][accept*='image'], input[type='file'][accept*='jpg']"
+        )
+        if loc.count():
+            loc.last.set_input_files(str(cover))
+    except Exception:
+        pass
+    try:
+        cover.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _pick_first_category(page) -> None:
+    _click_first(
+        page,
+        [
+            '[class*="select"]',
+            '[class*="category"]',
+            '[class*="partition"]',
+            'div[role="combobox"]',
+        ],
+    )
+    page.wait_for_timeout(400)
+    _click_first(
+        page,
+        [
+            '[class*="option"]:visible',
+            '[role="option"]',
+            "li[class*='option']",
+        ],
+    )
 
 
 def _open_login(page) -> bool:

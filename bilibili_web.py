@@ -831,3 +831,101 @@ def _record_session(
         last_alert_at=alert_at,
         next_keepalive_at=next_keepalive_at,
     )
+
+
+def export_web_session(account: dict[str, Any]) -> tuple[str, str, str]:
+    """Cookie + csrf de la sesión QR. El navegador se cierra antes de la subida."""
+    oid = str(account.get("id") or "").strip()
+    if not oid:
+        return "", "", "need_saved_account"
+    captured = {"cookie": "", "csrf": ""}
+
+    def body(page) -> tuple[bool, str]:
+        ok, code = _ensure_session(page)
+        if not ok:
+            return False, code
+        csrf = ""
+        parts: list[str] = []
+        try:
+            cookies = page.context.cookies()
+        except Exception:
+            return False, "session_dead"
+        for c in cookies:
+            name = str(c.get("name") or "").strip()
+            value = str(c.get("value") or "")
+            if not name:
+                continue
+            parts.append(f"{name}={value}")
+            if name.lower() == "bili_jct":
+                csrf = value
+        if not csrf or not _session_cookies(page):
+            return False, "session_dead"
+        captured["cookie"] = "; ".join(parts)
+        captured["csrf"] = csrf
+        return True, "ok"
+
+    ok, code = _with_browser(oid, body, link_name=str(account.get("name") or ""))
+    if not ok:
+        return "", "", code or "browser_error"
+    return captured["cookie"], captured["csrf"], ""
+
+
+def publish_video(
+    *,
+    file_path: Path,
+    content_type: str,
+    title: str,
+    description: str,
+    lang: str,
+    account: dict[str, Any],
+) -> tuple[bool, str]:
+    from i18n import t
+
+    import bilibili_studio
+    from bilibili_publish import VIDEO_EXT
+
+    if content_type == "photo" or Path(file_path).suffix.lower() in {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp",
+        ".gif",
+    }:
+        return False, t("pub.bilibili.no_photo", lang)
+    path = Path(file_path)
+    if not path.is_file() or path.stat().st_size <= 0:
+        return False, t("pub.bilibili.file_missing", lang)
+    if path.suffix.lower() not in VIDEO_EXT:
+        return False, t("pub.bilibili.bad_video", lang)
+
+    cookie, csrf, err = export_web_session(account)
+    if not cookie:
+        key = {
+            "session_dead": "bilibili_qr.err_session",
+            "captcha": "bilibili_qr.err_captcha",
+            "website_changed": "bilibili_qr.err_website",
+            "browser_busy": "bilibili_qr.err_busy",
+            "browser_error": "bilibili_qr.err_browser",
+            "playwright_missing": "bilibili_tv.err_playwright",
+        }.get((err or "").strip(), "bilibili_qr.err_session")
+        return False, t(key, lang)
+    try:
+        resource_id = bilibili_studio.upload_archive(
+            path=path,
+            title=title,
+            description=description,
+            cookie=cookie,
+            csrf=csrf,
+        )
+    except ValueError as e:
+        detail = str(e).strip() or "upload"
+        if detail == "session_dead":
+            return False, t("bilibili_qr.err_session", lang)
+        if detail == "website_changed":
+            return False, t("bilibili_qr.err_website", lang)
+        return False, t("pub.bilibili.upload_fail", lang, error=detail[:180])
+    except Exception as e:
+        return False, t("pub.bilibili.upload_fail", lang, error=str(e)[:180])
+    if not resource_id:
+        return False, t("pub.bilibili.upload_fail", lang, error="no id")
+    return True, t("pub.bilibili.ok", lang, id=resource_id)

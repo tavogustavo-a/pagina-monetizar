@@ -391,8 +391,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Entra con el email y la contraseña de odysee.com (no vale si solo usas Google). El panel los guarda y renueva el auth token cuando caduca. El canal es opcional: pega el claim ID de 40 caracteres, o @canal / la URL de Odysee; @nombre no es el claim ID.",
     },
     "servers.chain_hint_bilibili_tv": {
-        "en": "Sign in with the email and password of bilibili.tv (not Bilibili.com OAuth). Each account gets its own browser profile. Link a proxy to this account in Proxies and keep the same one: keep-alive uses it. If cookies expire, the panel signs in again. Keep-alive is every 3–5 days at staggered hours (not all accounts the same day). If the site asks for captcha or SMS, complete it yourself. Studio upload is not wired yet.",
-        "es": "Entra con el email y la contraseña de bilibili.tv (no es el OAuth de Bilibili.com). Cada cuenta tiene su propio perfil de navegador. Vincula un proxy a esta cuenta en Proxys y no lo cambies: el keep-alive sale por ahí. Si caducan las cookies, vuelve a entrar sola. Keep-alive cada 3–5 días a horas distintas (no todas el mismo día). Si pide captcha o SMS, lo haces tú. La subida al estudio aún no está cableada.",
+        "en": "Sign in with the email and password of bilibili.tv (not Bilibili.com OAuth). Each account gets its own browser profile. Link a proxy to this account in Proxies and keep the same one: keep-alive uses it. If cookies expire, the panel signs in again. Keep-alive is every 3–5 days at staggered hours (not all accounts the same day). If the site asks for captcha or SMS, complete it yourself. Studio upload goes through studio.bilibili.tv; if Bilibili.tv does not return a video id, the post is not marked sent.",
+        "es": "Entra con el email y la contraseña de bilibili.tv (no es el OAuth de Bilibili.com). Cada cuenta tiene su propio perfil de navegador. Vincula un proxy a esta cuenta en Proxys y no lo cambies: el keep-alive sale por ahí. Si caducan las cookies, vuelve a entrar sola. Keep-alive cada 3–5 días a horas distintas (no todas el mismo día). Si pide captcha o SMS, lo haces tú. La subida va por studio.bilibili.tv; si no hay id de video, el post no se marca como enviado.",
     },
     "servers.chain_hint_dtube": {
         "en": "",
@@ -606,8 +606,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Sesión web (código QR)",
     },
     "servers.bilibili_qr_hint": {
-        "en": "No company Open Platform app. Scan the QR with the Bilibili app on your phone. The panel keeps that browser session. Keep-alive every 3–5 days at 3 am (panel time), not every day; fan count is checked then and when you connect. If cookies die, scan again — there is no password to sign in alone. Link a proxy to this account in Proxies and keep the same one, or the session often dies when the IP changes. Studio upload is not wired yet.",
-        "es": "Sin app de empresa en Open Platform. Escanea el QR con la app de Bilibili en el móvil. El panel guarda esa sesión del navegador. Keep-alive cada 3–5 días a las 3 am (hora del panel), no cada día; los fans se consultan al conectar y en esa visita. Si las cookies mueren, vuelves a escanear: no hay contraseña para entrar solo. Vincula un proxy a esta cuenta en Proxys y no lo cambies, o la sesión suele caer al cambiar la IP. La subida al estudio aún no está cableada.",
+        "en": "No company Open Platform app. Scan the QR with the Bilibili app on your phone. The panel keeps that browser session and publishes 稿件 with it. Keep-alive every 3–5 days at 3 am (panel time), not every day; fan count is checked then and when you connect. If cookies die, scan again — there is no password to sign in alone. Link a proxy to this account in Proxies and keep the same one, or the session often dies when the IP changes.",
+        "es": "Sin app de empresa en Open Platform. Escanea el QR con la app de Bilibili en el móvil. El panel guarda esa sesión del navegador y con ella publica 稿件. Keep-alive cada 3–5 días a las 3 am (hora del panel), no cada día; los fans se consultan al conectar y en esa visita. Si las cookies mueren, vuelves a escanear: no hay contraseña para entrar solo. Vincula un proxy a esta cuenta en Proxys y no lo cambies, o la sesión suele caer al cambiar la IP.",
     },
     "servers.connect_with_bilibili_qr": {
         "en": "Connect with QR code",
@@ -868,12 +868,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Solo video. Conecta una cuenta de Dailymotion; las subidas van a ese canal.",
     },
     "limits.note.bilibili": {
-        "en": "Videos only (稿件) on Bilibili.com. Create the app from https://open.bilibili.com/doc?utm_source then Connect in Servers. Needs ffmpeg for the cover.",
-        "es": "Solo video (稿件) en Bilibili.com. Crea la app desde https://open.bilibili.com/doc?utm_source y luego Conectar en Servidores. Hace falta ffmpeg para la portada.",
+        "en": "Videos only (稿件) on Bilibili.com. Connect with QR in Servers, or with a company Open Platform app. Needs ffmpeg for the cover.",
+        "es": "Solo video (稿件) en Bilibili.com. Conecta con QR en Servidores, o con una app de empresa en Open Platform. Hace falta ffmpeg para la portada.",
     },
     "limits.note.bilibili_tv": {
-        "en": "Bilibili.tv (international). Sign in from Servers with email and password. Isolated browser profile per account; keep-alive every 3–5 days at staggered hours; re-login if the session expired. Studio upload is not wired yet: a post is never marked sent.",
-        "es": "Bilibili.tv (internacional). En Servidores entra con email y contraseña. Perfil de navegador por cuenta; keep-alive cada 3–5 días a horas distintas; si la sesión caduca, vuelve a entrar. La subida al estudio aún no está cableada: el post no se marca como enviado.",
+        "en": "Bilibili.tv (international). Sign in from Servers with email and password. Isolated browser profile per account; keep-alive every 3–5 days at staggered hours; re-login if the session expired. Videos go to studio.bilibili.tv; the post is only marked sent if Bilibili.tv returns a video id.",
+        "es": "Bilibili.tv (internacional). En Servidores entra con email y contraseña. Perfil de navegador por cuenta; keep-alive cada 3–5 días a horas distintas; si la sesión caduca, vuelve a entrar. Los videos salen por studio.bilibili.tv; el post solo se marca enviado si Bilibili.tv devuelve un id.",
     },
     "limits.note.rumble": {
         "en": "No public OAuth. Partner Upload API: access token + Channel ID. Videos only.",
@@ -1970,6 +1970,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Connect this network in Servers first.",
         "es": "Primero conecta esta red en Servidores.",
     },
+    "pub.bilibili_tv.ok": {
+        "en": "Uploaded to Bilibili.tv ({id}).",
+        "es": "Subido a Bilibili.tv ({id}).",
+    },
     "pub.bilibili_tv.not_wired": {
         "en": "Bilibili.tv is connected (browser session), but studio upload is not wired yet. The post was not sent.",
         "es": "Bilibili.tv está conectado (sesión del navegador), pero la subida al estudio aún no está cableada. El post no se envió.",
@@ -2847,12 +2851,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Un Chromium a la vez. No abras varios logins de Bilibili.tv a la vez.",
     },
     "cond.bilibili_tv.safe": {
-        "en": "Do not mark sent until studio upload is wired. If captcha appears, stop and complete it by hand.",
-        "es": "No marques enviado hasta que la subida al estudio esté cableada. Si sale captcha, para y complétalo a mano.",
+        "en": "Do not mark sent unless studio.bilibili.tv returns a video id. If captcha appears, stop and complete it by hand.",
+        "es": "No marques enviado si studio.bilibili.tv no devuelve un id de video. Si sale captcha, para y complétalo a mano.",
     },
     "cond.bilibili_tv.detail": {
-        "en": "This is Bilibili.tv, not Bilibili.com. Email/password in Servers. Isolated browser profile per account. VMOS is not used. Upload is not wired.",
-        "es": "Esto es Bilibili.tv, no Bilibili.com. Email/contraseña en Servidores. Perfil de navegador aislado por cuenta. VMOS no se usa. La subida no está cableada.",
+        "en": "This is Bilibili.tv, not Bilibili.com. Email/password in Servers. Isolated browser profile per account. VMOS is not used. Upload goes through studio.bilibili.tv.",
+        "es": "Esto es Bilibili.tv, no Bilibili.com. Email/contraseña en Servidores. Perfil de navegador aislado por cuenta. VMOS no se usa. La subida va por studio.bilibili.tv.",
     },
     "cond.dtube.cap": {
         "en": "Hive resource credits (RC) plus IPFS cluster capacity. No PPV host quota.",
@@ -3119,8 +3123,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "El nivel de miembro suele limitar (a menudo ~5/día en niveles bajos). Día natural de China. Uso seguro: 3–5/día hasta confirmar el nivel de esa cuenta.",
     },
     "apidoc.limits.bilibili_tv": {
-        "en": "No public daily quota. Safe: few videos/day when studio upload is wired. Keep-alive every 3–5 days; never mark sent yet.",
-        "es": "Sin cuota diaria pública. Uso seguro: pocos videos/día cuando la subida esté cableada. Keep-alive cada 3–5 días; aún no marques enviado.",
+        "en": "No public daily quota. Safe: few videos/day. Keep-alive every 3–5 days. Only mark sent if Bilibili.tv returns a video id.",
+        "es": "Sin cuota diaria pública. Uso seguro: pocos videos/día. Keep-alive cada 3–5 días. Solo marca enviado si Bilibili.tv devuelve un id de video.",
     },
     "apidoc.limits.rumble": {
         "en": "No public daily video quota. Safe: 8–10/day, one upload at a time.",
@@ -3371,8 +3375,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Servidores: guarda Client ID/Secret, luego Conectar con Bilibili (OAuth) o usa Conectar con código QR debajo. El OAuth pide una app de empresa certificada. El QR es un login del navegador, no Open Platform.",
     },
     "apidoc.bilibili.extra": {
-        "en": "ffmpeg is required for the cover (a random 16:10 frame). Optional: BILIBILI_TID and BILIBILI_TAG in .env. QR web session does not publish yet. This is Bilibili.com only.",
-        "es": "ffmpeg hace falta para la portada (un fotograma al azar 16:10). Opcional: BILIBILI_TID y BILIBILI_TAG en .env. La sesión QR aún no publica. Esto es solo Bilibili.com.",
+        "en": "ffmpeg is required for the cover (a random 16:10 frame). Optional: BILIBILI_TID and BILIBILI_TAG in .env. QR web session publishes 稿件 with the scanned login. This is Bilibili.com only.",
+        "es": "ffmpeg hace falta para la portada (un fotograma al azar 16:10). Opcional: BILIBILI_TID y BILIBILI_TAG en .env. La sesión QR publica 稿件 con el login escaneado. Esto es solo Bilibili.com.",
     },
     "apidoc.bilibili_tv.step1": {
         "en": "Create an account on bilibili.tv (international site, not member.bilibili.com).",
@@ -3387,8 +3391,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Keep-alive cada 3–5 días a horas distintas. Si caducan las cookies, vuelve a entrar; si pide captcha/SMS, lo completas tú.",
     },
     "apidoc.bilibili_tv.extra": {
-        "en": "Studio upload is not wired: publishing will not be marked sent. Needs: pip install playwright && playwright install chromium.",
-        "es": "La subida al estudio no está cableada: no se marca como enviado. Hace falta: pip install playwright && playwright install chromium.",
+        "en": "Publishes through studio.bilibili.tv with the saved browser session. Needs: pip install playwright && playwright install chromium. If the studio page changes or captcha appears, the post is not marked sent.",
+        "es": "Publica por studio.bilibili.tv con la sesión del navegador. Hace falta: pip install playwright && playwright install chromium. Si cambia el estudio o sale captcha, el post no se marca como enviado.",
     },
     "apidoc.rumble.step1": {
         "en": "No public OAuth. Apply for the partner Upload API.",
