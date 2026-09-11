@@ -417,7 +417,7 @@ def publish_video(
         media_type = "VIDEO"
         as_spotlight = True
 
-    caption = (description or title or "").strip()
+    caption = (description or "").strip()
     trim_tmp: Path | None = None
     if not is_photo:
         try:

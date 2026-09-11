@@ -235,12 +235,13 @@ def _upload_legacy(token: str, path: Path) -> str:
 def _create_v2(token: str, profile_id: str, file_url: str, title: str, description: str) -> str:
     payload = {
         "title": title[:TITLE_MAX] or "Video",
-        "description": description[:DESC_MAX],
         "category": _category(),
         "visibility": _visibility(),
         "is_for_kids": False,
         "source": {"file_url": file_url},
     }
+    if (description or "").strip():
+        payload["description"] = description[:DESC_MAX]
     data = _request(
         f"{V2}/profiles/{urllib.parse.quote(profile_id)}/videos",
         method="POST",

@@ -272,10 +272,10 @@ def _upload_dood(
     fields = {form_key: api_key}
     title_field = str(spec.get("title_field") or "")
     descr_field = str(spec.get("descr_field") or "")
-    if title_field:
-        fields[title_field] = (title or file_path.stem)[:200]
-    if descr_field:
-        fields[descr_field] = (description or "")[:2000]
+    if title_field and (title or "").strip():
+        fields[title_field] = str(title).strip()[:200]
+    if descr_field and (description or "").strip():
+        fields[descr_field] = str(description).strip()[:2000]
     file_field = str(spec.get("file_field") or "file")
     sep = "&" if "?" in url else "?"
     post_url = f"{url}{sep}{urllib.parse.urlencode({form_key: api_key})}"

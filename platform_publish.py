@@ -11,6 +11,31 @@ import vmos
 import filehost
 import chain
 
+# Título visible en la red. El resto (TikTok, IG, X, Snapchat, hosts) va solo con el archivo.
+TITLE_PLATFORMS = frozenset(
+    {
+        "youtube",
+        "facebook",
+        "dailymotion",
+        "bilibili",
+        "rumble",
+        "odysee",
+        "dtube",
+    }
+)
+
+
+def texts_for_platform(platform_id: str, title: str, description: str) -> tuple[str, str]:
+    """YouTube es la única con descripción (opcional). El título solo se envía donde la API lo pide."""
+    pid = (platform_id or "").strip()
+    label = str(title or "").strip()
+    desc = str(description or "").strip()
+    if pid == "youtube":
+        return label, desc
+    if pid in TITLE_PLATFORMS:
+        return label, ""
+    return "", ""
+
 
 def _has_generic_creds(raw: dict) -> bool:
     return bool(
@@ -361,12 +386,13 @@ def _publish_to_platform(
         if size_tmp:
             temps.append(size_tmp)
 
+        send_title, send_desc = texts_for_platform(pid, title, description)
         return _dispatch_platform(
             pid,
             file_path=send_path,
             content_type=content_type,
-            title=title,
-            description=description,
+            title=send_title,
+            description=send_desc,
             lang=lang,
             tiktok_config_id=tiktok_config_id,
             account_link_id=account_link_id,

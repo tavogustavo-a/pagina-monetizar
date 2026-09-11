@@ -200,7 +200,7 @@
           </label>
 
           <label class="pub-field pub-field--description">
-            <textarea class="pub-control pub-control--textarea" name="description" rows="3" required placeholder="{{ t('pub.caption_ph') }}" aria-label="{{ t('pub.caption_ph') }}"></textarea>
+            <textarea class="pub-control pub-control--textarea" name="description" rows="3" placeholder="{{ t('pub.caption_ph') }}" aria-label="{{ t('pub.caption_ph') }}"></textarea>
           </label>
 
           {% if x_funding_source %}
@@ -407,7 +407,6 @@
     var publisherOnlyVideo = {{ 'true' if user_is_publisher_mode(user) else 'false' }};
     var publisherMinSeconds = 60;
     var msgFile = {{ t('pub.flash.missing_file_publisher' if user_is_publisher_mode(user) else 'pub.flash.missing_file') | tojson }};
-    var msgDesc = {{ t('pub.flash.missing_description') | tojson }};
     var msgTitle = {{ t('pub.flash.missing_title') | tojson }};
     var msgAccount = {{ pub_account_i18n.select_required | tojson }};
 
@@ -932,17 +931,11 @@
         var title = form.querySelector('input[name="title"]');
         var scheduledAt = document.getElementById("scheduled-at");
         var hasFile = !!heldFile || !!tempToken || (input.files && input.files.length > 0);
-        var hasDesc = desc && (desc.value || "").trim().length > 0;
         var hasTitle = title && (title.value || "").trim().length > 0;
 
         if (!hasFile) {
           alert(msgFile);
           input.focus();
-          return;
-        }
-        if (!hasDesc) {
-          alert(msgDesc);
-          if (desc) desc.focus();
           return;
         }
         if (!hasTitle) {

@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import http.cookiejar
 import json
 import re
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -16,6 +18,12 @@ from typing import Any
 UA = "Tuyaho/1.0 (Odysee LBRY publish)"
 INTERNAL = "https://api.odysee.com"
 SDK = "https://api.na-backend.odysee.com"
+BROWSER_HEADERS = {
+    "Origin": "https://odysee.com",
+    "Referer": "https://odysee.com/",
+    "Accept": "application/json",
+}
+_TLS = threading.local()
 VIDEO_EXT = {".mp4", ".mov", ".avi", ".wmv", ".flv", ".mkv", ".webm", ".m4v"}
 PHOTO_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 TUS_CHUNK = 50 * 1024 * 1024
@@ -49,6 +57,50 @@ def _read_error(exc: urllib.error.HTTPError) -> str:
     return msg[:280]
 
 
+def _flatten_error(err: Any) -> str:
+    if err is None or err is False:
+        return ""
+    if isinstance(err, dict):
+        parts = []
+        for key, val in err.items():
+            if val in (None, "", False):
+                continue
+            parts.append(f"{key}: {val}")
+        return "; ".join(parts)[:280]
+    text = str(err).strip()
+    return text[:280]
+
+
+def _debug(message: str) -> None:
+    try:
+        from datetime import datetime, timezone
+
+        from db_engine import DATA_DIR
+
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with (DATA_DIR / "oauth_debug.log").open("a", encoding="utf-8") as fh:
+            fh.write(f"{stamp} [odysee] {message}\n")
+    except Exception:
+        pass
+
+
+def _opener() -> urllib.request.OpenerDirector:
+    op = getattr(_TLS, "opener", None)
+    if op is None:
+        op = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+        )
+        _TLS.opener = op
+    return op
+
+
+def _reset_http_session() -> None:
+    _TLS.opener = urllib.request.build_opener(
+        urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+    )
+
+
 def _request(
     url: str,
     *,
@@ -57,12 +109,13 @@ def _request(
     headers: dict[str, str] | None = None,
     timeout: int = 60,
 ) -> tuple[int, dict[str, str], bytes]:
-    hdrs = {"User-Agent": UA, "Accept": "application/json"}
+    hdrs = {"User-Agent": UA}
+    hdrs.update(BROWSER_HEADERS)
     if headers:
         hdrs.update(headers)
     req = urllib.request.Request(url, data=data, method=method, headers=hdrs)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _opener().open(req, timeout=timeout) as resp:
             body = resp.read()
             return int(resp.status), {k.lower(): v for k, v in resp.headers.items()}, body
     except urllib.error.HTTPError as e:
@@ -76,9 +129,21 @@ def _form(url: str, fields: dict[str, str], *, headers: dict[str, str] | None = 
     if headers:
         hdrs.update(headers)
     code, _, body = _request(url, method="POST", data=payload, headers=hdrs, timeout=45)
-    data = _parse(body.decode("utf-8", errors="replace"))
+    raw = body.decode("utf-8", errors="replace")
+    data = _parse(raw)
     if code >= 400 and not data:
         raise OdyseeError(f"HTTP {code}")
+    if code == 417:
+        raise OdyseeError("2fa_required")
+    if code == 409:
+        raise OdyseeError("email_unverified")
+    if code >= 400:
+        msg = (
+            _flatten_error(data.get("error"))
+            or _flatten_error(data.get("message"))
+            or f"HTTP {code}"
+        )
+        raise OdyseeError(msg)
     return data
 
 
@@ -115,31 +180,42 @@ def _inner_data(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _raise_if_api_error(data: dict[str, Any], fallback: str) -> None:
-    err = data.get("error")
+    err = _flatten_error(data.get("error"))
     if err:
-        raise OdyseeError(str(err)[:280])
+        raise OdyseeError(err)
     if data.get("success") is False:
-        raise OdyseeError(str(data.get("message") or fallback)[:280])
+        raise OdyseeError(_flatten_error(data.get("message")) or fallback)
+
+
+def _extract_auth_token(data: dict[str, Any]) -> str:
+    inner = _inner_data(data)
+    for key in ("auth_token", "authToken", "legacy_auth_token"):
+        val = str(inner.get(key) or data.get(key) or "").strip()
+        if val:
+            return val
+    return ""
 
 
 def _guest_auth_token() -> str:
     """Odysee exige un auth_token anónimo (user/new) antes de user/signin."""
-    # LBRY installation_id: 40 hex. Un prefijo tipo "tuyaho…" no es un app_id válido.
     app_id = hashlib.sha1(uuid.uuid4().bytes).hexdigest()
     last_err: OdyseeError | None = None
     for fields in (
         {"language": "en", "app_id": app_id, "auth_token": ""},
         {"language": "en", "auth_token": ""},
     ):
-        data = _form(f"{INTERNAL}/user/new", fields)
         try:
+            data = _form(f"{INTERNAL}/user/new", fields)
             _raise_if_api_error(data, "user/new failed")
         except OdyseeError as e:
             last_err = e
+            _debug(f"user/new fallo: {e}")
             continue
-        token = str(_inner_data(data).get("auth_token") or data.get("auth_token") or "").strip()
+        token = _extract_auth_token(data)
         if token:
             return token
+        keys = sorted({*data.keys(), *_inner_data(data).keys()})
+        _debug("user/new sin auth_token keys=" + ",".join(keys)[:180])
         last_err = OdyseeError("user/new did not return auth_token")
     raise last_err or OdyseeError("user/new did not return auth_token")
 
@@ -149,6 +225,7 @@ def signin(email: str, password: str) -> tuple[str, str]:
     pw = (password or "").strip()
     if not em or not pw:
         raise OdyseeError("email_password_required")
+    _reset_http_session()
     guest = _guest_auth_token()
     data = _form(
         f"{INTERNAL}/user/signin",
@@ -156,10 +233,8 @@ def signin(email: str, password: str) -> tuple[str, str]:
         headers={"X-Lbry-Auth-Token": guest},
     )
     _raise_if_api_error(data, "signin failed")
+    token = _extract_auth_token(data) or guest
     inner = _inner_data(data)
-    token = str(inner.get("auth_token") or data.get("auth_token") or guest).strip()
-    if not token:
-        raise OdyseeError(str(data.get("message") or "signin failed")[:280])
     name = str(inner.get("name") or inner.get("primary_email") or em).strip()
     return token, name
 
@@ -225,12 +300,13 @@ def user_me(auth_token: str) -> dict[str, Any]:
         {"auth_token": token},
         headers={"X-Lbry-Auth-Token": token},
     )
-    err = data.get("error")
-    if err:
-        raise OdyseeError(str(err)[:280])
-    inner = data.get("data") if isinstance(data.get("data"), dict) else data
-    if not inner:
-        raise OdyseeError("user/me empty")
+    _raise_if_api_error(data, "user/me empty")
+    inner = _inner_data(data)
+    if not inner or inner is data:
+        # Sin "data" anidado, exige al menos un id de usuario.
+        if not (inner.get("id") or inner.get("primary_email")):
+            raise OdyseeError("user/me empty")
+        return inner
     return inner
 
 
@@ -262,9 +338,13 @@ def probe_account(email: str, secret: str, extra: str = "") -> tuple[bool, str]:
             token = sec
             name = login
         me = user_me(token)
+        email_ok = str(me.get("primary_email") or "").strip()
+        if not email_ok and not me.get("has_verified_email"):
+            raise OdyseeError("signin_not_logged_in")
         shown = str(me.get("name") or me.get("primary_email") or name or login).strip()
         return True, shown
     except OdyseeError as e:
+        _debug(f"probe fallo: {e}")
         return False, str(e)
     except Exception as e:
         return False, str(e)[:280]

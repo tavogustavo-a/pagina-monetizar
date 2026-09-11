@@ -2711,11 +2711,6 @@ async def admin_upload_video(request: Request):
             request, ok=False, message=_msg(request, "pub.flash.missing_title")
         )
 
-    if not description:
-        return _publicaciones_result(
-            request, ok=False, message=_msg(request, "pub.flash.missing_description")
-        )
-
     if db.user_is_publisher_mode(u):
         owner_user_id = u.id
     elif "tiktok" in selected_platforms:
@@ -5099,15 +5094,21 @@ def _chain_fail_error(lang: str, platform_id: str, detail: str) -> str:
         return i18n.t("api.chain.fail", lang, error=msg or "error")
     if msg in {"email_password_required", "missing_fields"}:
         return i18n.t("servers.chain_missing", lang)
-    if "authentication required" in low:
+    if "authentication required" in low or "signin_not_logged_in" in low:
         return i18n.t("odysee.err_auth", lang)
     if "invalid application" in low or "app_id" in low:
         return i18n.t("odysee.err_app_id", lang)
+    if "2fa" in low:
+        return i18n.t("odysee.err_2fa", lang)
+    if "email_unverified" in low or "unverified" in low:
+        return i18n.t("odysee.err_unverified", lang)
+    if "recaptcha" in low:
+        return i18n.t("odysee.err_recaptcha", lang)
     if "user not found" in low or "does not exist" in low:
         return i18n.t("odysee.err_user", lang)
-    if "password" in low:
+    if "password" in low and "email_password_required" not in low:
         return i18n.t("odysee.err_password", lang)
-    return i18n.t("odysee.err_generic", lang)
+    return i18n.t("odysee.err_generic", lang, error=msg[:140] or "error")
 
 
 @app.post("/admin/api/chain")

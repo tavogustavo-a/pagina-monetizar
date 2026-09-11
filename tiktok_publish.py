@@ -242,14 +242,17 @@ def publish_video(
     }
     use_direct = _can_direct_post(row)
     if use_direct:
+        post_info = {
+            "privacy_level": _privacy_level(),
+            "disable_duet": False,
+            "disable_comment": False,
+            "disable_stitch": False,
+        }
+        caption = _caption(title, description)
+        if caption:
+            post_info["title"] = caption
         payload = {
-            "post_info": {
-                "title": _caption(title, description),
-                "privacy_level": _privacy_level(),
-                "disable_duet": False,
-                "disable_comment": False,
-                "disable_stitch": False,
-            },
+            "post_info": post_info,
             "source_info": source_info,
         }
         init_url = INIT_DIRECT_URL

@@ -174,18 +174,13 @@ def _post_multipart(url: str, body: bytes, content_type: str, timeout: int) -> d
 
 
 def _upload(page_id: str, token: str, path: Path, *, is_photo: bool, title: str, description: str) -> str:
-    caption = _caption(title, description)
     mime = MIME.get(path.suffix.lower(), "application/octet-stream")
     if is_photo:
         fields = {"access_token": token, "published": "true"}
-        if caption:
-            fields["caption"] = caption
         body, ctype = _multipart(fields, "source", path, mime)
         data = _post_multipart(f"{GRAPH}/{page_id}/photos", body, ctype, 120)
     else:
         fields = {"access_token": token, "title": _title(title)}
-        if caption:
-            fields["description"] = caption
         body, ctype = _multipart(fields, "source", path, mime)
         data = _post_multipart(f"{GRAPH}/{page_id}/videos", body, ctype, 300)
     media_id = str(data.get("post_id") or data.get("id") or "").strip()

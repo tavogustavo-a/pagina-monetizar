@@ -75,7 +75,8 @@ def _params(
     for key in keys:
         low = key.replace("-", "").replace(" ", "").lower()
         if low in _CAPTION_KEYS:
-            out[key] = caption
+            if caption:
+                out[key] = caption
         elif low in _URL_KEYS:
             out[key] = file_url
         elif low in _FILE_KEYS:
@@ -85,12 +86,13 @@ def _params(
                 out[key] = device_path
     if not out:
         out = {
-            "caption": caption,
-            "title": caption,
             "videoPath": device_path,
             "filePath": device_path,
             "url": file_url,
         }
+        if caption:
+            out["caption"] = caption
+            out["title"] = caption
     return out
 
 

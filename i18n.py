@@ -1045,8 +1045,20 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "La contraseña de Odysee no es correcta.",
     },
     "odysee.err_generic": {
-        "en": "Odysee could not verify the account. Check the email and password on odysee.com and try again.",
-        "es": "Odysee no pudo verificar la cuenta. Revisa el email y la contraseña en odysee.com y vuelve a probar.",
+        "en": "Odysee could not verify the account ({error}). Confirm you can sign in at odysee.com with that email and password.",
+        "es": "Odysee no pudo verificar la cuenta ({error}). Confirma que puedes entrar en odysee.com con ese email y contraseña.",
+    },
+    "odysee.err_2fa": {
+        "en": "This Odysee account has extra verification (2FA / email code). The panel cannot complete that step yet.",
+        "es": "Esta cuenta de Odysee pide verificación extra (2FA / código al email). El panel aún no puede completar ese paso.",
+    },
+    "odysee.err_unverified": {
+        "en": "Odysee asked to verify the email before signing in. Open odysee.com, confirm the email, then try again.",
+        "es": "Odysee pide verificar el email antes de entrar. Entra en odysee.com, confirma el correo y vuelve a probar.",
+    },
+    "odysee.err_recaptcha": {
+        "en": "Odysee required a captcha. Sign in once at odysee.com in the browser, then try again here.",
+        "es": "Odysee pidió un captcha. Entra una vez en odysee.com en el navegador y luego vuelve a probar aquí.",
     },
     "api.chain.need_account": {
         "en": "Connect this network in Servers first.",
@@ -1135,16 +1147,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "No se pudo subir el video. Inténtalo de nuevo.",
     },
     "pub.field_video": {"en": "Video file", "es": "Archivo de video"},
-    "pub.caption": {"en": "Caption", "es": "Descripción"},
+    "pub.caption": {"en": "YouTube description (optional)", "es": "Descripción de YouTube (opcional)"},
     "pub.caption_ph": {
-        "en": "Write a caption, hashtags, or notes…",
-        "es": "Escribe una descripción, hashtags o notas…",
+        "en": "YouTube only (optional). Other networks go without description.",
+        "es": "Solo YouTube (opcional). El resto se publica sin descripción.",
     },
     "pub.title_internal": {"en": "Title (internal)", "es": "Título (interno)"},
     "pub.field_title": {"en": "Video title", "es": "Título del video"},
     "pub.title_ph": {
-        "en": "Video title for your dashboard",
-        "es": "Título del video para tu panel",
+        "en": "Title for YouTube, Facebook, Rumble… (TikTok, Instagram, X and Snapchat ignore it)",
+        "es": "Título para YouTube, Facebook, Rumble… (TikTok, Instagram, X y Snapchat no lo envían)",
     },
     "pub.publish_btn": {"en": "Publish", "es": "Publicar"},
     "pub.schedule_enable": {
