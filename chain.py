@@ -60,10 +60,15 @@ def odysee_auth_token_for_save(login: str, secret: str, previous_token: str = ""
     em = (login or "").strip()
     pw = (secret or "").strip()
     prev = (previous_token or "").strip()
-    if em and pw and "@" in em and len(pw) < 40:
-        token, _ = odysee.signin(em, pw)
-        return token
-    if len(pw) >= 40:
+    if em and pw and "@" in em:
+        try:
+            token, _ = odysee.signin(em, pw)
+            return token
+        except odysee.OdyseeError:
+            if odysee._try_cached_token(pw):
+                return pw
+            raise
+    if odysee._try_cached_token(pw):
         return pw
     return prev
 

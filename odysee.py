@@ -320,7 +320,22 @@ def user_me(auth_token: str) -> dict[str, Any]:
 
 
 def _looks_like_password(login: str, secret: str) -> bool:
-    return bool(login and "@" in login and secret and len(secret) < 40)
+    """Email + secreto = contraseña. El token va en auth_token, no en secret."""
+    return bool((login or "").strip() and "@" in login and (secret or "").strip())
+
+
+def _is_bad_credentials(message: str) -> bool:
+    low = (message or "").lower()
+    return any(
+        x in low
+        for x in (
+            "incorrect email",
+            "incorrect password",
+            "email and/or password",
+            "invalid password",
+            "wrong password",
+        )
+    )
 
 
 def _try_cached_token(token: str) -> str | None:
@@ -341,11 +356,18 @@ def probe_account(email: str, secret: str, extra: str = "") -> tuple[bool, str]:
     if not login or not sec:
         return False, "missing_fields"
     try:
+        token = ""
+        name = login
         if _looks_like_password(login, sec):
-            token, name = signin(login, sec)
+            try:
+                token, name = signin(login, sec)
+            except OdyseeError:
+                if _try_cached_token(sec):
+                    token = sec
+                else:
+                    raise
         else:
             token = sec
-            name = login
         me = user_me(token)
         email_ok = str(me.get("primary_email") or "").strip()
         if not email_ok and not me.get("has_verified_email"):
@@ -373,10 +395,16 @@ def resolve_account_auth_token(account: dict[str, Any]) -> str:
         return hit
 
     if _looks_like_password(login, secret):
-        token, _ = signin(login, secret)
-        if account_id:
-            db.update_chain_auth_token(account_id, token)
-        return token
+        try:
+            token, _ = signin(login, secret)
+            if account_id:
+                db.update_chain_auth_token(account_id, token)
+            return token
+        except OdyseeError:
+            hit = _try_cached_token(secret)
+            if hit:
+                return hit
+            raise
 
     hit = _try_cached_token(secret)
     if hit:
@@ -635,11 +663,12 @@ def publish_video(
         return True, t("pub.odysee.ok", lang, url=url)
     except OdyseeError as e:
         code = str(e)
-        if code == "email_unverified":
+        low = code.lower()
+        if code == "email_unverified" or "unverified" in low:
             return False, t("odysee.err_unverified", lang)
-        if code == "2fa_required":
+        if code == "2fa_required" or "2fa" in low:
             return False, t("odysee.err_2fa", lang)
-        if code == "session_expired_reconnect":
+        if code == "session_expired_reconnect" or _is_bad_credentials(code):
             return False, t("odysee.err_auth", lang)
         return False, t("pub.odysee.upload_fail", lang, error=code[:180])
     except Exception as e:

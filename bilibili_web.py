@@ -409,6 +409,16 @@ def _poll_until_login(
         except (TypeError, ValueError):
             inner = -1
         if inner == 0:
+            finish = str(payload.get("url") or "").strip()
+            _ingest_login_url(jar, finish)
+            if finish.startswith("http"):
+                try:
+                    req = urllib.request.Request(finish, headers=_passport_headers())
+                    opener.open(req, timeout=25).read()
+                except Exception:
+                    pass
+            if not _jar_has_studio_cookies(jar):
+                return False, "session_dead"
             return True, "ok"
         if inner == 86090:
             _set_job(job_id, status="scanned")
@@ -439,8 +449,8 @@ def _apply_cookies_and_verify(
     link_name: str,
 ) -> tuple[bool, str]:
     cookies = _playwright_cookies(jar)
-    if not cookies:
-        return False, "website_changed"
+    if not cookies or not _jar_has_studio_cookies(jar):
+        return False, "session_dead"
 
     def body(page) -> tuple[bool, str]:
         for item in cookies:
@@ -530,10 +540,57 @@ def _png_from_login_url(url: str) -> bytes:
     return buf.getvalue()
 
 
+def _ingest_login_url(jar: http.cookiejar.CookieJar | None, url: str) -> None:
+    if jar is None or not (url or "").strip():
+        return
+    qs = urllib.parse.parse_qs(urlparse(url).query)
+    for name in ("SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5"):
+        vals = qs.get(name) or qs.get(name.lower())
+        if not vals:
+            continue
+        value = str(vals[0] or "").strip()
+        if value:
+            _set_jar_cookie(jar, name, value)
+
+
+def _set_jar_cookie(jar: http.cookiejar.CookieJar, name: str, value: str) -> None:
+    cookie = http.cookiejar.Cookie(
+        version=0,
+        name=name,
+        value=value,
+        port=None,
+        port_specified=False,
+        domain=".bilibili.com",
+        domain_specified=True,
+        domain_initial_dot=True,
+        path="/",
+        path_specified=True,
+        secure=True,
+        expires=None,
+        discard=True,
+        comment=None,
+        comment_url=None,
+        rest={"HttpOnly": None},
+        rfc2109=False,
+    )
+    jar.set_cookie(cookie)
+
+
+def _jar_has_studio_cookies(jar: http.cookiejar.CookieJar | None) -> bool:
+    names: set[str] = set()
+    for c in jar or []:
+        n = str(c.name or "").strip().lower()
+        v = str(c.value or "").strip()
+        if n in {"sessdata", "bili_jct"} and len(v) > 4:
+            names.add(n)
+    return {"sessdata", "bili_jct"} <= names
+
+
 def _playwright_cookies(jar: http.cookiejar.CookieJar | None) -> list[dict[str, Any]]:
     if jar is None:
         return []
     out: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
     for c in jar:
         name = str(c.name or "").strip()
         value = str(c.value or "")
@@ -554,7 +611,17 @@ def _playwright_cookies(jar: http.cookiejar.CookieJar | None) -> list[dict[str, 
                 item["expires"] = float(c.expires)
             except (TypeError, ValueError):
                 pass
-        out.append(item)
+        key = (name.lower(), domain)
+        if key not in seen:
+            seen.add(key)
+            out.append(item)
+        if name.lower() in {"sessdata", "bili_jct", "dedeuserid"}:
+            copy = dict(item)
+            copy["domain"] = ".bilibili.com"
+            key2 = (name.lower(), ".bilibili.com")
+            if key2 not in seen:
+                seen.add(key2)
+                out.append(copy)
     return out
 
 
@@ -570,6 +637,8 @@ def _ensure_session(page) -> tuple[bool, str]:
             page.wait_for_timeout(800)
         except Exception:
             pass
+        if not _session_cookies(page):
+            return False, "session_dead"
         return True, _nickname(page) or "ok"
     if _looks_captcha(page):
         return False, "captcha"
@@ -639,14 +708,20 @@ def _capture_followers(page, account_id: str, row: dict[str, Any] | None) -> Non
     db.update_chain_extra(oid, json.dumps(extra, ensure_ascii=False))
 
 
-def _with_browser(account_id: str, fn, *, link_name: str = "") -> tuple[bool, str]:
+def _account_proxy_url(account_id: str, link_name: str = "") -> str:
     proxy_url = db.get_active_proxy_url_for_source("chain", account_id)
-    if not proxy_url:
-        name = (link_name or "").strip()
-        raw = db.get_chain_account_raw(account_id) or {}
-        name = name or str(raw.get("name") or "")
-        if name:
-            proxy_url = db.get_active_proxy_url_for_account_name(name)
+    if proxy_url:
+        return (proxy_url or "").strip()
+    name = (link_name or "").strip()
+    raw = db.get_chain_account_raw(account_id) or {}
+    name = name or str(raw.get("name") or "")
+    if name:
+        return (db.get_active_proxy_url_for_account_name(name) or "").strip()
+    return ""
+
+
+def _with_browser(account_id: str, fn, *, link_name: str = "") -> tuple[bool, str]:
+    proxy_url = _account_proxy_url(account_id, link_name)
     return playwright_session.with_persistent_browser(
         profile_dir(account_id),
         fn,
@@ -773,7 +848,7 @@ def _session_cookies(page) -> bool:
         v = str(c.get("value") or "").strip()
         if n in _LOGIN_COOKIE_NAMES and len(v) > 4:
             names.add(n)
-    return bool(names & {"sessdata", "dedeuserid", "bili_jct"})
+    return {"sessdata", "bili_jct"} <= names
 
 
 def _parse_iso(raw: str) -> datetime | None:
@@ -909,14 +984,17 @@ def publish_video(
             "playwright_missing": "bilibili_tv.err_playwright",
         }.get((err or "").strip(), "bilibili_qr.err_session")
         return False, t(key, lang)
+    oid = str(account.get("id") or "").strip()
+    proxy_url = _account_proxy_url(oid, str(account.get("name") or ""))
     try:
-        resource_id = bilibili_studio.upload_archive(
-            path=path,
-            title=title,
-            description=description,
-            cookie=cookie,
-            csrf=csrf,
-        )
+        with proxy_util.using_proxy(proxy_url):
+            resource_id = bilibili_studio.upload_archive(
+                path=path,
+                title=title,
+                description=description,
+                cookie=cookie,
+                csrf=csrf,
+            )
     except ValueError as e:
         detail = str(e).strip() or "upload"
         if detail == "session_dead":

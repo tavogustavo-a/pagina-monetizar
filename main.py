@@ -5140,8 +5140,12 @@ def _chain_fail_error(lang: str, platform_id: str, detail: str) -> str:
         return i18n.t("odysee.err_recaptcha", lang)
     if "user not found" in low or "does not exist" in low:
         return i18n.t("odysee.err_user", lang)
-    if "password" in low and "email_password_required" not in low:
-        return i18n.t("odysee.err_password", lang)
+    if (
+        "incorrect email" in low
+        or "email and/or password" in low
+        or ("password" in low and "email_password_required" not in low)
+    ):
+        return i18n.t("odysee.err_auth", lang)
     return i18n.t("odysee.err_generic", lang, error=msg[:140] or "error")
 
 

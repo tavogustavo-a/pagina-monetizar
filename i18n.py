@@ -391,8 +391,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Entra con el email y la contraseña de odysee.com (no vale si solo usas Google). El panel los guarda y renueva el auth token cuando caduca. El canal es opcional: pega el claim ID de 40 caracteres, o @canal / la URL de Odysee; @nombre no es el claim ID.",
     },
     "servers.chain_hint_bilibili_tv": {
-        "en": "Sign in with the email and password of bilibili.tv (not Bilibili.com OAuth). Each account gets its own browser profile. Link a proxy to this account in Proxies and keep the same one: keep-alive uses it. If cookies expire, the panel signs in again. Keep-alive is every 3–5 days at staggered hours (not all accounts the same day). If the site asks for captcha or SMS, complete it yourself. Studio upload goes through studio.bilibili.tv; if Bilibili.tv does not return a video id, the post is not marked sent.",
-        "es": "Entra con el email y la contraseña de bilibili.tv (no es el OAuth de Bilibili.com). Cada cuenta tiene su propio perfil de navegador. Vincula un proxy a esta cuenta en Proxys y no lo cambies: el keep-alive sale por ahí. Si caducan las cookies, vuelve a entrar sola. Keep-alive cada 3–5 días a horas distintas (no todas el mismo día). Si pide captcha o SMS, lo haces tú. La subida va por studio.bilibili.tv; si no hay id de video, el post no se marca como enviado.",
+        "en": "Sign in with the email and password of bilibili.tv (not Bilibili.com OAuth). Login is the site modal: Sign In, age checkbox, Log in with Phone/Email, Account tab. Each account gets its own browser profile. Link a proxy to this account in Proxies and keep it. If the site asks for captcha or SMS, complete it yourself. Studio upload goes through studio.bilibili.tv; without a video id the post is not marked sent.",
+        "es": "Entra con el email y la contraseña de bilibili.tv (no es el OAuth de Bilibili.com). El login es el modal de la web: Sign In, casilla de 13 años, Log in with Phone/Email y pestaña Account. Cada cuenta tiene su propio perfil de navegador. Vincula un proxy a esta cuenta en Proxys y no lo cambies. Si pide captcha o SMS, lo haces tú. La subida va por studio.bilibili.tv; si no hay id de video, el post no se marca como enviado.",
     },
     "servers.chain_hint_dtube": {
         "en": "",
@@ -1187,8 +1187,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Playwright/Chromium no está instalado en este servidor. Ejecuta: pip install -r requirements.txt && playwright install chromium",
     },
     "bilibili_tv.err_website": {
-        "en": "Could not find Bilibili.tv email login with the saved email and password (the form is behind “Log in with Email”). Nothing was marked as sent. Try again; if captcha appears, complete it in Servers.",
-        "es": "No se pudo abrir el login por email de Bilibili.tv con el email y la contraseña guardados (el formulario está detrás de «Log in with Email»). No se marcó como enviado. Reintenta; si sale captcha, lo completas en Servidores.",
+        "en": "Could not open the Bilibili.tv login modal (Sign In → age checkbox → Log in with Phone/Email → Account). Nothing was marked as sent. Try again in Servers; complete captcha there if it appears.",
+        "es": "No se pudo abrir el login de Bilibili.tv (Sign In → casilla de 13 años → Log in with Phone/Email → Account). No se marcó como enviado. Reintenta en Servidores; si sale captcha, lo completas ahí.",
     },
     "bilibili_tv.err_captcha": {
         "en": "Bilibili.tv asked for captcha or SMS. Complete that check yourself; the panel will not guess codes. Then save the account again.",

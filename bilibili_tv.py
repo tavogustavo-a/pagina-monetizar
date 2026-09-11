@@ -7,7 +7,6 @@ import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 import db
 import notify
@@ -15,15 +14,16 @@ import playwright_session
 import publish_schedule
 
 PLATFORM_ID = "bilibili_tv"
-HOME_URL = "https://www.bilibili.tv/"
+HOME_URL = "https://www.bilibili.tv/en"
+STUDIO_HOME_URL = "https://studio.bilibili.tv/"
 STUDIO_NEW_URL = "https://studio.bilibili.tv/archive/new"
 VIDEO_EXT = {".mp4", ".flv", ".avi", ".wmv", ".mov", ".mkv", ".webm"}
 UPLOAD_WAIT_S = 15 * 60
 PUBLISH_LOCK_S = 20 * 60
-LOGIN_URLS = (
-    "https://www.bilibili.tv/en/account/login",
-    "https://www.bilibili.tv/en/login",
-    "https://www.bilibili.tv/login",
+ENTRY_URLS = (
+    "https://www.bilibili.tv/en",
+    "https://www.bilibili.tv/",
+    "https://studio.bilibili.tv/",
 )
 KEEP_DAYS_MIN = 3
 KEEP_DAYS_MAX = 5
@@ -49,10 +49,6 @@ _LOGIN_COOKIE_NAMES = frozenset(
 _CAPTCHA_RE = re.compile(
     r"captcha|recaptcha|geetest|hcaptcha|verify you|sms code|verification code|"
     r"phone code|otp|验证|人机",
-    re.I,
-)
-_LOGGED_IN_RE = re.compile(
-    r"log\s*out|sign\s*out|studio|creator|dashboard|my\s+channel|sign\s*out",
     re.I,
 )
 
@@ -517,72 +513,102 @@ def _pick_first_category(page) -> None:
 
 
 def _dismiss_noise(page) -> None:
-    _click_first(
+    _click_matching(
         page,
-        [
-            'button:has-text("Accept")',
-            'button:has-text("Agree")',
-            'button:has-text("I agree")',
-            'button:has-text("Got it")',
-            'button:has-text("OK")',
-            '[aria-label="Close"]',
-            'button:has-text("Close")',
-        ],
+        r"^(accept|agree|i agree|got it|ok|close)$",
+        exclude=r"facebook|google|twitter|email|phone|sign (in|up)|log in",
     )
 
 
 def _open_login(page) -> bool:
-    for url in LOGIN_URLS:
+    for url in ENTRY_URLS:
         try:
             page.goto(url, wait_until="domcontentloaded")
-            page.wait_for_timeout(700)
-            _dismiss_noise(page)
-            if _reveal_email_login(page):
-                return True
         except Exception:
             continue
-    try:
-        page.goto(HOME_URL, wait_until="domcontentloaded")
-    except Exception:
-        return False
-    page.wait_for_timeout(800)
-    _dismiss_noise(page)
-    _click_first(
-        page,
-        [
-            'a[href*="login"]',
-            'button:has-text("Log in")',
-            'button:has-text("Login")',
-            'button:has-text("Sign in")',
-            'a:has-text("Log in")',
-            'a:has-text("Sign in")',
-        ],
-    )
-    page.wait_for_timeout(900)
-    _reveal_email_login(page)
+        page.wait_for_timeout(900)
+        _dismiss_noise(page)
+        if _reveal_email_login(page):
+            return True
+        _open_signin_modal(page)
+        page.wait_for_timeout(700)
+        if _reveal_email_login(page):
+            return True
     return _email_input(page) is not None or _password_input(page) is not None
 
 
-def _reveal_email_login(page) -> bool:
-    if _email_input(page) is not None or _password_input(page) is not None:
-        return True
-    _click_first(
+def _open_signin_modal(page) -> None:
+    _click_matching(
+        page,
+        r"^(sign in|log in|login|sign-in)$",
+        exclude=r"facebook|google|twitter|email|phone|qr|sign up",
+    )
+    page.wait_for_timeout(500)
+    _click_matching(
+        page,
+        r"^(sign in|log in|login)$",
+        exclude=r"facebook|google|twitter|email|phone|qr|sign up|with",
+    )
+    page.wait_for_timeout(400)
+
+
+def _accept_age_gate(page) -> None:
+    for sel in (
+        'label:has-text("attained the age")',
+        'label:has-text("age of 13")',
+        'label:has-text("Terms of Service")',
+    ):
+        el = _first_visible(page, [sel])
+        if el is None:
+            continue
+        try:
+            el.click()
+            page.wait_for_timeout(200)
+            return
+        except Exception:
+            continue
+    el = _first_visible(
         page,
         [
-            'button:has-text("Log in with Email")',
-            'button:has-text("Login with Email")',
-            'button:has-text("Sign in with Email")',
-            'a:has-text("Log in with Email")',
-            'button:has-text("Email")',
-            'a:has-text("Email")',
-            '[class*="email"]',
+            '[class*="login"] input[type="checkbox"]',
+            '[class*="modal"] input[type="checkbox"]',
+            '[role="dialog"] input[type="checkbox"]',
         ],
     )
+    if el is None:
+        return
+    try:
+        if not el.is_checked():
+            el.check()
+    except Exception:
+        try:
+            el.click()
+        except Exception:
+            pass
+
+
+def _reveal_email_login(page) -> bool:
+    _accept_age_gate(page)
+    if _email_input(page) is not None or _password_input(page) is not None:
+        _click_matching(page, r"^(account|email)$", exclude=r"facebook|google|phone/email")
+        return True
+    if not _click_matching(
+        page,
+        r"log in with (phone/?\s*email|email)|login with (phone/?\s*email|email)|"
+        r"sign in with (phone/?\s*email|email)|phone/?email",
+        exclude=r"facebook|google|twitter|qr",
+    ):
+        return False
     page.wait_for_timeout(800)
+    _accept_age_gate(page)
+    _click_matching(page, r"^(account|email)$", exclude=r"facebook|google|phone/email|sign")
+    page.wait_for_timeout(500)
     return _email_input(page) is not None or _password_input(page) is not None
 
 
 def _fill_credentials(page, email: str, password: str) -> bool:
+    _click_matching(page, r"^(account|email)$", exclude=r"facebook|google|phone/email|sign")
+    page.wait_for_timeout(300)
     email_el = _email_input(page)
     pwd_el = _password_input(page)
     if email_el is None and pwd_el is None:
@@ -592,14 +618,7 @@ def _fill_credentials(page, email: str, password: str) -> bool:
             email_el.click()
             email_el.fill(email)
         if pwd_el is None:
-            _click_first(
-                page,
-                [
-                    'button:has-text("Continue")',
-                    'button:has-text("Next")',
-                    'button[type="submit"]',
-                ],
-            )
+            _click_matching(page, r"^(continue|next)$", exclude=r"facebook|google")
             page.wait_for_timeout(900)
             pwd_el = _password_input(page)
         if pwd_el is None:
@@ -608,15 +627,10 @@ def _fill_credentials(page, email: str, password: str) -> bool:
         pwd_el.fill(password)
     except Exception:
         return False
-    submitted = _click_first(
+    submitted = _click_matching(
         page,
-        [
-            'button[type="submit"]',
-            'button:has-text("Log in")',
-            'button:has-text("Sign in")',
-            'button:has-text("Login")',
-            'button:has-text("Continue")',
-        ],
+        r"^(log in|sign in|login|continue)$",
+        exclude=r"facebook|google|twitter|email|phone|qr|sign up|with",
     )
     if not submitted:
         try:
@@ -636,8 +650,7 @@ def _email_input(page):
             'input[name="account"]',
             'input[autocomplete="username"]',
             'input[placeholder*="mail" i]',
-            'input[placeholder*="phone" i]',
-            'input[type="text"]',
+            'input[placeholder*="account" i]',
         ],
     )
 
@@ -684,6 +697,43 @@ def _click_first(page, selectors: list[str]) -> bool:
         return False
 
 
+def _click_matching(page, pattern: str, *, exclude: str = "") -> bool:
+    rx = re.compile(pattern, re.I)
+    ex = re.compile(exclude, re.I) if exclude else None
+    scopes = [page]
+    try:
+        scopes.extend(list(page.frames))
+    except Exception:
+        pass
+    for scope in scopes:
+        for sel in ("button", "a", "[role='button']", "label", "span", "div"):
+            try:
+                loc = scope.locator(sel)
+                n = loc.count()
+                for i in range(min(n, 40)):
+                    el = loc.nth(i)
+                    try:
+                        if not el.is_visible():
+                            continue
+                        text = " ".join((el.inner_text() or "").split())
+                    except Exception:
+                        continue
+                    if not text or not rx.search(text):
+                        continue
+                    if ex and ex.search(text):
+                        continue
+                    if len(text) > 80:
+                        continue
+                    try:
+                        el.click(timeout=2500)
+                        return True
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+    return False
+
+
 def _looks_captcha(page) -> bool:
     try:
         if page.locator(
@@ -725,20 +775,9 @@ def _looks_bad_password(page) -> bool:
 def _looks_logged_in(page) -> bool:
     if _session_cookies(page):
         return True
-    url = (page.url or "").lower()
-    host = urlparse(url).hostname or ""
-    if "login" in url and "bilibili.tv" in host:
-        return False
     try:
-        body = (page.inner_text("body") or "")[:12_000]
-    except Exception:
-        body = ""
-    if _LOGGED_IN_RE.search(body) and not re.search(r"\blog in\b|\bsign in\b", body, re.I):
-        return True
-    try:
-        if page.locator('a[href*="logout"], [class*="avatar"], [class*="Avatar"]').count():
-            if _email_input(page) is None:
-                return True
+        if page.locator('a[href*="logout"], button:has-text("Log out"), button:has-text("Sign out")').count():
+            return True
     except Exception:
         pass
     return False
@@ -749,12 +788,10 @@ def _session_cookies(page) -> bool:
         cookies = page.context.cookies()
     except Exception:
         return False
-    names = {str(c.get("name") or "").strip().lower() for c in cookies}
-    if names & _LOGIN_COOKIE_NAMES:
-        return True
+    names = set()
     for c in cookies:
-        n = str(c.get("name") or "").lower()
-        v = str(c.get("value") or "")
-        if "session" in n and len(v) > 12:
-            return True
-    return False
+        n = str(c.get("name") or "").strip().lower()
+        v = str(c.get("value") or "").strip()
+        if n in _LOGIN_COOKIE_NAMES and len(v) > 4:
+            names.add(n)
+    return bool(names & {"sessdata", "dedeuserid", "bili_jct", "bstar_id", "bstar_session", "access_key"})
