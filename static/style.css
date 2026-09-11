@@ -7780,6 +7780,35 @@ form.server-modal__body.api-form .panel-api-test-msg {
   margin: 0;
 }
 
+.pub-retry-form .api-form__actions {
+  margin-top: 0.9rem;
+  justify-content: flex-end;
+}
+
+.pub-retry-item__head {
+  justify-content: flex-start;
+  gap: 0.55rem;
+}
+
+.pub-retry-drop {
+  flex: none;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 90, 90, 0.45);
+  background: rgba(255, 70, 70, 0.12);
+  color: #ff8b8b;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pub-retry-drop:hover {
+  background: rgba(255, 70, 70, 0.28);
+  border-color: rgba(255, 110, 110, 0.8);
+  color: #fff;
+}
+
 .dropzone {
   position: relative;
   margin-bottom: 0.75rem;

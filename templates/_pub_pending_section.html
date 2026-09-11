@@ -37,12 +37,13 @@
                   {% endfor %}
                 </td>
                 <td class="pub-pending-actions">
-                  <form method="post" action="{{ url_for('admin_retry_pending_publish', sched_id=row.id) }}" class="pub-pending-form">
-                    {% if pub_retry_next %}
-                    <input type="hidden" name="next" value="{{ pub_retry_next }}" />
-                    {% endif %}
-                    <button type="submit" class="btn btn-accent btn-sm">{{ t('pub.retry_btn') }}</button>
-                  </form>
+                  <button
+                    type="button"
+                    class="btn btn-accent btn-sm js-pub-retry-open"
+                    data-action="{{ url_for('admin_retry_pending_publish', sched_id=row.id) }}"
+                    data-next="{{ pub_retry_next or '' }}"
+                    data-platforms="{{ row.platforms_json | e }}"
+                  >{{ t('pub.retry_btn') }}</button>
                   <form
                     method="post"
                     action="{{ url_for('admin_cancel_pending_publish', sched_id=row.id) }}"
@@ -61,4 +62,128 @@
           </table>
         </div>
       </section>
+      <div id="pub-retry-modal" class="equipo-modal" aria-hidden="true">
+        <div class="equipo-modal__backdrop" data-close-pub-retry tabindex="-1"></div>
+        <div class="equipo-modal__panel server-modal__panel" role="dialog" aria-modal="true" aria-labelledby="pub-retry-title">
+          <div class="equipo-modal__accent" aria-hidden="true"></div>
+          <div class="equipo-modal__head">
+            <div>
+              <h2 id="pub-retry-title">{{ t('pub.retry_modal_title') }}</h2>
+            </div>
+            <button type="button" class="equipo-modal__close" data-close-pub-retry aria-label="{{ t('servers.modal_close') }}">×</button>
+          </div>
+          <form method="post" action="" class="server-modal__body pub-retry-form" id="pub-retry-form">
+            <input type="hidden" name="next" id="pub-retry-next" value="" />
+            <ul class="pub-log-detail-list" id="pub-retry-list"></ul>
+            <p class="sub api-msg--fail" id="pub-retry-need-one" hidden>{{ t('pub.retry_need_one') }}</p>
+            <div class="api-form__actions">
+              <button type="button" class="btn btn-ghost" data-close-pub-retry>{{ t('servers.modal_close') }}</button>
+              <button type="submit" class="btn btn-accent" id="pub-retry-submit">{{ t('pub.retry_btn') }}</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      <script type="application/json" id="pub-retry-labels-json">{% set seen = [] %}{
+        {%- for row in pending_retry_publications -%}
+          {%- for pid in row.platforms_json | fromjson -%}
+            {%- if pid not in seen -%}
+              {%- if seen.append(pid) %}{% endif -%}
+            {%- endif -%}
+          {%- endfor -%}
+        {%- endfor -%}
+        {%- for pid in seen -%}
+          {{ pid | tojson }}: {{ t('platform.' ~ pid) | tojson }}{% if not loop.last %},{% endif %}
+        {%- endfor -%}
+      }</script>
+      <script>
+        (function () {
+          var modal = document.getElementById("pub-retry-modal");
+          var form = document.getElementById("pub-retry-form");
+          var listEl = document.getElementById("pub-retry-list");
+          var nextEl = document.getElementById("pub-retry-next");
+          var needEl = document.getElementById("pub-retry-need-one");
+          var submitBtn = document.getElementById("pub-retry-submit");
+          var labelsEl = document.getElementById("pub-retry-labels-json");
+          if (!modal || !form || !listEl) return;
+          var labels = {};
+          try { labels = JSON.parse(labelsEl && labelsEl.textContent ? labelsEl.textContent : "{}"); } catch (e) { labels = {}; }
+          var removeTpl = {{ t('pub.retry_remove') | tojson }};
+          var lastTrigger = null;
+
+          function fmt(tpl, name) {
+            return String(tpl || "").replace("{name}", name);
+          }
+
+          function close() {
+            modal.classList.remove("is-open");
+            modal.setAttribute("aria-hidden", "true");
+            if (lastTrigger) lastTrigger.focus();
+          }
+
+          function render(ids) {
+            listEl.innerHTML = "";
+            ids.forEach(function (pid) {
+              var name = labels[pid] || pid;
+              var li = document.createElement("li");
+              li.className = "pub-log-detail-list__item pub-retry-item";
+              li.setAttribute("data-platform", pid);
+              var head = document.createElement("div");
+              head.className = "pub-log-detail-list__head pub-retry-item__head";
+              var drop = document.createElement("button");
+              drop.type = "button";
+              drop.className = "pub-retry-drop";
+              drop.setAttribute("aria-label", fmt(removeTpl, name));
+              drop.title = fmt(removeTpl, name);
+              drop.textContent = "×";
+              drop.addEventListener("click", function () {
+                li.remove();
+                if (needEl) needEl.hidden = listEl.querySelectorAll("[data-platform]").length > 0;
+              });
+              var hidden = document.createElement("input");
+              hidden.type = "hidden";
+              hidden.name = "platform";
+              hidden.value = pid;
+              var strong = document.createElement("strong");
+              strong.textContent = name;
+              head.appendChild(drop);
+              head.appendChild(strong);
+              li.appendChild(hidden);
+              li.appendChild(head);
+              listEl.appendChild(li);
+            });
+          }
+
+          document.querySelectorAll(".js-pub-retry-open").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+              lastTrigger = btn;
+              var ids = [];
+              try { ids = JSON.parse(btn.getAttribute("data-platforms") || "[]"); } catch (e) { ids = []; }
+              if (!Array.isArray(ids)) ids = [];
+              form.setAttribute("action", btn.getAttribute("data-action") || "");
+              if (nextEl) nextEl.value = btn.getAttribute("data-next") || "";
+              if (needEl) needEl.hidden = true;
+              render(ids.map(function (p) { return String(p || "").trim(); }).filter(Boolean));
+              modal.classList.add("is-open");
+              modal.setAttribute("aria-hidden", "false");
+            });
+          });
+
+          form.addEventListener("submit", function (e) {
+            var n = listEl.querySelectorAll("[data-platform]").length;
+            if (n < 1) {
+              e.preventDefault();
+              if (needEl) needEl.hidden = false;
+              return;
+            }
+            if (submitBtn) submitBtn.disabled = true;
+          });
+
+          modal.querySelectorAll("[data-close-pub-retry]").forEach(function (el) {
+            el.addEventListener("click", close);
+          });
+          document.addEventListener("keydown", function (e) {
+            if (e.key === "Escape" && modal.classList.contains("is-open")) close();
+          });
+        })();
+      </script>
 {% endif %}

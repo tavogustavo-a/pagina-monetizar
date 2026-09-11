@@ -272,22 +272,21 @@ def _with_browser(account_id: str, fn, *, lock_wait_s: int | None = None) -> tup
 
 
 def _ensure_session(page, email: str, password: str) -> tuple[bool, str]:
-    try:
-        page.goto(HOME_URL, wait_until="domcontentloaded")
-    except Exception:
-        return False, "website_changed"
-    page.wait_for_timeout(1200)
-    _dismiss_noise(page)
+    if _visit_and_check_login(page):
+        return True, email
+    if _looks_captcha(page):
+        return False, "captcha"
+    opened = _open_login(page)
+    page.wait_for_timeout(800)
     if _looks_logged_in(page):
         return True, email
     if _looks_captcha(page):
         return False, "captcha"
-    if not _open_login(page):
+    if not opened:
         return False, "website_changed"
-    page.wait_for_timeout(800)
-    if _looks_captcha(page):
-        return False, "captcha"
     if not _fill_credentials(page, email, password):
+        if _looks_logged_in(page):
+            return True, email
         return False, "website_changed"
     page.wait_for_timeout(2800)
     if _looks_captcha(page):
@@ -296,16 +295,24 @@ def _ensure_session(page, email: str, password: str) -> tuple[bool, str]:
         return True, email
     if _looks_bad_password(page):
         return False, "login_failed"
-    try:
-        page.goto(HOME_URL, wait_until="domcontentloaded")
-        page.wait_for_timeout(1500)
-    except Exception:
-        pass
-    if _looks_logged_in(page):
+    if _visit_and_check_login(page):
         return True, email
     if _looks_captcha(page):
         return False, "captcha"
     return False, "session_dead"
+
+
+def _visit_and_check_login(page) -> bool:
+    for url in (HOME_URL, STUDIO_HOME_URL):
+        try:
+            page.goto(url, wait_until="domcontentloaded")
+        except Exception:
+            continue
+        page.wait_for_timeout(800)
+        _dismiss_noise(page)
+        if _looks_logged_in(page):
+            return True
+    return False
 
 
 def _studio_upload(page, path: Path, title: str, description: str) -> tuple[bool, str]:
@@ -521,15 +528,19 @@ def _dismiss_noise(page) -> None:
 
 
 def _open_login(page) -> bool:
+    if _reveal_email_login(page):
+        return True
+    _open_signin_modal(page)
+    page.wait_for_timeout(700)
+    if _reveal_email_login(page):
+        return True
     for url in ENTRY_URLS:
         try:
-            page.goto(url, wait_until="domcontentloaded")
+            page.goto(url, wait_until="domcontentloaded", timeout=25000)
         except Exception:
             continue
         page.wait_for_timeout(900)
         _dismiss_noise(page)
-        if _reveal_email_login(page):
-            return True
         _open_signin_modal(page)
         page.wait_for_timeout(700)
         if _reveal_email_login(page):
@@ -538,18 +549,26 @@ def _open_login(page) -> bool:
 
 
 def _open_signin_modal(page) -> None:
-    _click_matching(
-        page,
-        r"^(sign in|log in|login|sign-in)$",
-        exclude=r"facebook|google|twitter|email|phone|qr|sign up",
-    )
-    page.wait_for_timeout(500)
+    for loc in (
+        page.locator("header").get_by_text(re.compile(r"^\s*sign in\s*$", re.I)),
+        page.get_by_role("button", name=re.compile(r"^\s*sign in\s*$", re.I)),
+        page.get_by_text(re.compile(r"^\s*sign in\s*$", re.I)),
+    ):
+        try:
+            if loc.count():
+                loc.first.hover(timeout=2000)
+                loc.first.click(timeout=3000)
+                break
+        except Exception:
+            continue
+    page.wait_for_timeout(600)
     _click_matching(
         page,
         r"^(sign in|log in|login)$",
         exclude=r"facebook|google|twitter|email|phone|qr|sign up|with",
     )
     page.wait_for_timeout(400)
+    _accept_age_gate(page)
 
 
 def _accept_age_gate(page) -> None:
@@ -728,7 +747,11 @@ def _click_matching(page, pattern: str, *, exclude: str = "") -> bool:
                         el.click(timeout=2500)
                         return True
                     except Exception:
-                        continue
+                        try:
+                            el.click(timeout=2500, force=True)
+                            return True
+                        except Exception:
+                            continue
             except Exception:
                 continue
     return False
@@ -776,10 +799,19 @@ def _looks_logged_in(page) -> bool:
     if _session_cookies(page):
         return True
     try:
-        if page.locator('a[href*="logout"], button:has-text("Log out"), button:has-text("Sign out")').count():
+        if page.locator(
+            'a[href*="logout"], button:has-text("Log out"), button:has-text("Sign out")'
+        ).count():
             return True
     except Exception:
         pass
+    url = (page.url or "").lower()
+    if "studio.bilibili.tv" in url and _email_input(page) is None and _password_input(page) is None:
+        try:
+            if page.locator("input[type='file']").count():
+                return True
+        except Exception:
+            pass
     return False
 
 

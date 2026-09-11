@@ -54,12 +54,12 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {% for platform in platforms %}
+          {% for platform in platforms %}
                   {% set tok = platform.token_renewal or 'manual' %}
                   <tr id="server-{{ platform.id }}" data-platform-id="{{ platform.id }}">
                     <td data-label="{{ t('apidoc.col_server') }}">
                       <span class="servers-platforms-table__name">
-                        <span class="servers-list__icon" aria-hidden="true">{{ platform.icon }}</span>
+              <span class="servers-list__icon" aria-hidden="true">{{ platform.icon }}</span>
                         <span>{{ platform.name }}</span>
                         {% if not platform.publish_enabled %}
                         <span class="api-status" data-ok="False">{{ t('servers.publish_paused') }}</span>
@@ -83,8 +83,8 @@
                   {% endfor %}
                 </tbody>
               </table>
+              </div>
             </div>
-          </div>
         </section>
 
         <div class="servers-divider" role="separator" aria-hidden="true">
@@ -95,8 +95,8 @@
 
         <section class="servers-accordion pub-accordion pub-accordion--collapsed" id="api-webs">
           <div class="servers-accordion__head admin-head admin-head--title">
-            <button
-              type="button"
+              <button
+                type="button"
               class="pub-accordion__trigger servers-accordion__trigger"
               id="servers-api-docs-trigger"
               aria-expanded="false"
@@ -106,8 +106,8 @@
                 <span class="pub-accordion__title">{{ t('nav.api_docs') }}</span>
               </span>
               <span class="pub-accordion__chevron" aria-hidden="true"></span>
-            </button>
-          </div>
+              </button>
+            </div>
           <div class="pub-accordion__panel" id="servers-api-docs-panel" hidden>
             {% include "_servers_api_documento_table.html" %}
           </div>
@@ -245,7 +245,7 @@
     <div class="equipo-modal__head">
       <h2 id="vmos-modal-title" class="server-modal-title">{{ t('servers.vmos_title', platform='') }}</h2>
       <button type="button" class="equipo-modal__close" data-close-vmos-modal aria-label="{{ t('servers.modal_close') }}">×</button>
-    </div>
+      </div>
     <form class="server-modal__body api-form" id="vmos-connect-form">
       <input type="hidden" name="id" value="" />
       <input type="hidden" name="platform_id" id="vmos-platform-id" value="" />
@@ -263,7 +263,7 @@
         <div class="password-input-wrap">
           <input type="password" name="secret_key" class="js-api-secret" autocomplete="new-password" />
           {% include "_password_eye.html" %}
-        </div>
+    </div>
       </label>
       <label class="field">
         <span>{{ t('servers.vmos_field_pad') }}</span>
@@ -281,7 +281,7 @@
       <div class="api-form__actions">
         <button type="submit" class="btn btn-accent">{{ t('servers.vmos_save') }}</button>
         <button type="button" class="btn btn-ghost" id="vmos-test-btn">⚡ {{ t('servers.vmos_test') }}</button>
-      </div>
+    </div>
     </form>
   </div>
 </div>
@@ -925,7 +925,9 @@
     var accountTitleLabel = {{ t('servers.modal_account_name') | tojson }};
     var confirmMsg = {{ t('servers.disconnect_confirm') | tojson }};
     var errorMsg = {{ t('servers.disconnect_error') | tojson }};
-    var networkMsg = {{ t('servers.network_error') | tojson }};
+    var chainConnectingMsg = {{ t('servers.chain_connecting') | tojson }};
+    var chainConnectingBtn = {{ t('servers.chain_connecting_btn') | tojson }};
+    var chainSaveLabel = {{ t('servers.chain_save') | tojson }};
     var qrJobId = "";
     var qrPollTimer = 0;
     var vmosTitleTpl = {{ t('servers.vmos_title', platform='__NAME__') | tojson }};
@@ -1423,16 +1425,34 @@
           var payload = chainPayload(form, true);
           var msgEl = form.querySelector(".js-chain-form-msg");
           var submit = form.querySelector('button[type="submit"]');
-          if (submit) submit.disabled = true;
+          var pid = (form.getAttribute("data-platform-id") || payload.platform_id || "");
+          if (msgEl) {
+            msgEl.hidden = false;
+            msgEl.textContent = pid === "bilibili_tv" ? chainConnectingMsg : networkMsg;
+            msgEl.className = "sub js-chain-form-msg";
+          }
+          if (submit) {
+            submit.disabled = true;
+            if (pid === "bilibili_tv") submit.textContent = chainConnectingBtn;
+          }
           fetch("/admin/api/chain", {
             method: "POST",
             credentials: "same-origin",
             headers: { "Content-Type": "application/json", Accept: "application/json" },
             body: JSON.stringify(payload),
           })
-            .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+            .then(function (r) {
+              return r.text().then(function (raw) {
+                var j = {};
+                try { j = raw ? JSON.parse(raw) : {}; } catch (err) { j = { error: networkMsg }; }
+                return { res: r, body: j };
+              });
+            })
             .then(function (x) {
-              if (submit) submit.disabled = false;
+              if (submit) {
+                submit.disabled = false;
+                submit.textContent = chainSaveLabel;
+              }
               if (!x.res.ok || !x.body.ok) {
                 if (msgEl) {
                   msgEl.hidden = false;
@@ -1445,7 +1465,10 @@
               window.location.reload();
             })
             .catch(function () {
-              if (submit) submit.disabled = false;
+              if (submit) {
+                submit.disabled = false;
+                submit.textContent = chainSaveLabel;
+              }
               if (msgEl) {
                 msgEl.hidden = false;
                 msgEl.textContent = networkMsg;
@@ -1769,14 +1792,14 @@
     function apiFormPayload(form) {
       var fd = new FormData(form);
       return {
-        name: fd.get("name") || "",
-        client_id: fd.get("client_id") || "",
+          name: fd.get("name") || "",
+          client_id: fd.get("client_id") || "",
         client_secret: readSecretInput(form.querySelector('input[name="client_secret"]')),
         access_token: readSecretInput(form.querySelector('input[name="access_token"]')),
-        extra: fd.get("extra") || "",
+          extra: fd.get("extra") || "",
         use_own_x_api: !!(form.querySelector(".js-x-use-own-api") && form.querySelector(".js-x-use-own-api").checked),
-      };
-    }
+        };
+      }
 
     function testPlatform(platformId, msgEl, btn, form) {
       if (btn) btn.disabled = true;
@@ -1954,8 +1977,8 @@
       if (!modalBody) return;
       if (!platformId) {
         applyPlatformCreds(modalBody, {});
-        return;
-      }
+          return;
+        }
       var url = "/admin/api/platforms/" + encodeURIComponent(platformId) + "/credentials";
       if (accountName) url += "?account=" + encodeURIComponent(accountName);
       fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } })
@@ -1965,7 +1988,7 @@
         })
         .catch(function () {
           applyPlatformCreds(modalBody, {});
-        });
+      });
     }
 
     function openModal(platformId, platformName, trigger, modalOptions) {
@@ -2597,10 +2620,10 @@
           return true;
         })
         .sort(function (a, b) {
-          var an = (platformMeta[a] && platformMeta[a].name) || a;
-          var bn = (platformMeta[b] && platformMeta[b].name) || b;
-          return an.localeCompare(bn, undefined, { sensitivity: "base" });
-        });
+        var an = (platformMeta[a] && platformMeta[a].name) || a;
+        var bn = (platformMeta[b] && platformMeta[b].name) || b;
+        return an.localeCompare(bn, undefined, { sensitivity: "base" });
+      });
       accountPickerList.innerHTML = platformIds
         .map(function (platformId) {
           var meta = platformMeta[platformId] || { name: platformId, icon: "•" };

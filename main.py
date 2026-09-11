@@ -2957,6 +2957,7 @@ def admin_retry_pending_publish(
     request: Request,
     sched_id: str,
     next: Annotated[str, Form()] = "",
+    platform: Annotated[list[str], Form()] = [],
 ):
     try:
         u = _require_publish_retry_admin(request)
@@ -2994,18 +2995,20 @@ def admin_retry_pending_publish(
         platforms_list = json.loads(row.get("platforms_json") or "[]")
     except (TypeError, ValueError):
         platforms_list = []
-    if not isinstance(platforms_list, list) or not platforms_list:
-        db.complete_scheduled_publication(sched_id, "failed", "No platforms selected")
-        db.release_publish_file_lock_if_idle(
-            row["user_id"], getattr(video, "file_hash", "") or ""
-        )
+    leftover = [str(p).strip() for p in platforms_list if str(p).strip()]
+    wanted = [str(p).strip() for p in (platform or []) if str(p).strip()]
+    if wanted:
+        allow = set(leftover)
+        leftover = [p for p in wanted if p in allow]
+    if not leftover:
+        db.set_scheduled_awaiting_retry(sched_id, platforms_list, "")
         request.session["admin_error"] = _msg(request, "pub.flash.no_platforms")
         return done()
     ok_n, fail_n, pending_n, _ = publish_schedule.execute_video_publish(
         upload_dir=UPLOAD_DIR,
         user_id=row["user_id"],
         video=video,
-        selected_platforms=[str(p) for p in platforms_list if str(p).strip()],
+        selected_platforms=leftover,
         tiktoker_config_id=(row.get("tiktok_config_id") or "").strip(),
         content_type=row.get("content_type") or "video",
         lang=row.get("lang") or lang,

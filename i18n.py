@@ -391,8 +391,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Entra con el email y la contraseña de odysee.com (no vale si solo usas Google). El panel los guarda y renueva el auth token cuando caduca. El canal es opcional: pega el claim ID de 40 caracteres, o @canal / la URL de Odysee; @nombre no es el claim ID.",
     },
     "servers.chain_hint_bilibili_tv": {
-        "en": "Sign in with the email and password of bilibili.tv (not Bilibili.com OAuth). Login is the site modal: Sign In, age checkbox, Log in with Phone/Email, Account tab. Each account gets its own browser profile. Link a proxy to this account in Proxies and keep it. If the site asks for captcha or SMS, complete it yourself. Studio upload goes through studio.bilibili.tv; without a video id the post is not marked sent.",
-        "es": "Entra con el email y la contraseña de bilibili.tv (no es el OAuth de Bilibili.com). El login es el modal de la web: Sign In, casilla de 13 años, Log in with Phone/Email y pestaña Account. Cada cuenta tiene su propio perfil de navegador. Vincula un proxy a esta cuenta en Proxys y no lo cambies. Si pide captcha o SMS, lo haces tú. La subida va por studio.bilibili.tv; si no hay id de video, el post no se marca como enviado.",
+        "en": "Sign in with the email and password of bilibili.tv.",
+        "es": "Entra con el email y la contraseña de bilibili.tv.",
     },
     "servers.chain_hint_dtube": {
         "en": "",
@@ -415,6 +415,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Claim ID del canal o @canal (opcional)",
     },
     "servers.chain_save": {"en": "Save account", "es": "Guardar cuenta"},
+    "servers.chain_connecting": {
+        "en": "Connecting to Bilibili.tv… this can take a minute. Do not close this window.",
+        "es": "Conectando con Bilibili.tv… puede tardar un minuto. No cierres esta ventana.",
+    },
+    "servers.chain_connecting_btn": {"en": "Connecting…", "es": "Conectando…"},
     "servers.chain_saved": {
         "en": "Account saved ({name}).",
         "es": "Cuenta guardada ({name}).",
@@ -2145,6 +2150,18 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pub.pending_col_user": {"en": "User", "es": "Usuario"},
     "pub.pending_col_actions": {"en": "Actions", "es": "Acciones"},
     "pub.retry_btn": {"en": "Republish", "es": "Republicar"},
+    "pub.retry_modal_title": {
+        "en": "Republish remaining platforms",
+        "es": "Republicar plataformas restantes",
+    },
+    "pub.retry_remove": {
+        "en": "Do not republish {name}",
+        "es": "Quitar {name} de esta republicación",
+    },
+    "pub.retry_need_one": {
+        "en": "Leave at least one platform, or cancel the whole job.",
+        "es": "Deja al menos una plataforma, o cancela el envío.",
+    },
     "pub.cancel_pending_btn": {"en": "Cancel", "es": "Cancelar"},
     "pub.cancel_pending_confirm": {
         "en": "Cancel the remaining platforms for this video?",
