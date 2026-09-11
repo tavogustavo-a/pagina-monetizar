@@ -11339,10 +11339,15 @@ ul.proxys-list .proxys-row__actions {
 /* ------------------------------------------------------------------ */
 /* Config X                                                            */
 /* ------------------------------------------------------------------ */
+.configx-section .admin-head--title {
+  justify-content: center;
+  text-align: center;
+}
 .configx-msg {
   margin: 0 0 0.8rem;
   font-size: 0.8rem;
   color: var(--accent2);
+  text-align: center;
 }
 .configx-msg--error {
   color: #ff7a90;
@@ -11353,12 +11358,14 @@ ul.proxys-list .proxys-row__actions {
   padding: 1rem 1.1rem;
   margin-bottom: 1.1rem;
   background: rgba(255, 255, 255, 0.02);
+  text-align: center;
 }
 .configx-card__title {
   margin: 0 0 0.35rem;
   font-size: 1rem;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   flex-wrap: wrap;
 }
@@ -11366,8 +11373,29 @@ ul.proxys-list .proxys-row__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
+  justify-content: center;
   gap: 0.7rem;
   margin: 0.8rem 0 0.4rem;
+}
+.configx-form .field span {
+  text-align: center;
+}
+.configx-form__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+}
+.configx-form__row input[type="number"] {
+  width: 5.5rem;
+  min-width: 0;
+  text-align: center;
+}
+.configx-field-hint {
+  margin: 0.25rem 0 0;
+  width: 100%;
+  text-align: center;
 }
 .configx-field {
   min-width: 200px;
@@ -11375,20 +11403,25 @@ ul.proxys-list .proxys-row__actions {
 }
 .configx-hint {
   margin-top: 0.15rem;
+  text-align: center;
 }
 .configx-sources {
   margin-top: 0.9rem;
   display: grid;
   gap: 0.7rem;
+  justify-items: center;
 }
 .configx-source {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
   padding: 0.55rem 0.85rem;
+  width: fit-content;
+  max-width: 100%;
 }
 .configx-source__head {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   flex-wrap: wrap;
 }
@@ -11418,6 +11451,11 @@ ul.proxys-list .proxys-row__actions {
 }
 .configx-table {
   width: 100%;
+  text-align: center;
+}
+.configx-table th,
+.configx-table td {
+  text-align: center;
 }
 .servers-x-own-api__row {
   display: flex;

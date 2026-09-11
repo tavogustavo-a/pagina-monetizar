@@ -5454,7 +5454,6 @@ def admin_config_x(request: Request):
             "nav_active": "config_x",
             "sources": sources,
             "x_accounts": rows,
-            "usage": db.list_x_funding_usage(limit=30),
             "min_followers": x_funding.min_followers(),
             "last_check": (db.get_app_setting(x_funding.LAST_CHECK_KEY) or ""),
         },

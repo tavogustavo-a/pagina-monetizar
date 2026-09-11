@@ -84,12 +84,12 @@
               </button>
             </h2>
             <form class="configx-form" id="configx-settings-form">
-              <label class="field configx-field">
-                <span>{{ t('configx.min_followers_label') }}</span>
-                <input type="number" id="configx-min-followers" min="1" value="{{ min_followers }}" />
-              </label>
-              <button type="submit" class="btn btn-sm">{{ t('configx.save') }}</button>
-              <button type="button" class="btn btn-accent btn-sm" id="configx-check-now">{{ t('configx.check_now') }}</button>
+              <div class="configx-form__row">
+                <input type="number" id="configx-min-followers" min="1" value="{{ min_followers }}" aria-label="{{ t('configx.min_followers_label') }}" />
+                <button type="submit" class="btn btn-sm">{{ t('configx.save') }}</button>
+                <button type="button" class="btn btn-accent btn-sm" id="configx-check-now">{{ t('configx.check_now') }}</button>
+              </div>
+              <p class="sub configx-field-hint">{{ t('configx.min_followers_label') }}</p>
             </form>
 
             {% if x_accounts %}
@@ -99,7 +99,6 @@
                   <tr>
                     <th>{{ t('configx.col_account') }}</th>
                     <th>{{ t('configx.col_followers') }}</th>
-                    <th>{{ t('configx.col_posts') }}</th>
                     <th>{{ t('configx.col_meets') }}</th>
                     <th>{{ t('configx.col_checked') }}</th>
                   </tr>
@@ -107,43 +106,15 @@
                 <tbody>
                   {% for acc in x_accounts %}
                   <tr data-check-oauth-id="{{ acc.id }}">
-                    <td>{{ acc.name }}{% if acc.is_source %} <span class="configx-badge configx-badge--on">{{ t('configx.source_badge') }}</span>{% endif %}</td>
+                    <td>{{ acc.name }}</td>
                     <td class="js-chk-followers">{{ acc.followers if acc.followers is not none else '—' }}</td>
-                    <td class="js-chk-posts">{{ acc.posts_count if acc.posts_count is not none else '—' }}</td>
                     <td class="js-chk-meets">
                       {% if acc.meets is none %}—
                       {% elif acc.meets %}<span class="configx-badge configx-badge--on">{{ t('configx.meets_yes') }}</span>
                       {% else %}<span class="configx-badge configx-badge--off">{{ t('configx.meets_no') }}</span>
                       {% endif %}
                     </td>
-                    <td class="js-chk-date">{{ acc.checked_at[:16].replace('T', ' ') if acc.checked_at else t('configx.never_checked') }}</td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-            {% endif %}
-          </div>
-
-          <!-- Consumo reciente -->
-          <div class="configx-card">
-            <h2 class="configx-card__title">{{ t('configx.usage_title') }}</h2>
-            {% if usage %}
-            <div class="configx-table-wrap">
-              <table class="pub-log-table configx-table">
-                <thead>
-                  <tr>
-                    <th>{{ t('configx.col_date') }}</th>
-                    <th>{{ t('configx.col_account') }}</th>
-                    <th>{{ t('configx.col_video') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for row in usage %}
-                  <tr>
-                    <td>{{ row.created_at[:16].replace('T', ' ') }}</td>
-                    <td>{{ row.account or '—' }}</td>
-                    <td>{{ row.video_title or '—' }}</td>
+                    <td class="js-chk-date">{{ acc.checked_at[:10] if acc.checked_at else t('configx.never_checked') }}</td>
                   </tr>
                   {% endfor %}
                 </tbody>
@@ -258,7 +229,6 @@
             );
             if (!tr) return;
             tr.querySelector(".js-chk-followers").textContent = res.ok ? res.followers : "—";
-            tr.querySelector(".js-chk-posts").textContent = res.ok ? res.posts_count : "—";
             var meets = tr.querySelector(".js-chk-meets");
             if (res.ok) {
               meets.innerHTML =
@@ -272,8 +242,7 @@
             }
             tr.querySelector(".js-chk-date").textContent = new Date()
               .toISOString()
-              .slice(0, 16)
-              .replace("T", " ");
+              .slice(0, 10);
           });
         });
       });
