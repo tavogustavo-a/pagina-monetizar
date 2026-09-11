@@ -11384,9 +11384,7 @@ ul.proxys-list .proxys-row__actions {
 .configx-source {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
-  padding: 0.7rem 0.85rem;
-  display: grid;
-  gap: 0.5rem;
+  padding: 0.55rem 0.85rem;
 }
 .configx-source__head {
   display: flex;
@@ -11394,18 +11392,8 @@ ul.proxys-list .proxys-row__actions {
   gap: 0.5rem;
   flex-wrap: wrap;
 }
-.configx-source__stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.2rem;
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-.configx-source__actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+.configx-source__head .btn-user-delete {
+  margin-right: 0.1rem;
 }
 .configx-badge {
   font-size: 0.66rem;
@@ -11431,19 +11419,14 @@ ul.proxys-list .proxys-row__actions {
 .configx-table {
   width: 100%;
 }
-.pub-x-funding {
-  border: 1px solid rgba(37, 244, 238, 0.22);
-  border-radius: 10px;
-  padding: 0.6rem 0.8rem;
-  background: rgba(37, 244, 238, 0.05);
-}
-.pub-x-funding__label {
+.servers-x-own-api__row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.82rem;
+  font-size: 0.86rem;
   cursor: pointer;
 }
-.pub-x-funding__hint {
-  margin: 0.3rem 0 0;
+.servers-x-own-api input {
+  width: auto;
+  margin: 0;
 }

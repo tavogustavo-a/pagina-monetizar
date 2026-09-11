@@ -203,16 +203,6 @@
             <textarea class="pub-control pub-control--textarea" name="description" rows="3" placeholder="{{ t('pub.caption_ph') }}" aria-label="{{ t('pub.caption_ph') }}"></textarea>
           </label>
 
-          {% if x_funding_source %}
-          <div class="pub-field pub-x-funding" id="pub-x-funding" hidden>
-            <label class="pub-x-funding__label">
-              <input type="checkbox" name="x_use_funding" value="1" checked />
-              <span>{% if x_funding_source_count > 1 %}{{ t('pub.x_use_funding', name=t('configx.sources_title')) }}{% else %}{{ t('pub.x_use_funding', name=x_funding_source.name) }}{% endif %}</span>
-            </label>
-            <p class="sub pub-x-funding__hint">{{ t('pub.x_use_funding_hint') }}</p>
-          </div>
-          {% endif %}
-
           <div class="pub-schedule-block">
             <span class="pub-field__label pub-schedule-block__label">{{ t('pub.schedule_datetime') }}</span>
             <div class="pub-schedule-row">
@@ -1042,40 +1032,6 @@
         publishAccounts[0].platform_sources || {}
       );
     }
-  })();
-
-  (function () {
-    var block = document.getElementById("pub-x-funding");
-    if (!block) return;
-
-    function xSelected() {
-      var boxes = document.querySelectorAll('input[name="platforms"]');
-      for (var i = 0; i < boxes.length; i++) {
-        var el = boxes[i];
-        if (el.value !== "x") continue;
-        if (el.type === "hidden") return true;
-        if (el.checked && !el.disabled && !el.closest("tr[hidden]")) return true;
-      }
-      return false;
-    }
-
-    function sync() {
-      block.hidden = !xSelected();
-    }
-
-    document.addEventListener("change", function (e) {
-      if (e.target && e.target.name === "platforms") sync();
-    });
-
-    var prevFilter = window.__pubApplyPlatformFilter;
-    if (typeof prevFilter === "function") {
-      window.__pubApplyPlatformFilter = function () {
-        prevFilter.apply(this, arguments);
-        sync();
-      };
-    }
-
-    sync();
   })();
 
   (function () {

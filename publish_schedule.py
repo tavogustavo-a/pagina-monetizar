@@ -135,6 +135,7 @@ def execute_video_publish(
     batch_id = str(uuid.uuid4())
     sched_id = (retry_sched_id or "").strip() or None
 
+    x_use_funding = not db.account_wants_own_x_api(account_link_id)
     for pid in selected_platforms:
         if not platforms.is_publish_enabled(pid):
             continue
@@ -153,12 +154,27 @@ def execute_video_publish(
             status = "fail"
         if status == "ok":
             ok_n += 1
-            if pid == "x" and x_use_funding:
+            if pid == "x" and status == "ok":
                 try:
-                    db.record_x_funding_usage(
-                        account_link_id=account_link_id,
-                        video_title=video.title,
-                    )
+                    if x_use_funding:
+                        db.record_x_funding_usage(
+                            account_link_id=account_link_id,
+                            video_title=video.title,
+                        )
+                    else:
+                        src = db.x_funding_source_for_account_link(account_link_id)
+                        if src:
+                            db.record_x_funding_usage(
+                                account_link_id=account_link_id,
+                                video_title=video.title,
+                                source_id=str(src.get("id") or ""),
+                            )
+                except Exception:
+                    pass
+                try:
+                    import x_funding
+
+                    x_funding.maybe_check_on_publish(account_link_id)
                 except Exception:
                     pass
         elif status == "pending":

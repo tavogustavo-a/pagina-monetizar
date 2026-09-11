@@ -534,12 +534,24 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Conectar con X",
     },
     "servers.x_oauth_missing": {
-        "en": "Save this account’s X Client ID and Secret, or connect using Config X (the account that pays for the API).",
-        "es": "Guarda el Client ID y el Secret de esta cuenta, o conéctala con la API de Config X (la cuenta que paga la API).",
+        "en": "Save this account’s X Client ID and Secret (with “Use own X API” checked), or add an app in Config X and leave that box unchecked.",
+        "es": "Guarda el Client ID y el Secret de esta cuenta (con «Usar API propia de X» marcado), o añade una app en Config X y deja esa casilla sin marcar.",
     },
     "servers.x_api_inherit_hint": {
-        "en": "X is the exception: other names can connect with the Config X app (the account whose membership pays for the API). Only save Client ID and Secret here if this name should use its own X API when you uncheck “Use Config X” at publish time.",
-        "es": "X es la excepción: los demás nombres pueden conectarse con la app de Config X (la cuenta cuya membresía paga la API). Guarda Client ID y Secret aquí solo si este nombre debe usar su propia API de X cuando desmarques «Usar Config X» al publicar.",
+        "en": "By default this name publishes through Config X (one app, or split across several). Check “Use own X API” only if this name has its own developer app.",
+        "es": "Por defecto este nombre publica por Config X (una app, o varias si hay más). Marca «Usar API propia de X» solo si este nombre tiene su propia app de desarrollador.",
+    },
+    "servers.x_use_own_api": {
+        "en": "Use own X API",
+        "es": "Usar API propia de X",
+    },
+    "servers.x_use_own_api_hint": {
+        "en": "Checked: this account’s Client ID and Secret are used. Unchecked: Config X is used (one app if there is only one; if there are several, posts are split).",
+        "es": "Marcado: se usan el Client ID y el Secret de esta cuenta. Sin marcar: se usa Config X (si hay una app, esa; si hay varias, se reparte).",
+    },
+    "servers.x_own_api_needs_keys": {
+        "en": "To use this account’s own X API, save Client ID and Secret first.",
+        "es": "Para usar la API propia de esta cuenta, guarda primero el Client ID y el Secret.",
     },
     "servers.x_redirect_hint": {
         "en": "Paste this exact Callback URI in the X developer portal (SITE_URL/oauth/x/callback).",
@@ -3343,8 +3355,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Servidores: guarda Client ID/Secret → Conectar con X.",
     },
     "apidoc.x.extra": {
-        "en": "Needs a paid write API plan. Config X: mark the account whose membership publishes for the others; daily 4 AM check for follower threshold.",
-        "es": "Hace falta plan de pago con escritura. Config X: marca la cuenta cuya membresía publica por las demás; a las 4 am se marcan las que ya cumplen seguidores.",
+        "en": "Needs a paid write API plan. Config X: mark the account whose membership publishes for the others. Follower checks run on publish, at most once a week.",
+        "es": "Hace falta plan de pago con escritura. Config X: marca la cuenta cuya membresía publica por las demás. Los seguidores se revisan al publicar, como máximo una vez por semana.",
     },
     "apidoc.dailymotion.step1": {
         "en": "Get API Key and Secret from Dailymotion (partner / developer app).",
@@ -3817,8 +3829,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     # ------------------------------------------------------------------
     "configx.title": {"en": "Config X", "es": "Config X"},
     "configx.intro": {
-        "en": "Mark the connected X account whose paid developer app publishes for the others. Posts using Config X go through that app. Each app stops near 9,900 posts in 24 hours (X’s cap is 10,000). A daily check at 4 AM (panel time) shows which X accounts already meet the follower threshold to start earning.",
-        "es": "Marca la cuenta de X conectada cuya app de desarrollador (membresía de pago) publica por las demás. Los posts con Config X salen por esa app. Cada app se corta cerca de 9.900 posts en 24 horas (el tope de X es 10.000). Un chequeo diario a las 4 am (hora del panel) muestra qué cuentas ya cumplen el mínimo de seguidores para empezar a ganar.",
+        "en": "Mark the connected X account whose paid developer app publishes for the others. Posts without “Use own X API” go through that app. Follower checks run when that account publishes, at most once a week.",
+        "es": "Marca la cuenta de X conectada cuya app de desarrollador (membresía de pago) publica por las demás. Los posts sin «Usar API propia de X» salen por esa app. Los seguidores se revisan al publicar esa cuenta, como máximo una vez por semana.",
     },
     "configx.info_btn": {"en": "About Config X", "es": "Acerca de Config X"},
     "configx.sources_title": {
@@ -3830,8 +3842,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Acerca de la cuenta que paga la API",
     },
     "configx.sources_hint": {
-        "en": "Add the connected X account whose developer app has the paid write plan. Publishing with the Config X checkbox uses that app (if you add more than one, the one with the most posts left in 24 hours is used first). Each app stops at 9,900 posts / 24 h.",
-        "es": "Añade la cuenta de X conectada cuya app de desarrollador tiene el plan de pago. Al publicar con Config X, los posts salen por esa app (si hay varias, se usa primero la que más hueco tenga en 24 h). Cada app se corta a 9.900 posts / 24 h.",
+        "en": "Add the connected X account whose developer app has the paid write plan. Accounts without “Use own X API” publish through these apps (if there are several, the one with the most posts left in 24 hours is used first). Each app stops at 9,900 posts / 24 h.",
+        "es": "Añade la cuenta de X conectada cuya app de desarrollador tiene el plan de pago. Las cuentas sin «Usar API propia de X» publican por estas apps (si hay varias, se usa primero la que más hueco tenga en 24 h). Cada app se corta a 9.900 posts / 24 h.",
     },
     "configx.account_label": {"en": "X account", "es": "Cuenta de X"},
     "configx.sources_form_hint": {
@@ -3873,8 +3885,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Acerca de cumplir para ganar",
     },
     "configx.checks_hint": {
-        "en": "Every day at 4 AM (panel time) the panel queries the X API for each connected account and marks the ones that reach the follower threshold. X also requires Premium and 5M organic impressions in 3 months to share revenue; impressions are not exposed by the API, so verify them in X before paying.",
-        "es": "Todos los días a las 4 am (hora del panel) se consulta la API de X para cada cuenta conectada y se marcan las que llegan al mínimo de seguidores. X además exige Premium y 5M de impresiones orgánicas en 3 meses para repartir ingresos; la API no expone impresiones, así que verifícalas en X antes de pagar.",
+        "en": "When an X account publishes, the panel queries followers if that account was not checked in the last 7 days. X also requires Premium and 5M organic impressions in 3 months to share revenue; impressions are not exposed by the API, so verify them in X before paying.",
+        "es": "Al publicar una cuenta de X, se consultan seguidores si esa cuenta no se revisó en los últimos 7 días. X además exige Premium y 5M de impresiones orgánicas en 3 meses para repartir ingresos; la API no expone impresiones, así que verifícalas en X antes de pagar.",
     },
     "configx.min_followers_label": {
         "en": "Minimum followers to qualify",
@@ -3887,8 +3899,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Chequeo terminado: {n} cuentas, {meets} ya cumplen.",
     },
     "configx.last_check": {
-        "en": "Last daily check: {date}",
-        "es": "Último chequeo diario: {date}",
+        "en": "Last check: {date}",
+        "es": "Última revisión: {date}",
     },
     "configx.col_account": {"en": "Account", "es": "Cuenta"},
     "configx.col_followers": {"en": "Followers", "es": "Seguidores"},

@@ -936,6 +936,11 @@ def _ensure_account_platform_credentials_table() -> None:
         conn.commit()
     finally:
         conn.close()
+    _ensure_column(
+        "account_platform_credentials",
+        "use_own_x_api",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
 
 
 def _ensure_server_groups_tables() -> None:
@@ -6188,9 +6193,18 @@ def record_x_funding_usage(
     *,
     account_link_id: str | None = None,
     video_title: str = "",
+    source_id: str = "",
 ) -> bool:
     """Cuenta un post de Config X contra el tope de 24 h. Devuelve False si no hay app."""
-    src = resolve_active_x_funding_source()
+    src = None
+    sid = (source_id or "").strip()
+    if sid:
+        for item in list_x_funding_sources():
+            if str(item.get("id") or "") == sid:
+                src = item
+                break
+    if not src:
+        src = resolve_active_x_funding_source()
     if not src:
         return False
     oid = resolve_oauth_account_id("x", account_link_id=account_link_id) or ""
@@ -6305,6 +6319,31 @@ def list_x_monetize_checks() -> dict[str, dict[str, Any]]:
                 "checked_at": r["checked_at"],
             }
             for r in rows
+        }
+    finally:
+        conn.close()
+
+
+def get_x_monetize_check(oauth_account_id: str) -> dict[str, Any] | None:
+    oid = (oauth_account_id or "").strip()
+    if not oid:
+        return None
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        r = conn.execute(
+            "SELECT * FROM x_monetize_checks WHERE oauth_account_id = ?",
+            (oid,),
+        ).fetchone()
+        if not r:
+            return None
+        return {
+            "username": r["username"],
+            "followers": int(r["followers"] or 0),
+            "posts_count": int(r["posts_count"] or 0),
+            "meets": bool(r["meets"]),
+            "detail": r["detail"],
+            "checked_at": r["checked_at"],
         }
     finally:
         conn.close()
@@ -6875,6 +6914,28 @@ def x_app_cred(field: str, env_fallback: str = "") -> str:
     return own or funded or env
 
 
+def account_name_wants_own_x_api(account_name: str) -> bool:
+    label = (account_name or "").strip()
+    if not label:
+        return False
+    raw = get_account_platform_credentials_raw("x", label)
+    return bool(raw and int(raw.get("use_own_x_api") or 0))
+
+
+def account_wants_own_x_api(account_link_id: str | None) -> bool:
+    return account_name_wants_own_x_api(get_account_link_name(account_link_id) or "")
+
+
+def x_funding_source_for_account_link(account_link_id: str | None) -> dict[str, Any] | None:
+    name = (get_account_link_name(account_link_id) or "").strip().lower()
+    if not name:
+        return None
+    for src in list_x_funding_sources():
+        if str(src.get("name") or "").strip().lower() == name:
+            return src
+    return None
+
+
 def cred_value(platform_id: str, field: str, env_fallback: str = "") -> str:
     """Clave de esa cuenta si hay contexto; si no, env o credencial global."""
     raw = get_platform_credentials_raw(platform_id) or {}
@@ -6908,6 +6969,7 @@ def _credentials_public_from_raw(platform_id: str, raw: dict[str, Any] | None) -
             or (raw.get("access_token") or "").strip()
             or (raw.get("extra") or "").strip()
         ),
+        "use_own_x_api": bool(int(raw.get("use_own_x_api") or 0)),
     }
 
 
@@ -6970,7 +7032,11 @@ def get_platform_credentials_public(platform_id: str) -> dict[str, Any]:
     fund_name = x_funding_app_account_name()
     current = (credentials_account_name() or "").strip()
     inherit = False
-    if not own_ready and x_app_has_keys(x_funding_app_raw()):
+    if (
+        not bool(data.get("use_own_x_api"))
+        and not own_ready
+        and x_app_has_keys(x_funding_app_raw())
+    ):
         if not current or current.lower() != fund_name.lower():
             inherit = True
     data["x_inherit_funding"] = inherit
@@ -7012,6 +7078,7 @@ def upsert_platform_credentials(
     access_token: str | None = None,
     extra: str | None = None,
     owner_user_id: str | None = None,
+    use_own_x_api: bool | None = None,
 ) -> dict[str, Any]:
     seed_admin_if_missing()
     pid = (platform_id or "").strip()
@@ -7042,6 +7109,12 @@ def upsert_platform_credentials(
     if extra is not None:
         extra_val = extra.strip()
 
+    own_x = bool(int(existing.get("use_own_x_api") or 0))
+    if use_own_x_api is not None:
+        own_x = bool(use_own_x_api)
+    if pid == "x" and own_x and not (cid and secret):
+        raise ValueError("x_own_api_needs_keys")
+
     owner = existing.get("owner_user_id") or ""
     if owner_user_id is not None:
         owner = (owner_user_id or "").strip()
@@ -7065,8 +7138,8 @@ def upsert_platform_credentials(
                 INSERT INTO account_platform_credentials (
                     id, platform_id, account_name, account_key, client_id, client_secret,
                     access_token, extra, owner_user_id, last_test_ok, last_test_at,
-                    last_test_message, updated_at
-                ) VALUES (?, ?, ?, lower(trim(?)), ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    last_test_message, updated_at, use_own_x_api
+                ) VALUES (?, ?, ?, lower(trim(?)), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(platform_id, account_key) DO UPDATE SET
                     account_name = excluded.account_name,
                     client_id = excluded.client_id,
@@ -7074,7 +7147,8 @@ def upsert_platform_credentials(
                     access_token = excluded.access_token,
                     extra = excluded.extra,
                     owner_user_id = COALESCE(excluded.owner_user_id, account_platform_credentials.owner_user_id),
-                    updated_at = excluded.updated_at
+                    updated_at = excluded.updated_at,
+                    use_own_x_api = excluded.use_own_x_api
                 """,
                 (
                     existing.get("id") or str(uuid.uuid4()),
@@ -7090,6 +7164,7 @@ def upsert_platform_credentials(
                     existing.get("last_test_at") or "",
                     existing.get("last_test_message") or "",
                     now,
+                    1 if own_x else 0,
                 ),
             )
         else:

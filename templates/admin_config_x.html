@@ -29,25 +29,7 @@
 
           <p id="configx-msg" class="configx-msg" hidden></p>
 
-          <!-- App de X que publica por las demás -->
           <div class="configx-card">
-            <h2 class="configx-card__title">
-              {{ t('configx.sources_title') }}
-              <button
-                type="button"
-                class="servers-info-btn panel-info-btn js-panel-info-open"
-                data-info-title="{{ t('configx.sources_title') }}"
-                data-info-text={{ t('configx.sources_hint') | tojson }}
-                aria-label="{{ t('configx.sources_info_btn') }}"
-                title="{{ t('configx.sources_info_btn') }}"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h.008v.008H11.25v-.008zM12 17.25h.01M12 21a9 9 0 100-18 9 9 0 000 18z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v.008M12 11.25V16.5" />
-                </svg>
-              </button>
-            </h2>
-
             {% if x_accounts %}
             <form class="configx-form" id="configx-source-form">
               <label class="field configx-field">
@@ -61,7 +43,6 @@
               </label>
               <button type="submit" class="btn btn-accent btn-sm">{{ t('configx.save') }}</button>
             </form>
-            <p class="sub configx-hint">{{ t('configx.sources_form_hint') }}</p>
             {% endif %}
 
             {% if sources %}
@@ -69,20 +50,9 @@
               {% for src in sources %}
               <li class="configx-source" data-source-id="{{ src.id }}">
                 <div class="configx-source__head">
+                  <button type="button" class="btn btn-ghost btn-sm btn-user-delete js-configx-delete" aria-label="{{ t('configx.delete_confirm') }}">{% include '_icon_trash.html' %}</button>
                   <strong>{{ src.name }}</strong>
                   {% if src.username %}<span class="sub">@{{ src.username }}</span>{% endif %}
-                  <span class="configx-badge {{ 'configx-badge--on' if src.active and src.connected else 'configx-badge--off' }}">
-                    {{ t('configx.active') if src.active and src.connected else t('configx.inactive') }}
-                  </span>
-                </div>
-                <div class="configx-source__stats">
-                  <span>{{ t('configx.posts_24h_label') }}: <strong>{{ src.posts_24h }} / {{ src.posts_cap }}</strong></span>
-                  {% if src.posts_left <= 0 %}
-                  <span class="configx-badge configx-badge--off">{{ t('configx.cap_badge') }}</span>
-                  {% endif %}
-                </div>
-                <div class="configx-source__actions">
-                  <button type="button" class="btn btn-ghost btn-sm btn-user-delete js-configx-delete">{% include '_icon_trash.html' %}</button>
                 </div>
               </li>
               {% endfor %}

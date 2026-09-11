@@ -519,6 +519,15 @@
         </div>
       </label>
       {% endif %}
+      {% if platform.id == 'x' %}
+      <label class="field servers-x-own-api">
+        <span class="servers-x-own-api__row">
+          <input type="checkbox" name="use_own_x_api" class="js-x-use-own-api" value="1" />
+          <span>{{ t('servers.x_use_own_api') }}</span>
+        </span>
+      </label>
+      <p class="sub">{{ t('servers.x_use_own_api_hint') }}</p>
+      {% endif %}
       <div class="api-form__actions">
         <button type="submit" class="btn btn-accent">{{ t('api.save') }}</button>
         <button type="button" class="btn btn-ghost js-test-platform" data-platform-id="{{ platform.id }}">⚡ {{ t('api.test') }}</button>
@@ -1765,6 +1774,7 @@
         client_secret: readSecretInput(form.querySelector('input[name="client_secret"]')),
         access_token: readSecretInput(form.querySelector('input[name="access_token"]')),
         extra: fd.get("extra") || "",
+        use_own_x_api: !!(form.querySelector(".js-x-use-own-api") && form.querySelector(".js-x-use-own-api").checked),
       };
     }
 
@@ -1920,12 +1930,14 @@
         tokenLabel.setAttribute("data-base", tbase);
         tokenLabel.textContent = tbase;
       }
+      var ownX = host.querySelector(".js-x-use-own-api");
+      if (ownX) ownX.checked = !!creds.use_own_x_api;
       var connect = host.querySelector(".js-oauth-connect");
       var missing = host.querySelector(".js-oauth-missing");
       if (connect || missing) {
         var ready = !!(creds.client_id && creds.client_secret_set);
         if (connect && (connect.getAttribute("href") || "").indexOf("/oauth/x/") !== -1) {
-          ready = ready || !!creds.x_inherit_funding;
+          ready = !!creds.use_own_x_api ? ready : (ready || !!creds.x_inherit_funding);
         }
         if (connect) connect.hidden = false;
         if (missing) missing.hidden = ready;

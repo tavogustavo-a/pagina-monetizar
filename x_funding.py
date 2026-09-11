@@ -1,21 +1,21 @@
-"""Config X: una cuenta X paga la API; chequeo diario (4 am) de requisitos para monetizar."""
+"""Config X: una cuenta X paga la API; al publicar se revisa seguidores (máx. 1 vez/semana)."""
 from __future__ import annotations
 
 import json
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import db
 import publish_schedule
 
 ME_METRICS_URL = "https://api.twitter.com/2/users/me"
-CHECK_HOUR_LOCAL = 4  # 4 am hora del panel (UTC-5)
 LAST_CHECK_KEY = "x_funding_last_check"
 MIN_FOLLOWERS_KEY = "x_monetize_min_followers"
 MIN_FOLLOWERS_DEFAULT = 500
+CHECK_EVERY_DAYS = 7
 
 
 def min_followers() -> int:
@@ -135,21 +135,50 @@ def run_check_now() -> list[dict[str, Any]]:
     return results
 
 
+def _parse_checked_at(raw: str) -> datetime | None:
+    text = (raw or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def check_due_for_oauth(oauth_account_id: str) -> bool:
+    oid = (oauth_account_id or "").strip()
+    if not oid:
+        return False
+    row = db.get_x_monetize_check(oid)
+    if not row:
+        return True
+    parsed = _parse_checked_at(str(row.get("checked_at") or ""))
+    if not parsed:
+        return True
+    return datetime.now(timezone.utc) - parsed >= timedelta(days=CHECK_EVERY_DAYS)
+
+
+def maybe_check_on_publish(account_link_id: str | None) -> None:
+    """Si esa cuenta X no se revisó en 7 días, usa esta publicación para consultar seguidores."""
+    oid = db.resolve_oauth_account_id("x", account_link_id=account_link_id)
+    if not oid or not check_due_for_oauth(oid):
+        return
+    raw = db.get_oauth_account_row(oid)
+    if not raw:
+        return
+    res = check_account(raw, min_followers())
+    db.save_x_monetize_check(
+        oauth_account_id=oid,
+        username=res["username"],
+        followers=res["followers"],
+        posts_count=res["posts_count"],
+        meets=res["meets"],
+        detail=res["detail"],
+    )
+
+
 def _today_local() -> str:
     return publish_schedule.now_publish_tz().date().isoformat()
-
-
-def daily_check_due(now_local: datetime | None = None) -> bool:
-    """True si ya pasaron las 4 am locales y hoy no se ha hecho el chequeo."""
-    now = now_local or publish_schedule.now_publish_tz()
-    if now.hour < CHECK_HOUR_LOCAL:
-        return False
-    last = (db.get_app_setting(LAST_CHECK_KEY) or "").strip()
-    return last != now.date().isoformat()
-
-
-def run_daily_check_if_due() -> bool:
-    if not daily_check_due():
-        return False
-    run_check_now()
-    return True

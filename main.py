@@ -147,15 +147,6 @@ async def lifespan(app: FastAPI):
                 pass
             await asyncio.sleep(extractor.WORKER_TICK_SECONDS)
 
-    async def x_monetize_worker() -> None:
-        """A las 4 am (hora del panel) revisa qué cuentas X ya cumplen para monetizar."""
-        while True:
-            try:
-                await asyncio.to_thread(x_funding.run_daily_check_if_due)
-            except Exception:
-                pass
-            await asyncio.sleep(300)
-
     async def bilibili_tv_worker() -> None:
         """Keep-alive Bilibili.tv y QR de .com: 3–5 días, horas distintas, una cuenta por ciclo."""
         while True:
@@ -171,25 +162,22 @@ async def lifespan(app: FastAPI):
 
     worker = None
     extractor_task = None
-    x_check_task = None
     bilibili_tv_task = None
     _SCHEDULER_LOCK_FH = _try_hold_scheduler_lock()
     if _SCHEDULER_LOCK_FH is not None:
         worker = asyncio.create_task(scheduled_worker())
         extractor_task = asyncio.create_task(extractor_worker())
-        x_check_task = asyncio.create_task(x_monetize_worker())
         bilibili_tv_task = asyncio.create_task(bilibili_tv_worker())
     try:
         yield
     finally:
-        for task in (worker, extractor_task, x_check_task, bilibili_tv_task):
+        for task in (worker, extractor_task, bilibili_tv_task):
             if task is not None:
                 task.cancel()
         if worker is not None:
             await asyncio.gather(
                 worker,
                 extractor_task,
-                x_check_task,
                 bilibili_tv_task,
                 return_exceptions=True,
             )
@@ -407,6 +395,7 @@ class PlatformApiBody(BaseModel):
     client_secret: str = ""
     access_token: str = ""
     extra: str = ""
+    use_own_x_api: bool | None = None
 
 
 class VmosAccountBody(BaseModel):
@@ -2534,12 +2523,6 @@ def admin_publicaciones(request: Request):
             "pub_account_i18n": pub_account_i18n,
             "max_upload_mb": MAX_UPLOAD_MB,
             "max_upload_bytes": MAX_UPLOAD_BYTES,
-            "x_funding_source": (
-                db.resolve_active_x_funding_source() if is_publish_admin else None
-            ),
-            "x_funding_source_count": (
-                len(db.list_usable_x_funding_sources()) if is_publish_admin else 0
-            ),
             "schedule_datetime_default": publish_schedule.min_datetime_local_input(),
         },
     )
@@ -2635,7 +2618,6 @@ async def admin_upload_video(request: Request):
     ]
     upload = form.get("file")
     video_temp_token = (form.get("video_temp_token") or "").strip().lower()
-    x_use_funding = (form.get("x_use_funding") or "").strip() in ("1", "on", "true")
 
     if not db.user_can_upload_videos(u):
         return _publicaciones_result(request, ok=False, message=_msg(request, "pub.flash.no_upload"))
@@ -2891,7 +2873,6 @@ async def admin_upload_video(request: Request):
             scheduled_at_utc=scheduled_utc,
             lang=lang,
             account_link_id=account_link_id,
-            x_use_funding=x_use_funding,
         )
         when_local = publish_schedule.format_scheduled_local(
             scheduled_utc.isoformat(), lang
@@ -2916,7 +2897,6 @@ async def admin_upload_video(request: Request):
         content_type=content_type,
         lang=lang,
         account_link_id=account_link_id,
-        x_use_funding=x_use_funding,
     )
     db.release_publish_file_lock_if_idle(u.id, file_hash)
 
@@ -3031,7 +3011,6 @@ def admin_retry_pending_publish(
         lang=row.get("lang") or lang,
         account_link_id=(row.get("account_link_id") or "").strip(),
         retry_sched_id=sched_id,
-        x_use_funding=bool(row.get("x_use_funding") or 0),
     )
     db.release_publish_file_lock_if_idle(
         row["user_id"], getattr(video, "file_hash", "") or ""
@@ -4533,19 +4512,26 @@ def x_oauth_connect(request: Request):
     except PermissionError:
         return _admin_privileges_redirect_login(request)
     lang = i18n.resolve_lang(request)
-    if not x_oauth.oauth_configured():
-        request.session["tiktok_error"] = i18n.t("servers.x_oauth_missing", lang)
-        return _oauth_redirect(request, admin)
-    state = x_oauth.new_csrf_state()
-    verifier, challenge = x_oauth.pkce_pair()
-    request.session["x_oauth_state"] = state
-    request.session["x_oauth_verifier"] = verifier
-    request.session["x_oauth_user_id"] = admin.id
     _store_oauth_link_target(request)
-    ru = _store_oauth_redirect(request, "x_oauth_redirect_uri", x_oauth)
-    url = x_oauth.build_authorize_url(
-        state=state, code_challenge=challenge, redirect_uri_value=ru
-    )
+    link_name = (request.query_params.get("link_name") or "").strip() or str(
+        request.session.get("oauth_link_target_name") or ""
+    ).strip()
+    x_mode = "own" if db.account_name_wants_own_x_api(link_name) else "funding"
+    request.session["x_oauth_app_mode"] = x_mode
+    with db.using_credentials_account(link_name):
+        with db.using_x_app_mode(x_mode):
+            if not x_oauth.oauth_configured():
+                request.session["tiktok_error"] = i18n.t("servers.x_oauth_missing", lang)
+                return _oauth_redirect(request, admin)
+            state = x_oauth.new_csrf_state()
+            verifier, challenge = x_oauth.pkce_pair()
+            request.session["x_oauth_state"] = state
+            request.session["x_oauth_verifier"] = verifier
+            request.session["x_oauth_user_id"] = admin.id
+            ru = _store_oauth_redirect(request, "x_oauth_redirect_uri", x_oauth)
+            url = x_oauth.build_authorize_url(
+                state=state, code_challenge=challenge, redirect_uri_value=ru
+            )
     return RedirectResponse(url=url, status_code=303)
 
 
@@ -4573,33 +4559,39 @@ def x_oauth_callback(request: Request):
         request.session["tiktok_error"] = i18n.t("servers.x_no_code", lang)
         return _oauth_redirect(request, admin)
     try:
-        ru = _pop_oauth_redirect(request, "x_oauth_redirect_uri", x_oauth)
-        token_data = x_oauth.exchange_code_for_tokens(
-            code, code_verifier=str(verifier), redirect_uri_value=ru
-        )
-        access = str(token_data.get("access_token") or "").strip()
-        refresh = str(token_data.get("refresh_token") or "").strip() or None
-        expires_in = token_data.get("expires_in")
-        if not access:
-            raise ValueError("No access token in X response.")
-        profile = x_oauth.fetch_profile(access)
-        open_id = profile.get("open_id") or ""
-        if not open_id:
-            raise ValueError("X did not return a user id.")
-        cid = db.save_oauth_connection(
-            platform_id="x",
-            open_id=str(open_id),
-            username=profile.get("username"),
-            display_name=profile.get("display_name"),
-            access_token=access,
-            refresh_token=refresh,
-            expires_in=int(expires_in) if expires_in is not None else 7200,
-            scopes=x_oauth.oauth_scopes(),
-            client_id=x_oauth.client_id(),
-            client_secret=x_oauth.client_secret(),
-            redirect_uri=ru,
-            linked_by_user_id=str(linked_by) if linked_by else None,
-        )
+        link_name = str(request.session.get("oauth_link_target_name") or "").strip()
+        x_mode = str(request.session.pop("x_oauth_app_mode", "") or "").strip()
+        if x_mode not in ("own", "funding"):
+            x_mode = "own" if db.account_name_wants_own_x_api(link_name) else "funding"
+        with db.using_credentials_account(link_name):
+            with db.using_x_app_mode(x_mode):
+                ru = _pop_oauth_redirect(request, "x_oauth_redirect_uri", x_oauth)
+                token_data = x_oauth.exchange_code_for_tokens(
+                    code, code_verifier=str(verifier), redirect_uri_value=ru
+                )
+                access = str(token_data.get("access_token") or "").strip()
+                refresh = str(token_data.get("refresh_token") or "").strip() or None
+                expires_in = token_data.get("expires_in")
+                if not access:
+                    raise ValueError("No access token in X response.")
+                profile = x_oauth.fetch_profile(access)
+                open_id = profile.get("open_id") or ""
+                if not open_id:
+                    raise ValueError("X did not return a user id.")
+                cid = db.save_oauth_connection(
+                    platform_id="x",
+                    open_id=str(open_id),
+                    username=profile.get("username"),
+                    display_name=profile.get("display_name"),
+                    access_token=access,
+                    refresh_token=refresh,
+                    expires_in=int(expires_in) if expires_in is not None else 7200,
+                    scopes=x_oauth.oauth_scopes(),
+                    client_id=x_oauth.client_id(),
+                    client_secret=x_oauth.client_secret(),
+                    redirect_uri=ru,
+                    linked_by_user_id=str(linked_by) if linked_by else None,
+                )
         _bind_oauth_link_target(request, cid)
         label = profile.get("username") or profile.get("display_name") or "X"
         request.session["tiktok_ok"] = i18n.t("servers.x_connected", lang, name=label)
@@ -5570,10 +5562,17 @@ def api_save_platform_credentials(request: Request, platform_id: str, body: Plat
             access_token=body.access_token,
             extra=body.extra,
             owner_user_id=user.id if db.user_can_manage_panel_accounts(user) else None,
+            use_own_x_api=body.use_own_x_api if platform_id == "x" else None,
         )
     except ValueError as e:
+        code = str(e)
+        if code == "x_own_api_needs_keys":
+            return JSONResponse(
+                {"ok": False, "error": i18n.t("servers.x_own_api_needs_keys", lang)},
+                status_code=400,
+            )
         return JSONResponse(
-            {"ok": False, "error": _server_account_error_message(str(e), lang)},
+            {"ok": False, "error": _server_account_error_message(code, lang)},
             status_code=400,
         )
     editor = db.get_platform_credentials_editor(platform_id)

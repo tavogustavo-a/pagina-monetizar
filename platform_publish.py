@@ -336,7 +336,7 @@ def publish_to_platform(
     name = db.get_account_link_name(account_link_id) if account_link_id else ""
     x_mode = "auto"
     if pid == "x":
-        x_mode = "funding" if x_use_funding else "own"
+        x_mode = "own" if db.account_wants_own_x_api(account_link_id) else "funding"
         if x_mode == "funding" and not db.resolve_active_x_funding_source():
             from i18n import t as _t
 
