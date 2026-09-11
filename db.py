@@ -1877,7 +1877,6 @@ def delete_account_link(link_id: str) -> None:
         for account in accounts:
             _delete_server_account_on_conn(conn, str(account["id"]))
         conn.execute("DELETE FROM server_account_links WHERE id = ?", (lid,))
-        _prune_empty_account_links_on_conn(conn)
         conn.commit()
     finally:
         conn.close()
@@ -2991,26 +2990,9 @@ def _delete_videos_on_conn(conn: sqlite3.Connection, video_ids: list[str]) -> No
 
 
 def _prune_empty_account_links_on_conn(conn: sqlite3.Connection) -> None:
-    rows = conn.execute(
-        """
-        SELECT l.id FROM server_account_links l
-        WHERE NOT EXISTS (
-            SELECT 1 FROM server_accounts a
-            WHERE lower(trim(a.name)) = lower(trim(l.name))
-        )
-        """
-    ).fetchall()
-    for row in rows:
-        lid = str(row["id"])
-        _delete_extractor_jobs_on_conn(conn, account_link_id=lid)
-        if _has_column(conn, "publication_log", "account_link_id"):
-            conn.execute("DELETE FROM publication_log WHERE account_link_id = ?", (lid,))
-        if _has_column(conn, "scheduled_publications", "account_link_id"):
-            conn.execute(
-                "DELETE FROM scheduled_publications WHERE account_link_id = ?", (lid,)
-            )
-        conn.execute("DELETE FROM user_account_links WHERE account_link_id = ?", (lid,))
-        conn.execute("DELETE FROM server_account_links WHERE id = ?", (lid,))
+    """Las cuentas de Servidores pueden existir solo con nombre (sin redes).
+    No se eliminan en cascada al borrar otra ficha o una plataforma."""
+    return
 
 
 def _delete_tiktok_config_on_conn(conn: sqlite3.Connection, config_id: str) -> None:
@@ -4867,7 +4849,6 @@ def delete_tiktok_api_config(config_id: str) -> None:
         if not cur.fetchone():
             raise ValueError("Configuration not found.")
         _delete_tiktok_config_on_conn(conn, cid)
-        _prune_empty_account_links_on_conn(conn)
         conn.commit()
     finally:
         conn.close()
@@ -8069,7 +8050,6 @@ def delete_server_account(account_id: str) -> None:
     conn = _connect()
     try:
         _delete_server_account_on_conn(conn, aid)
-        _prune_empty_account_links_on_conn(conn)
         conn.commit()
     finally:
         conn.close()

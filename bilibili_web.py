@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import random
 import re
 import shutil
@@ -24,14 +25,15 @@ QR_SECRET = "qr-session"
 HOME_URL = "https://www.bilibili.com/"
 LOGIN_URL = "https://passport.bilibili.com/login"
 MEMBER_URL = "https://member.bilibili.com/"
-QR_WAIT_S = 180
+QR_WAIT_S = 12 * 60
+QR_TICK_MS = 900
 KEEP_DAYS_MIN = 3
 KEEP_DAYS_MAX = 5
 RETRY_HOURS_MIN = 8
 RETRY_HOURS_MAX = 20
 ACCOUNT_GAP_HOURS_MIN = 2
 ACCOUNT_GAP_HOURS_MAX = 7
-JOB_TTL_S = 600
+JOB_TTL_S = 20 * 60
 
 _LOGIN_COOKIE_NAMES = frozenset(
     {
@@ -46,7 +48,10 @@ _CAPTCHA_RE = re.compile(
     r"phone code|otp|验证码|人机|短信",
     re.I,
 )
-_QR_EXPIRED_RE = re.compile(r"expired|过期|失效|点击刷新|click to refresh", re.I)
+_QR_EXPIRED_RE = re.compile(
+    r"二维码已失效|二维码过期|二维码失效|点击刷新|click to refresh qr",
+    re.I,
+)
 
 _jobs: dict[str, dict[str, Any]] = {}
 _jobs_lock = threading.Lock()
@@ -68,6 +73,54 @@ _QR_BOX_SELECTORS = [
     ".qr-code",
     ".scan-code",
 ]
+
+
+def _jobs_dir() -> Path:
+    from db_engine import DATA_DIR
+
+    path = DATA_DIR / "bilibili_qr_jobs"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _job_file(job_id: str) -> Path:
+    safe = "".join(ch for ch in (job_id or "").strip() if ch.isalnum() or ch in "-_")
+    return _jobs_dir() / f"{safe or '_invalid'}.json"
+
+
+def _persist_job(job: dict[str, Any]) -> None:
+    jid = str(job.get("id") or "").strip()
+    if not jid:
+        return
+    payload = {
+        "id": jid,
+        "account_id": job.get("account_id") or "",
+        "link_name": job.get("link_name") or "",
+        "is_new": bool(job.get("is_new")),
+        "status": job.get("status") or "",
+        "qr_png": job.get("qr_png") or "",
+        "nickname": job.get("nickname") or "",
+        "error": job.get("error") or "",
+        "cancel": bool(job.get("cancel")),
+        "created_at": float(job.get("created_at") or time.time()),
+    }
+    path = _job_file(jid)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(payload), encoding="utf-8")
+    tmp.replace(path)
+
+
+def _load_job_file(job_id: str) -> dict[str, Any] | None:
+    path = _job_file(job_id)
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data
 
 
 def profile_dir(account_id: str) -> Path:
@@ -119,6 +172,7 @@ def start_qr_login(*, link_name: str, account_id: str = "") -> dict[str, Any]:
     }
     with _jobs_lock:
         _jobs[job_id] = job
+        _persist_job(job)
     thread = threading.Thread(target=_run_qr_job, args=(job_id,), daemon=True)
     thread.start()
     return {"ok": True, "job_id": job_id, "account_id": oid}
@@ -129,26 +183,34 @@ def get_qr_job(job_id: str) -> dict[str, Any] | None:
     jid = (job_id or "").strip()
     with _jobs_lock:
         job = _jobs.get(jid)
-        if not job:
-            return None
-        return {
-            "id": job["id"],
-            "account_id": job.get("account_id") or "",
-            "status": job.get("status") or "",
-            "qr_png": job.get("qr_png") or "",
-            "nickname": job.get("nickname") or "",
-            "error": job.get("error") or "",
-        }
+    if not job:
+        job = _load_job_file(jid)
+        if job:
+            with _jobs_lock:
+                _jobs.setdefault(jid, job)
+    if not job:
+        return None
+    return {
+        "id": job.get("id") or jid,
+        "account_id": job.get("account_id") or "",
+        "status": job.get("status") or "",
+        "qr_png": job.get("qr_png") or "",
+        "nickname": job.get("nickname") or "",
+        "error": job.get("error") or "",
+    }
 
 
 def cancel_qr_job(job_id: str) -> None:
     jid = (job_id or "").strip()
     with _jobs_lock:
-        job = _jobs.get(jid)
-        if job:
-            job["cancel"] = True
-            if job.get("status") in {"starting", "waiting"}:
-                job["status"] = "cancelled"
+        job = _jobs.get(jid) or _load_job_file(jid)
+        if not job:
+            return
+        job["cancel"] = True
+        if job.get("status") in {"starting", "waiting"}:
+            job["status"] = "cancelled"
+        _jobs[jid] = job
+        _persist_job(job)
 
 
 def keep_alive_account(account: dict[str, Any]) -> tuple[bool, str]:
@@ -225,6 +287,16 @@ def _purge_jobs() -> None:
         ]
         for jid in dead:
             _jobs.pop(jid, None)
+    try:
+        for path in _jobs_dir().glob("*.json"):
+            try:
+                age = now - path.stat().st_mtime
+            except OSError:
+                continue
+            if age > JOB_TTL_S:
+                path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def _run_qr_job(job_id: str) -> None:
@@ -257,6 +329,7 @@ def _run_qr_job(job_id: str) -> None:
             job["status"] = code or "error"
             job["error"] = code or "error"
             job["qr_png"] = job.get("qr_png") or ""
+        _persist_job(job)
     nick = ""
     with _jobs_lock:
         nick = str((_jobs.get(job_id) or {}).get("nickname") or "")
@@ -288,27 +361,21 @@ def _run_qr_job(job_id: str) -> None:
 
 
 def _qr_login_flow(page, job_id: str) -> tuple[bool, str]:
-    with _jobs_lock:
-        job = _jobs.get(job_id)
-        if job:
-            job["status"] = "waiting"
+    _set_job(job_id, status="waiting")
     try:
         page.goto(LOGIN_URL, wait_until="domcontentloaded")
     except Exception:
         return False, "website_changed"
-    page.wait_for_timeout(1200)
-    _click_first(
-        page,
-        [
-            'div:has-text("二维码")',
-            'li:has-text("二维码")',
-            'div:has-text("QR")',
-            'span:has-text("QR")',
-            ".login-scan",
-            ".qrcode-login",
-        ],
-    )
-    page.wait_for_timeout(500)
+    page.wait_for_timeout(800)
+    _open_qr_tab(page)
+    try:
+        page.wait_for_selector(
+            ".login-scan img, .qrcode-img img, img[src*='qrcode'], img[src*='qr'], canvas",
+            timeout=20_000,
+        )
+    except Exception:
+        pass
+    page.wait_for_timeout(400)
     if _looks_logged_in(page):
         nick = _nickname(page)
         _set_job(job_id, nickname=nick)
@@ -319,28 +386,44 @@ def _qr_login_flow(page, job_id: str) -> tuple[bool, str]:
     last_png = b""
     saw_qr = False
     while time.time() < deadline:
-        with _jobs_lock:
-            job = _jobs.get(job_id)
-            if not job or job.get("cancel"):
-                return False, "cancelled"
+        if _job_cancelled(job_id):
+            return False, "cancelled"
         if _looks_captcha(page):
             return False, "captcha"
         if _looks_logged_in(page):
             nick = _nickname(page)
             _set_job(job_id, nickname=nick)
             return True, nick or "ok"
+        if _qr_expired(page):
+            _click_qr_refresh(page)
+            page.wait_for_timeout(500)
         png = _qr_png(page)
         if png:
             saw_qr = True
             if png != last_png:
                 last_png = png
-                _set_job(job_id, qr_png=base64.b64encode(png).decode("ascii"))
-        elif _qr_expired(page):
-            _click_qr_refresh(page)
-        page.wait_for_timeout(1500)
+                _set_job(
+                    job_id,
+                    status="waiting",
+                    qr_png=base64.b64encode(png).decode("ascii"),
+                )
+        page.wait_for_timeout(QR_TICK_MS)
     if not saw_qr:
         return False, "website_changed"
     return False, "expired"
+
+
+def _open_qr_tab(page) -> None:
+    _click_first(
+        page,
+        [
+            'div.login-tab:has-text("二维码")',
+            'li:has-text("二维码登录")',
+            'div:has-text("二维码登录")',
+            ".qrcode-login",
+            ".login-scan",
+        ],
+    )
 
 
 def _ensure_session(page) -> tuple[bool, str]:
@@ -378,35 +461,56 @@ def _with_browser(account_id: str, fn, *, link_name: str = "") -> tuple[bool, st
     )
 
 
+def _job_cancelled(job_id: str) -> bool:
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+    if job and job.get("cancel"):
+        return True
+    disk = _load_job_file(job_id)
+    return bool(disk and disk.get("cancel"))
+
+
 def _set_job(job_id: str, **fields: Any) -> None:
     with _jobs_lock:
         job = _jobs.get(job_id)
         if not job:
-            return
+            job = _load_job_file(job_id) or {"id": job_id}
+            _jobs[job_id] = job
         job.update(fields)
+        _persist_job(job)
 
 
 def _qr_png(page) -> bytes:
-    for sel in _QR_IMG_SELECTORS:
-        el = _first_visible(page, [sel])
-        if el is None:
+    frames = [page]
+    try:
+        frames.extend(page.frames)
+    except Exception:
+        pass
+    seen: set[int] = set()
+    for fr in frames:
+        if id(fr) in seen:
             continue
-        try:
-            data = el.screenshot()
-            if data and len(data) > 80:
-                return data
-        except Exception:
-            continue
-    for sel in _QR_BOX_SELECTORS:
-        el = _first_visible(page, [sel])
-        if el is None:
-            continue
-        try:
-            data = el.screenshot()
-            if data and len(data) > 80:
-                return data
-        except Exception:
-            continue
+        seen.add(id(fr))
+        for sel in _QR_IMG_SELECTORS:
+            el = _first_visible(fr, [sel])
+            if el is None:
+                continue
+            try:
+                data = el.screenshot()
+                if data and len(data) > 80:
+                    return data
+            except Exception:
+                continue
+        for sel in _QR_BOX_SELECTORS:
+            el = _first_visible(fr, [sel])
+            if el is None:
+                continue
+            try:
+                data = el.screenshot()
+                if data and len(data) > 80:
+                    return data
+            except Exception:
+                continue
     return b""
 
 

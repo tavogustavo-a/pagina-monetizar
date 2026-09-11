@@ -1536,6 +1536,7 @@
       var img = root.querySelector(".js-bilibili-qr-img");
       var msgEl = root.querySelector(".js-bilibili-qr-msg");
       var cancelBtn = root.querySelector(".js-bilibili-qr-cancel");
+      var pollMisses = 0;
 
       function currentLinkName() {
         if (typeof editingGroupName === "string" && editingGroupName) return editingGroupName;
@@ -1558,16 +1559,26 @@
       function pollJob(jobId) {
         fetch("/admin/api/bilibili/qr/" + encodeURIComponent(jobId), {
           credentials: "same-origin",
-          headers: { Accept: "application/json" },
+          headers: { Accept: "application/json", "Cache-Control": "no-store" },
         })
           .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
           .then(function (x) {
             if (qrJobId !== jobId) return;
             var body = x.body || {};
             var status = String(body.status || "");
+            if (!x.res.ok) {
+              pollMisses += 1;
+              if (pollMisses < 8) return;
+              stopBilibiliQrPoll();
+              hideBox();
+              showMsg((body.error || errorMsg), false);
+              startBtn.disabled = false;
+              return;
+            }
             if (body.qr_png && img) {
               img.src = "data:image/png;base64," + body.qr_png;
               if (box) box.hidden = false;
+              pollMisses = 0;
             }
             if (status === "ok") {
               stopBilibiliQrPoll(false);
@@ -1578,7 +1589,7 @@
               return;
             }
             if (status === "waiting" || status === "starting") {
-              showMsg("", true);
+              pollMisses = 0;
               return;
             }
             stopBilibiliQrPoll();
@@ -1588,6 +1599,8 @@
           })
           .catch(function () {
             if (qrJobId !== jobId) return;
+            pollMisses += 1;
+            if (pollMisses < 8) return;
             stopBilibiliQrPoll();
             hideBox();
             showMsg(networkMsg, false);
@@ -1618,9 +1631,10 @@
               return;
             }
             qrJobId = String(x.body.job_id || "");
+            pollMisses = 0;
             if (box) box.hidden = false;
             pollJob(qrJobId);
-            qrPollTimer = setInterval(function () { pollJob(qrJobId); }, 1500);
+            qrPollTimer = setInterval(function () { pollJob(qrJobId); }, 900);
           })
           .catch(function () {
             startBtn.disabled = false;

@@ -622,8 +622,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Abre este servidor desde una cuenta en Servidores y luego escanea el QR.",
     },
     "servers.bilibili_qr_waiting": {
-        "en": "Scan this code with the Bilibili app. It expires in about 3 minutes.",
-        "es": "Escanea este código con la app de Bilibili. Caduca en unos 3 minutos.",
+        "en": "Scan with the Bilibili app. The code updates by itself when Bilibili refreshes it.",
+        "es": "Escanea con la app de Bilibili. El código se actualiza solo cuando Bilibili lo renueva.",
     },
     "servers.bilibili_qr_cancel": {"en": "Cancel scan", "es": "Cancelar escaneo"},
     "bilibili_qr.connected": {
