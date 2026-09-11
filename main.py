@@ -157,12 +157,14 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(300)
 
     async def bilibili_tv_worker() -> None:
-        """A las 3 am (hora del panel) mantiene vivas las sesiones de Bilibili.tv."""
+        """Keep-alive Bilibili.tv y QR de .com: 3–5 días, horas distintas, una cuenta por ciclo."""
         while True:
             try:
                 import bilibili_tv
+                import bilibili_web
 
                 await asyncio.to_thread(bilibili_tv.run_daily_keep_alive_if_due)
+                await asyncio.to_thread(bilibili_web.run_keep_alive_if_due)
             except Exception:
                 pass
             await asyncio.sleep(300)
@@ -435,6 +437,11 @@ class ChainAccountBody(BaseModel):
     login: str = ""
     secret: str = ""
     extra: str = ""
+    link_name: str = ""
+
+
+class BilibiliQrStartBody(BaseModel):
+    account_id: str = ""
     link_name: str = ""
 
 
@@ -3204,7 +3211,9 @@ def admin_servidores(request: Request):
                 pid: filehost.settings_url(pid) for pid in filehost.PLATFORM_IDS
             },
             "chain_by_platform": chain_grouped,
-            "chain_platform_ids": list(chain.PLATFORM_IDS),
+            "chain_platform_ids": [
+                pid for pid in chain.PLATFORM_IDS if pid not in chain.QR_PLATFORM_IDS
+            ],
             "chain_extra_fields": {
                 pid: chain.extra_field(pid) for pid in chain.PLATFORM_IDS
             },
@@ -5205,11 +5214,17 @@ def api_chain_save(request: Request, body: ChainAccountBody):
         )
         now = datetime.now(timezone.utc).isoformat()
         prev_ok = str(stored.get("last_ok_at") or "")
+        next_at = ""
+        if ok or str(detail or "") == "captcha":
+            next_at = bilibili_tv.pick_next_keepalive(
+                except_id=str(row.get("id") or "")
+            )
         db.update_chain_browser_session(
             str(row.get("id") or ""),
             session_ok=ok,
             last_ok_at=now if ok else prev_ok,
             last_error="" if ok else str(detail or ""),
+            next_keepalive_at=next_at or None,
         )
         if ok:
             return {
@@ -5303,6 +5318,98 @@ def api_chain_test(request: Request, body: ChainAccountBody):
             status_code=400,
         )
     return {"ok": True, "message": i18n.t("api.chain.ok", lang, name=detail)}
+
+
+def _bilibili_qr_error(lang: str, detail: str) -> str:
+    key = {
+        "need_account_name": "servers.bilibili_qr_need_name",
+        "missing_fields": "servers.bilibili_qr_need_name",
+        "not_found": "servers.disconnect_error",
+        "playwright_missing": "bilibili_tv.err_playwright",
+        "website_changed": "bilibili_qr.err_website",
+        "captcha": "bilibili_qr.err_captcha",
+        "session_dead": "bilibili_qr.err_session",
+        "browser_busy": "bilibili_qr.err_busy",
+        "browser_error": "bilibili_qr.err_browser",
+        "expired": "bilibili_qr.err_expired",
+        "cancelled": "bilibili_qr.err_cancelled",
+    }.get((detail or "").strip())
+    if key:
+        return i18n.t(key, lang)
+    return i18n.t("bilibili_qr.err_browser", lang)
+
+
+@app.post("/admin/api/bilibili/qr/start")
+def api_bilibili_qr_start(request: Request, body: BilibiliQrStartBody):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    import bilibili_web
+
+    result = bilibili_web.start_qr_login(
+        link_name=(body.link_name or "").strip(),
+        account_id=(body.account_id or "").strip(),
+    )
+    if not result.get("ok"):
+        return JSONResponse(
+            {"ok": False, "error": _bilibili_qr_error(lang, str(result.get("error") or ""))},
+            status_code=400,
+        )
+    return {
+        "ok": True,
+        "job_id": result.get("job_id"),
+        "account_id": result.get("account_id"),
+    }
+
+
+@app.get("/admin/api/bilibili/qr/{job_id}")
+def api_bilibili_qr_status(request: Request, job_id: str):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    import bilibili_web
+
+    job = bilibili_web.get_qr_job(job_id)
+    if not job:
+        return JSONResponse(
+            {"ok": False, "error": i18n.t("bilibili_qr.err_expired", lang)},
+            status_code=404,
+        )
+    status = str(job.get("status") or "")
+    err = str(job.get("error") or "")
+    out = {
+        "ok": True,
+        "status": status,
+        "qr_png": job.get("qr_png") or "",
+        "nickname": job.get("nickname") or "",
+        "account_id": job.get("account_id") or "",
+    }
+    if status in {"ok"}:
+        nick = str(job.get("nickname") or "").strip()
+        out["message"] = i18n.t(
+            "bilibili_qr.connected",
+            lang,
+            name=f" ({nick})" if nick else "",
+        )
+    elif status in {"expired", "captcha", "website_changed", "browser_error", "browser_busy", "cancelled"} or (
+        err and status not in {"starting", "waiting"}
+    ):
+        out["ok"] = False
+        out["error"] = _bilibili_qr_error(lang, err or status)
+    return out
+
+
+@app.post("/admin/api/bilibili/qr/{job_id}/cancel")
+def api_bilibili_qr_cancel(request: Request, job_id: str):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    import bilibili_web
+
+    bilibili_web.cancel_qr_job(job_id)
+    return {"ok": True}
 
 
 @app.delete("/admin/api/chain/{account_id}")

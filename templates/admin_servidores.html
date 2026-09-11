@@ -701,6 +701,7 @@
       </li>
       {% endfor %}
     </ul>
+    {% include "_servers_bilibili_qr.html" %}
     {% endif %}
 
     {% if platform.id == 'rumble' %}
@@ -916,6 +917,8 @@
     var confirmMsg = {{ t('servers.disconnect_confirm') | tojson }};
     var errorMsg = {{ t('servers.disconnect_error') | tojson }};
     var networkMsg = {{ t('servers.network_error') | tojson }};
+    var qrJobId = "";
+    var qrPollTimer = 0;
     var vmosTitleTpl = {{ t('servers.vmos_title', platform='__NAME__') | tojson }};
     var filehostTitleTpl = {{ t('servers.filehost_title', platform='__NAME__') | tojson }};
     var filehostExtraFields = {{ filehost_extra_fields | tojson }};
@@ -1509,6 +1512,143 @@
       });
     }
 
+    function stopBilibiliQrPoll(cancelJob) {
+      if (qrPollTimer) {
+        clearInterval(qrPollTimer);
+        qrPollTimer = 0;
+      }
+      if (qrJobId && cancelJob !== false) {
+        fetch("/admin/api/bilibili/qr/" + encodeURIComponent(qrJobId) + "/cancel", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        }).catch(function () {});
+      }
+      qrJobId = "";
+    }
+
+    function bindBilibiliQr(root) {
+      if (!root) return;
+      var startBtn = root.querySelector(".js-bilibili-qr-start");
+      if (!startBtn || startBtn.dataset.bound) return;
+      startBtn.dataset.bound = "1";
+      var box = root.querySelector(".js-bilibili-qr-box");
+      var img = root.querySelector(".js-bilibili-qr-img");
+      var msgEl = root.querySelector(".js-bilibili-qr-msg");
+      var cancelBtn = root.querySelector(".js-bilibili-qr-cancel");
+
+      function currentLinkName() {
+        if (typeof editingGroupName === "string" && editingGroupName) return editingGroupName;
+        var credName = root.querySelector("input[name='name']") || document.querySelector("#server-modal-body input[name='name']");
+        return credName ? String(credName.value || "").trim() : "";
+      }
+
+      function showMsg(text, ok) {
+        if (!msgEl) return;
+        msgEl.hidden = !text;
+        msgEl.textContent = text || "";
+        msgEl.className = "sub js-bilibili-qr-msg " + (ok ? "api-msg--ok" : "api-msg--fail");
+      }
+
+      function hideBox() {
+        if (box) box.hidden = true;
+        if (img) img.removeAttribute("src");
+      }
+
+      function pollJob(jobId) {
+        fetch("/admin/api/bilibili/qr/" + encodeURIComponent(jobId), {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        })
+          .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+          .then(function (x) {
+            if (qrJobId !== jobId) return;
+            var body = x.body || {};
+            var status = String(body.status || "");
+            if (body.qr_png && img) {
+              img.src = "data:image/png;base64," + body.qr_png;
+              if (box) box.hidden = false;
+            }
+            if (status === "ok") {
+              stopBilibiliQrPoll(false);
+              hideBox();
+              showMsg(body.message || "", true);
+              rememberAccountPickerRestore();
+              window.location.reload();
+              return;
+            }
+            if (status === "waiting" || status === "starting") {
+              showMsg("", true);
+              return;
+            }
+            stopBilibiliQrPoll();
+            hideBox();
+            showMsg((body.error || errorMsg), false);
+            startBtn.disabled = false;
+          })
+          .catch(function () {
+            if (qrJobId !== jobId) return;
+            stopBilibiliQrPoll();
+            hideBox();
+            showMsg(networkMsg, false);
+            startBtn.disabled = false;
+          });
+      }
+
+      function startQr(accountId) {
+        var linkName = currentLinkName();
+        if (!linkName && !accountId) {
+          showMsg({{ t('servers.bilibili_qr_need_name') | tojson }}, false);
+          return;
+        }
+        stopBilibiliQrPoll();
+        startBtn.disabled = true;
+        showMsg("", true);
+        fetch("/admin/api/bilibili/qr/start", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ link_name: linkName, account_id: accountId || "" }),
+        })
+          .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+          .then(function (x) {
+            if (!x.res.ok || !x.body.ok) {
+              startBtn.disabled = false;
+              showMsg((x.body && x.body.error) || errorMsg, false);
+              return;
+            }
+            qrJobId = String(x.body.job_id || "");
+            if (box) box.hidden = false;
+            pollJob(qrJobId);
+            qrPollTimer = setInterval(function () { pollJob(qrJobId); }, 1500);
+          })
+          .catch(function () {
+            startBtn.disabled = false;
+            showMsg(networkMsg, false);
+          });
+      }
+
+      startBtn.addEventListener("click", function () {
+        var card = root.querySelector(".js-bilibili-qr-linked:not([hidden])");
+        var existingId = card ? (card.getAttribute("data-account-id") || "") : "";
+        startQr(existingId);
+      });
+      root.querySelectorAll(".js-bilibili-qr-rescan").forEach(function (btn) {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", function () {
+          startQr(btn.getAttribute("data-account-id") || "");
+        });
+      });
+      if (cancelBtn) {
+        cancelBtn.addEventListener("click", function () {
+          stopBilibiliQrPoll();
+          hideBox();
+          startBtn.disabled = false;
+        });
+      }
+    }
+
     function fillSecretInput(input, realValue) {
       if (!input) return;
       var stored = String(realValue || "");
@@ -1812,7 +1952,7 @@
           var bound = String(card.getAttribute("data-account-name") || "").trim().toLowerCase();
           if (bound && bound !== wantName) card.hidden = true;
         });
-        [".js-filehost-linked", ".js-vmos-linked", ".js-chain-linked"].forEach(function (sel) {
+        [".js-filehost-linked", ".js-vmos-linked", ".js-chain-linked", ".js-bilibili-qr-linked"].forEach(function (sel) {
           var all = modalBody.querySelectorAll(sel);
           var vis = Array.prototype.filter.call(all, function (el) { return !el.hidden; });
           if (all.length && !vis.length) {
@@ -1831,6 +1971,7 @@
       bindVmos(modalBody);
       bindFilehost(modalBody);
       bindChain(modalBody);
+      bindBilibiliQr(modalBody);
       bindApiForms(modalBody);
       loadAccountPlatformCreds(platformId, accountName);
       if (fromAccountPicker) {
@@ -1865,6 +2006,7 @@
 
     function closeModal() {
       if (!modal) return;
+      stopBilibiliQrPoll();
       var returnState = accountPickerReturnState;
       hideModal(modal, lastAccountsTrigger);
       modal.classList.remove("equipo-modal--stack");

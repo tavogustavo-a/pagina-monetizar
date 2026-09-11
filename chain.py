@@ -1,4 +1,4 @@
-"""Odysee (LBRY), DTube (Hive) y Bilibili.tv (navegador): cuentas en Servidores."""
+"""Odysee (LBRY), DTube (Hive), Bilibili.tv y sesión QR de Bilibili.com."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,11 +8,24 @@ import bilibili_tv
 import dtube
 import odysee
 
-PLATFORM_IDS = frozenset({"odysee", "dtube", "bilibili_tv"})
+QR_PLATFORM_IDS = frozenset({"bilibili_qr"})
+PLATFORM_IDS = frozenset({"odysee", "dtube", "bilibili_tv", "bilibili_qr"})
 
-API_KIND = {"odysee": "lbry", "dtube": "hive", "bilibili_tv": "browser"}
+API_KIND = {
+    "odysee": "lbry",
+    "dtube": "hive",
+    "bilibili_tv": "browser",
+    "bilibili_qr": "browser",
+}
 
-NO_TEST_IDS = frozenset({"odysee", "bilibili_tv"})
+NO_TEST_IDS = frozenset({"odysee", "bilibili_tv", "bilibili_qr"})
+
+SERVER_PLATFORM = {"bilibili_qr": "bilibili"}
+
+
+def server_platform_id(platform_id: str) -> str:
+    pid = (platform_id or "").strip()
+    return SERVER_PLATFORM.get(pid, pid)
 
 
 def extra_field(platform_id: str) -> str:
@@ -88,4 +101,6 @@ def publish_video(
 
     if pid == "bilibili_tv":
         return False, t("pub.bilibili_tv.not_wired", lang)
+    if pid == "bilibili_qr":
+        return False, t("pub.bilibili_qr.not_wired", lang)
     return False, t("api.unknown_platform", lang)

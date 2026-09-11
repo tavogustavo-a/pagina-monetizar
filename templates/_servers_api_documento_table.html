@@ -19,7 +19,7 @@
         <td data-label="{{ t('apidoc.col_setup') }}" class="apidoc-cell--stack">
           <ol class="apidoc-steps">
             {% for step in row.setup_steps %}
-            <li>{{ step }}</li>
+            <li>{{ step | urlize(target='_blank', rel='noopener noreferrer') }}</li>
             {% endfor %}
           </ol>
         </td>

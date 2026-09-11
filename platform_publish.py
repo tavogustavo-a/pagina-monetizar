@@ -191,6 +191,21 @@ def _publish_bilibili(
 ) -> tuple[bool, str]:
     import bilibili_publish
 
+    oauth_id = db.resolve_oauth_account_id("bilibili", account_link_id=account_link_id)
+    if oauth_id:
+        return bilibili_publish.publish_video(
+            file_path=file_path,
+            content_type=content_type,
+            title=title,
+            description=description,
+            lang=lang,
+            account_link_id=account_link_id,
+        )
+    qr = db.resolve_chain_account_for_publish("bilibili", account_link_id)
+    if qr:
+        from i18n import t
+
+        return False, t("pub.bilibili_qr.not_wired", lang)
     return bilibili_publish.publish_video(
         file_path=file_path,
         content_type=content_type,

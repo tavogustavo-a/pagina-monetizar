@@ -324,6 +324,7 @@ def _ensure_chain_accounts_table() -> None:
     _ensure_column("chain_accounts", "last_ok_at", "TEXT NOT NULL DEFAULT ''")
     _ensure_column("chain_accounts", "last_error", "TEXT NOT NULL DEFAULT ''")
     _ensure_column("chain_accounts", "last_alert_at", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column("chain_accounts", "next_keepalive_at", "TEXT NOT NULL DEFAULT ''")
 
 
 def _ensure_x_funding_tables() -> None:
@@ -3152,6 +3153,10 @@ def _delete_chain_account_on_conn(conn: sqlite3.Connection, account_id: str) -> 
         import bilibili_tv
 
         bilibili_tv.remove_profile(oid)
+    elif pid == "bilibili_qr":
+        import bilibili_web
+
+        bilibili_web.remove_profile(oid)
 
 
 def _delete_server_account_on_conn(conn: sqlite3.Connection, account_id: str) -> None:
@@ -5766,6 +5771,7 @@ def update_chain_browser_session(
     last_ok_at: str = "",
     last_error: str = "",
     last_alert_at: str | None = None,
+    next_keepalive_at: str | None = None,
 ) -> None:
     oid = (account_id or "").strip()
     if not oid:
@@ -5773,7 +5779,7 @@ def update_chain_browser_session(
     now = datetime.now(timezone.utc).isoformat()
     conn = _connect()
     try:
-        if last_alert_at is None:
+        if last_alert_at is None and next_keepalive_at is None:
             conn.execute(
                 """
                 UPDATE chain_accounts
@@ -5782,7 +5788,24 @@ def update_chain_browser_session(
                 """,
                 (1 if session_ok else 0, last_ok_at or "", last_error or "", now, oid),
             )
-        else:
+        elif last_alert_at is None:
+            conn.execute(
+                """
+                UPDATE chain_accounts
+                SET session_ok = ?, last_ok_at = ?, last_error = ?,
+                    next_keepalive_at = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    1 if session_ok else 0,
+                    last_ok_at or "",
+                    last_error or "",
+                    next_keepalive_at or "",
+                    now,
+                    oid,
+                ),
+            )
+        elif next_keepalive_at is None:
             conn.execute(
                 """
                 UPDATE chain_accounts
@@ -5799,6 +5822,45 @@ def update_chain_browser_session(
                     oid,
                 ),
             )
+        else:
+            conn.execute(
+                """
+                UPDATE chain_accounts
+                SET session_ok = ?, last_ok_at = ?, last_error = ?, last_alert_at = ?,
+                    next_keepalive_at = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    1 if session_ok else 0,
+                    last_ok_at or "",
+                    last_error or "",
+                    last_alert_at,
+                    next_keepalive_at or "",
+                    now,
+                    oid,
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_chain_next_keepalive(account_id: str, next_keepalive_at: str) -> None:
+    oid = (account_id or "").strip()
+    when = (next_keepalive_at or "").strip()
+    if not oid or not when:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            UPDATE chain_accounts
+            SET next_keepalive_at = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (when, now, oid),
+        )
         conn.commit()
     finally:
         conn.close()
@@ -5811,7 +5873,17 @@ def resolve_chain_account_for_publish(
 
     pid = (platform_id or "").strip()
     lid = (account_link_id or "").strip()
-    if pid not in chain_mod.PLATFORM_IDS or not lid:
+    if not lid:
+        return None
+    if pid == "bilibili":
+        linked = get_account_platform_row(lid, "bilibili")
+        if not linked or str(linked.get("source_kind") or "") != "chain":
+            return None
+        raw = get_chain_account_raw(str(linked.get("source_ref") or ""))
+        if raw and str(raw.get("platform_id") or "") == "bilibili_qr":
+            return raw
+        return None
+    if pid not in chain_mod.PLATFORM_IDS:
         return None
     linked = get_account_platform_row(lid, pid)
     if not linked or str(linked.get("source_kind") or "") != "chain":
@@ -5828,6 +5900,7 @@ def upsert_chain_account(
     secret: str | None,
     extra: str | None = None,
     link_name: str = "",
+    create_if_missing: bool = False,
 ) -> dict[str, Any]:
     import chain as chain_mod
 
@@ -5844,7 +5917,7 @@ def upsert_chain_account(
             existing = conn.execute(
                 "SELECT * FROM chain_accounts WHERE id = ?", (oid,)
             ).fetchone()
-            if not existing:
+            if not existing and not create_if_missing:
                 raise ValueError("not_found")
         login_val = (existing["login"] if existing else "") or ""
         secret_val = (existing["secret"] if existing else "") or ""
@@ -5875,6 +5948,7 @@ def upsert_chain_account(
                 pass
         label = (name or "").strip() or (link_name or "").strip() or login_val or pid
         account_label = (link_name or "").strip() or label
+        sa_pid = chain_mod.server_platform_id(pid)
         created = existing["created_at"] if existing else now
         conn.execute(
             """
@@ -5909,7 +5983,7 @@ def upsert_chain_account(
             _release_other_links_for_platform(
                 conn,
                 source_kind="chain",
-                platform_id=pid,
+                platform_id=sa_pid,
                 link_name=account_label,
                 keep_ref=oid,
             )
@@ -5918,7 +5992,7 @@ def upsert_chain_account(
                 source_kind="chain",
                 source_ref=oid,
                 name=account_label,
-                platform_id=pid,
+                platform_id=sa_pid,
                 active=True,
             )
         except ValueError as e:
@@ -7682,24 +7756,39 @@ def sync_server_accounts_from_links() -> None:
             )
 
         live_chain: set[str] = set()
+        phantom_qr: list[str] = []
         try:
-            chain_rows = conn.execute(
-                "SELECT id, platform_id, name, login FROM chain_accounts"
-            ).fetchall()
+            chain_rows = conn.execute("SELECT * FROM chain_accounts").fetchall()
         except sqlite3.OperationalError:
             chain_rows = []
         for row in chain_rows:
             cid = str(row["id"])
+            pid = str(row["platform_id"] or "")
+            if pid in chain_mod.QR_PLATFORM_IDS or pid == "bilibili_tv":
+                session_ok = 0
+                keys = row.keys()
+                if "session_ok" in keys:
+                    session_ok = int(row["session_ok"] or 0)
+                last_ok = ""
+                if "last_ok_at" in keys:
+                    last_ok = str(row["last_ok_at"] or "").strip()
+                if not session_ok:
+                    if pid in chain_mod.QR_PLATFORM_IDS and not last_ok:
+                        phantom_qr.append(cid)
+                    continue
             live_chain.add(cid)
             label = str(row["name"] or "").strip() or str(row["login"] or "").strip() or "chain"
+            sa_pid = chain_mod.server_platform_id(str(row["platform_id"] or ""))
             _upsert_linked_server_account(
                 conn,
                 source_kind="chain",
                 source_ref=cid,
                 name=label,
-                platform_id=str(row["platform_id"] or ""),
+                platform_id=sa_pid,
                 active=True,
             )
+        for cid in phantom_qr:
+            _delete_chain_account_on_conn(conn, cid)
 
         for row in conn.execute(
             "SELECT id, source_kind, source_ref FROM server_accounts WHERE source_kind != 'manual'"
@@ -9950,6 +10039,51 @@ def get_active_proxy_url_for_account(account_link_id: str | None) -> str:
         return stored or proxy_util.build_proxy_url(data)
     finally:
         conn.close()
+
+
+def get_active_proxy_url_for_account_name(name: str) -> str:
+    label = (name or "").strip()
+    if not label:
+        return ""
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT id FROM server_account_links
+            WHERE lower(trim(name)) = lower(trim(?))
+            LIMIT 1
+            """,
+            (label,),
+        ).fetchone()
+        if not row:
+            return ""
+        lid = str(row["id"] or "")
+    finally:
+        conn.close()
+    return get_active_proxy_url_for_account(lid)
+
+
+def get_active_proxy_url_for_source(source_kind: str, source_ref: str) -> str:
+    kind = (source_kind or "").strip()
+    ref = (source_ref or "").strip()
+    if not kind or not ref:
+        return ""
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT name FROM server_accounts
+            WHERE source_kind = ? AND source_ref = ?
+            LIMIT 1
+            """,
+            (kind, ref),
+        ).fetchone()
+        name = str(row["name"] or "").strip() if row else ""
+    finally:
+        conn.close()
+    return get_active_proxy_url_for_account_name(name)
 
 
 def create_proxy(

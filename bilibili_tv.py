@@ -1,16 +1,17 @@
 """Bilibili.tv: sesión en navegador interno (Playwright), no OAuth ni API de .com."""
 from __future__ import annotations
 
+import random
 import re
 import shutil
-import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 import db
 import notify
+import playwright_session
 import publish_schedule
 
 PLATFORM_ID = "bilibili_tv"
@@ -20,11 +21,13 @@ LOGIN_URLS = (
     "https://www.bilibili.tv/en/login",
     "https://www.bilibili.tv/login",
 )
-CHECK_HOUR_LOCAL = 3
-LAST_CHECK_KEY = "bilibili_tv_keepalive_day"
-NAV_TIMEOUT_MS = 45_000
-LOCK_WAIT_S = 180
-_BROWSER_LOCK = threading.Lock()
+KEEP_DAYS_MIN = 3
+KEEP_DAYS_MAX = 5
+RETRY_HOURS_MIN = 8
+RETRY_HOURS_MAX = 20
+ACCOUNT_GAP_HOURS_MIN = 2
+ACCOUNT_GAP_HOURS_MAX = 7
+NAV_TIMEOUT_MS = playwright_session.NAV_TIMEOUT_MS
 
 _LOGIN_COOKIE_NAMES = frozenset(
     {
@@ -64,11 +67,7 @@ def remove_profile(account_id: str) -> None:
 
 
 def playwright_ready() -> tuple[bool, str]:
-    try:
-        from playwright.sync_api import sync_playwright  # noqa: F401
-    except ImportError:
-        return False, "playwright_missing"
-    return True, ""
+    return playwright_session.playwright_ready()
 
 
 def probe_account(login: str, secret: str, extra: str = "", account_id: str = "") -> tuple[bool, str]:
@@ -91,90 +90,129 @@ def keep_alive_account(account: dict[str, Any]) -> tuple[bool, str]:
     return _with_browser(oid, lambda page: _ensure_session(page, em, pw))
 
 
-def run_daily_keep_alive_if_due() -> None:
-    """A las 3:00 (hora del panel, UTC-5) visita las cuentas una detrás de otra."""
-    now = publish_schedule.now_publish_tz()
-    if now.hour < CHECK_HOUR_LOCAL:
-        return
-    last = (db.get_app_setting(LAST_CHECK_KEY) or "").strip()
-    today = now.date().isoformat()
-    if last == today:
-        return
+def schedule_next_visit(account_id: str, *, soon: bool = False) -> str:
+    """Próxima visita: 3–5 días a hora aleatoria, o reintento en horas si la sesión cayó."""
+    when = pick_next_keepalive(except_id=account_id, soon=soon)
+    db.update_chain_next_keepalive(account_id, when)
+    return when
+
+
+def pick_next_keepalive(*, except_id: str, soon: bool = False) -> str:
+    now_local = publish_schedule.now_publish_tz()
+    if soon:
+        candidate = now_local + timedelta(
+            hours=random.randint(RETRY_HOURS_MIN, RETRY_HOURS_MAX),
+            minutes=random.randint(0, 59),
+        )
+    else:
+        days = random.randint(KEEP_DAYS_MIN, KEEP_DAYS_MAX)
+        hour = random.randint(0, 23)
+        minute = random.randint(0, 59)
+        candidate = (now_local + timedelta(days=days)).replace(
+            hour=hour, minute=minute, second=0, microsecond=0
+        )
+        if candidate <= now_local:
+            candidate += timedelta(days=1)
+    others = _other_next_times(except_id)
+    gap = timedelta(hours=random.randint(ACCOUNT_GAP_HOURS_MIN, ACCOUNT_GAP_HOURS_MAX))
+    for _ in range(36):
+        if all(abs((candidate - other).total_seconds()) >= gap.total_seconds() for other in others):
+            break
+        candidate += gap
+    return candidate.astimezone(timezone.utc).isoformat()
+
+
+def _parse_iso(raw: str) -> datetime | None:
+    text = (raw or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _other_next_times(except_id: str) -> list[datetime]:
+    skip = (except_id or "").strip()
+    out: list[datetime] = []
     for row in db.list_chain_accounts_raw(PLATFORM_ID):
-        ok, code = keep_alive_account(row)
-        _record_session(str(row.get("id") or ""), ok, code, row)
-    db.set_app_setting(LAST_CHECK_KEY, today)
+        if str(row.get("id") or "") == skip:
+            continue
+        parsed = _parse_iso(str(row.get("next_keepalive_at") or ""))
+        if parsed:
+            out.append(parsed.astimezone(publish_schedule.PUBLISH_TZ))
+    return out
 
 
-def _record_session(account_id: str, ok: bool, code: str, row: dict[str, Any]) -> None:
+def run_daily_keep_alive_if_due() -> None:
+    """Visita como máximo una cuenta por ciclo: 3–5 días, horas distintas; relogin si caducó."""
+    now = datetime.now(timezone.utc)
+    due: list[dict[str, Any]] = []
+    for row in db.list_chain_accounts_raw(PLATFORM_ID):
+        oid = str(row.get("id") or "").strip()
+        if not oid:
+            continue
+        nxt = str(row.get("next_keepalive_at") or "").strip()
+        if not nxt:
+            db.update_chain_next_keepalive(oid, pick_next_keepalive(except_id=oid))
+            continue
+        parsed = _parse_iso(nxt)
+        if parsed and parsed <= now:
+            due.append(row)
+    if not due:
+        return
+    due.sort(key=lambda r: str(r.get("next_keepalive_at") or ""))
+    row = due[0]
+    oid = str(row.get("id") or "")
+    ok, code = keep_alive_account(row)
+    soon = (not ok) and code in {"session_dead", "login_failed", "browser_error"}
+    next_at = pick_next_keepalive(except_id=oid, soon=soon)
+    _record_session(oid, ok, code, row, next_keepalive_at=next_at)
+
+
+def _record_session(
+    account_id: str,
+    ok: bool,
+    code: str,
+    row: dict[str, Any],
+    *,
+    next_keepalive_at: str = "",
+) -> None:
     now = datetime.now(timezone.utc).isoformat()
     last_ok = now if ok else str(row.get("last_ok_at") or "")
+    alert_at: str | None = None
+    if not ok and code not in {"playwright_missing", "browser_busy"}:
+        last_alert = str(row.get("last_alert_at") or "").strip()
+        today = publish_schedule.now_publish_tz().date().isoformat()
+        if not last_alert.startswith(today):
+            login = str(row.get("login") or "").strip() or account_id
+            notify.send_bilibili_tv_session_alert(
+                login=login,
+                code=code,
+                lang="es",
+            )
+            alert_at = now
     db.update_chain_browser_session(
         account_id,
         session_ok=ok,
-        last_ok_at=last_ok if ok else str(row.get("last_ok_at") or ""),
+        last_ok_at=now if ok else last_ok,
         last_error="" if ok else code,
-    )
-    if ok:
-        return
-    if code in {"playwright_missing", "browser_busy"}:
-        return
-    last_alert = str(row.get("last_alert_at") or "").strip()
-    today = publish_schedule.now_publish_tz().date().isoformat()
-    if last_alert.startswith(today):
-        return
-    login = str(row.get("login") or "").strip() or account_id
-    notify.send_bilibili_tv_session_alert(
-        login=login,
-        code=code,
-        lang="es",
-    )
-    db.update_chain_browser_session(
-        account_id,
-        session_ok=ok,
-        last_ok_at=str(row.get("last_ok_at") or ""),
-        last_error=code,
-        last_alert_at=now,
+        last_alert_at=alert_at,
+        next_keepalive_at=next_keepalive_at or None,
     )
 
 
 def _with_browser(account_id: str, fn) -> tuple[bool, str]:
-    ready, err = playwright_ready()
-    if not ready:
-        return False, err
-    got = _BROWSER_LOCK.acquire(timeout=LOCK_WAIT_S)
-    if not got:
-        return False, "browser_busy"
-    try:
-        from playwright.sync_api import sync_playwright
-
-        path = profile_dir(account_id)
-        path.mkdir(parents=True, exist_ok=True)
-        try:
-            with sync_playwright() as p:
-                context = p.chromium.launch_persistent_context(
-                    user_data_dir=str(path),
-                    headless=True,
-                    viewport={"width": 1360, "height": 900},
-                    locale="en-US",
-                    args=[
-                        "--disable-dev-shm-usage",
-                        "--disable-blink-features=AutomationControlled",
-                    ],
-                )
-                try:
-                    page = context.pages[0] if context.pages else context.new_page()
-                    page.set_default_timeout(NAV_TIMEOUT_MS)
-                    return fn(page)
-                finally:
-                    context.close()
-        except Exception as e:
-            msg = str(e or "").lower()
-            if "executable doesn't exist" in msg or "playwright install" in msg:
-                return False, "playwright_missing"
-            return False, "browser_error"
-    finally:
-        _BROWSER_LOCK.release()
+    proxy_url = db.get_active_proxy_url_for_source("chain", account_id)
+    return playwright_session.with_persistent_browser(
+        profile_dir(account_id),
+        fn,
+        proxy_url=proxy_url,
+        locale="en-US",
+    )
 
 
 def _ensure_session(page, email: str, password: str) -> tuple[bool, str]:

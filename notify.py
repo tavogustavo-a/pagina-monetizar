@@ -190,6 +190,32 @@ def send_bilibili_tv_session_alert(*, login: str, code: str, lang: str = "es") -
     return sent_any
 
 
+def send_bilibili_qr_session_alert(*, login: str, code: str, lang: str = "es") -> bool:
+    """Avisa si la sesión QR de Bilibili.com caducó o pide captcha."""
+    if not smtp_configured():
+        return False
+    import db
+    from i18n import t
+
+    emails = db.list_admin_notification_emails()
+    if not emails:
+        return False
+    err_key = {
+        "website_changed": "bilibili_qr.err_website",
+        "captcha": "bilibili_qr.err_captcha",
+        "session_dead": "bilibili_qr.err_session",
+        "browser_error": "bilibili_qr.err_browser",
+    }.get(code, "bilibili_qr.err_session")
+    detail = t(err_key, lang)
+    subject = t("bilibili_qr.alert_subject", lang, site=site_config.SITE_NAME, login=login)
+    body = t("bilibili_qr.alert_body", lang, login=login, detail=detail)
+    sent_any = False
+    for to in emails:
+        if send_plain_email(to=to, subject=subject, body=body):
+            sent_any = True
+    return sent_any
+
+
 def send_publish_failure_alert(
     *,
     video_title: str,
