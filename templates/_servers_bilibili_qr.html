@@ -32,6 +32,12 @@
           {% elif c.name %}
           <p class="tiktok-config-card__meta sub">{{ c.name }}</p>
           {% endif %}
+          {% if c.followers is not none %}
+          <p class="tiktok-config-card__meta sub">{{ t('servers.bilibili_followers', count=c.followers, goal=1000) }}</p>
+          {% if c.followers_ready %}
+          <span class="badge badge-active">{{ t('servers.bilibili_monetize_ready') }}</span>
+          {% endif %}
+          {% endif %}
         </div>
         <div class="tiktok-config-card__actions">
           <button type="button" class="btn btn-ghost btn-sm js-bilibili-qr-rescan" data-account-id="{{ c.id }}">

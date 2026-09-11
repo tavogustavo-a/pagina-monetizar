@@ -606,8 +606,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Sesión web (código QR)",
     },
     "servers.bilibili_qr_hint": {
-        "en": "No company Open Platform app. Scan the QR with the Bilibili app on your phone. The panel keeps that browser session. Keep-alive every 3–5 days (not every day). If cookies die, scan again — there is no password to sign in alone. Link a proxy to this account in Proxies and keep the same one, or the session often dies when the IP changes. Studio upload is not wired yet.",
-        "es": "Sin app de empresa en Open Platform. Escanea el QR con la app de Bilibili en el móvil. El panel guarda esa sesión del navegador. Keep-alive cada 3–5 días (no hace falta entrar cada día). Si las cookies mueren, vuelves a escanear: no hay contraseña para entrar solo. Vincula un proxy a esta cuenta en Proxys y no lo cambies, o la sesión suele caer al cambiar la IP. La subida al estudio aún no está cableada.",
+        "en": "No company Open Platform app. Scan the QR with the Bilibili app on your phone. The panel keeps that browser session. Keep-alive every 3–5 days at 3 am (panel time), not every day; fan count is checked then and when you connect. If cookies die, scan again — there is no password to sign in alone. Link a proxy to this account in Proxies and keep the same one, or the session often dies when the IP changes. Studio upload is not wired yet.",
+        "es": "Sin app de empresa en Open Platform. Escanea el QR con la app de Bilibili en el móvil. El panel guarda esa sesión del navegador. Keep-alive cada 3–5 días a las 3 am (hora del panel), no cada día; los fans se consultan al conectar y en esa visita. Si las cookies mueren, vuelves a escanear: no hay contraseña para entrar solo. Vincula un proxy a esta cuenta en Proxys y no lo cambies, o la sesión suele caer al cambiar la IP. La subida al estudio aún no está cableada.",
     },
     "servers.connect_with_bilibili_qr": {
         "en": "Connect with QR code",
@@ -673,6 +673,22 @@ MESSAGES: dict[str, dict[str, str]] = {
     "bilibili_qr.alert_body": {
         "en": "Bilibili.com account {login}:\n\n{detail}\n\nOpen Servers and scan the QR again if needed. Nothing was marked as published.",
         "es": "Cuenta de Bilibili.com {login}:\n\n{detail}\n\nAbre Servidores y vuelve a escanear el QR si hace falta. No se marcó nada como publicado.",
+    },
+    "bilibili_qr.followers_alert_subject": {
+        "en": "[{site}] Bilibili.com {login} reached {followers} fans — apply for monetization",
+        "es": "[{site}] Bilibili.com {login} llegó a {followers} fans — pide la monetización",
+    },
+    "bilibili_qr.followers_alert_body": {
+        "en": "Bilibili.com account {login} has {followers} fans (goal {goal}).\n\nThat is the usual threshold for 创作激励 (creator incentive). Open the Bilibili app → Creator Center → Creator incentive and apply yourself. The panel cannot complete real-name verification or the application.\n\nOther typical requirements: original videos, credit score, and sometimes 电磁力. The panel does not mark anything as published.",
+        "es": "La cuenta de Bilibili.com {login} tiene {followers} fans (objetivo {goal}).\n\nEse es el umbral habitual para pedir 创作激励 (incentivo de creadores). Ábrelo tú: app de Bilibili → Centro de creación → Incentivo de creación. El panel no puede hacer la verificación de identidad ni enviar la solicitud.\n\nSuelen pedir también videos originales, puntuación de crédito y a veces 电磁力. El panel no marca nada como publicado.",
+    },
+    "servers.bilibili_followers": {
+        "en": "{count} / {goal} fans",
+        "es": "{count} / {goal} fans",
+    },
+    "servers.bilibili_monetize_ready": {
+        "en": "Ready to apply for monetization",
+        "es": "Ya puedes pedir la monetización",
     },
     "servers.rumble_partner_hint": {
         "en": "Rumble has no public OAuth. Save the partner Upload API token and Channel ID that Rumble issued (not a livestream chat URL).",
@@ -3355,8 +3371,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Servidores: guarda Client ID/Secret, luego Conectar con Bilibili (OAuth) o usa Conectar con código QR debajo. El OAuth pide una app de empresa certificada. El QR es un login del navegador, no Open Platform.",
     },
     "apidoc.bilibili.extra": {
-        "en": "ffmpeg is required for the cover on the official API. Optional: BILIBILI_TID and BILIBILI_TAG in .env. QR web session does not publish yet. This is Bilibili.com only.",
-        "es": "ffmpeg hace falta para la portada en la API oficial. Opcional: BILIBILI_TID y BILIBILI_TAG en .env. La sesión QR aún no publica. Esto es solo Bilibili.com.",
+        "en": "ffmpeg is required for the cover (a random 16:10 frame). Optional: BILIBILI_TID and BILIBILI_TAG in .env. QR web session does not publish yet. This is Bilibili.com only.",
+        "es": "ffmpeg hace falta para la portada (un fotograma al azar 16:10). Opcional: BILIBILI_TID y BILIBILI_TAG en .env. La sesión QR aún no publica. Esto es solo Bilibili.com.",
     },
     "apidoc.bilibili_tv.step1": {
         "en": "Create an account on bilibili.tv (international site, not member.bilibili.com).",

@@ -44,6 +44,10 @@ RETRY_HOURS_MAX = 20
 ACCOUNT_GAP_HOURS_MIN = 2
 ACCOUNT_GAP_HOURS_MAX = 7
 JOB_TTL_S = 20 * 60
+NAV_URL = "https://api.bilibili.com/x/web-interface/nav"
+STAT_URL = "https://api.bilibili.com/x/relation/stat"
+FOLLOWER_GOAL = 1000
+KEEP_HOUR_LOCAL = 3
 
 _LOGIN_COOKIE_NAMES = frozenset(
     {
@@ -223,7 +227,14 @@ def keep_alive_account(account: dict[str, Any]) -> tuple[bool, str]:
     oid = str(account.get("id") or "").strip()
     if not oid:
         return False, "need_saved_account"
-    return _with_browser(oid, _ensure_session)
+
+    def body(page) -> tuple[bool, str]:
+        ok, code = _ensure_session(page)
+        if ok:
+            _capture_followers(page, oid, account)
+        return ok, code
+
+    return _with_browser(oid, body, link_name=str(account.get("name") or ""))
 
 
 def schedule_next_visit(account_id: str, *, soon: bool = False) -> str:
@@ -241,10 +252,9 @@ def pick_next_keepalive(*, except_id: str, soon: bool = False) -> str:
         )
     else:
         days = random.randint(KEEP_DAYS_MIN, KEEP_DAYS_MAX)
-        hour = random.randint(0, 23)
-        minute = random.randint(0, 59)
+        minute = random.randint(0, 40)
         candidate = (now_local + timedelta(days=days)).replace(
-            hour=hour, minute=minute, second=0, microsecond=0
+            hour=KEEP_HOUR_LOCAL, minute=minute, second=0, microsecond=0
         )
         if candidate <= now_local:
             candidate += timedelta(days=1)
@@ -253,7 +263,11 @@ def pick_next_keepalive(*, except_id: str, soon: bool = False) -> str:
     for _ in range(36):
         if all(abs((candidate - other).total_seconds()) >= gap.total_seconds() for other in others):
             break
-        candidate += gap
+        if soon:
+            candidate += gap
+        else:
+            candidate += timedelta(days=1)
+            candidate = candidate.replace(hour=KEEP_HOUR_LOCAL, second=0, microsecond=0)
     return candidate.astimezone(timezone.utc).isoformat()
 
 
@@ -434,7 +448,11 @@ def _apply_cookies_and_verify(
                 page.context.add_cookies([item])
             except Exception:
                 continue
-        return _ensure_session(page)
+        ok, code = _ensure_session(page)
+        if ok:
+            stored = db.get_chain_account_raw(oid) or {}
+            _capture_followers(page, oid, stored)
+        return ok, code
 
     return _with_browser(oid, body, link_name=link_name)
 
@@ -556,6 +574,69 @@ def _ensure_session(page) -> tuple[bool, str]:
     if _looks_captcha(page):
         return False, "captcha"
     return False, "session_dead"
+
+
+def _extra_payload(row: dict[str, Any] | None) -> dict[str, Any]:
+    raw = str((row or {}).get("extra") or "").strip()
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _capture_followers(page, account_id: str, row: dict[str, Any] | None) -> None:
+    oid = (account_id or "").strip()
+    if not oid:
+        return
+    mid = ""
+    try:
+        nav = page.context.request.get(NAV_URL, timeout=20_000).json()
+        inner = nav.get("data") if isinstance(nav, dict) else {}
+        if isinstance(inner, dict):
+            mid = str(inner.get("mid") or "").strip()
+    except Exception:
+        inner = {}
+    if not mid:
+        try:
+            for c in page.context.cookies():
+                if str(c.get("name") or "").lower() == "dedeuserid":
+                    mid = str(c.get("value") or "").strip()
+                    break
+        except Exception:
+            pass
+    if not mid:
+        return
+    try:
+        stat = page.context.request.get(
+            f"{STAT_URL}?vmid={urllib.parse.quote(mid)}",
+            timeout=20_000,
+        ).json()
+        payload = stat.get("data") if isinstance(stat.get("data"), dict) else {}
+        followers = int(payload.get("follower") or 0)
+    except Exception:
+        return
+    if followers < 0:
+        return
+    extra = _extra_payload(row)
+    extra["followers"] = followers
+    extra["followers_checked_at"] = datetime.now(timezone.utc).isoformat()
+    extra["followers_mid"] = mid
+    already = bool(extra.get("followers_alerted"))
+    if followers >= FOLLOWER_GOAL and not already:
+        login = str((row or {}).get("login") or (row or {}).get("name") or "").strip() or oid
+        sent = notify.send_bilibili_followers_alert(
+            login=login,
+            followers=followers,
+            goal=FOLLOWER_GOAL,
+            lang="es",
+        )
+        if sent or not notify.smtp_configured():
+            extra["followers_alerted"] = True
+            extra["followers_alerted_at"] = extra["followers_checked_at"]
+    db.update_chain_extra(oid, json.dumps(extra, ensure_ascii=False))
 
 
 def _with_browser(account_id: str, fn, *, link_name: str = "") -> tuple[bool, str]:

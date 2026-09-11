@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import subprocess
 import tempfile
 import urllib.error
@@ -16,6 +17,7 @@ from typing import Any
 import db
 import ffmpeg_bin
 import bilibili_oauth
+import video_probe
 
 INIT_URL = "https://member.bilibili.com/arcopen/fn/archive/video/init"
 PART_URL = "https://openupos.bilivideo.com/video/v2/part/upload"
@@ -27,6 +29,8 @@ UA = "CreatorHub/1.0 (Bilibili Open Platform)"
 VIDEO_EXT = {".mp4", ".flv", ".avi", ".wmv", ".mov", ".mkv", ".webm"}
 CHUNK = 4 * 1024 * 1024
 TITLE_MAX = 80
+COVER_W = 1146
+COVER_H = 717
 
 
 def _tid() -> int:
@@ -156,23 +160,46 @@ def _data(resp: dict[str, Any]) -> dict[str, Any]:
     return inner if isinstance(inner, dict) else {}
 
 
+def _cover_seek_seconds(path: Path) -> float:
+    """Un instante al azar del video (evita el primer fotograma negro)."""
+    meta = video_probe.probe_video(path)
+    try:
+        duration = float(meta.get("duration_seconds") or 0)
+    except (TypeError, ValueError):
+        duration = 0.0
+    if duration <= 1.2:
+        return 0.4 if duration > 0.5 else 0.0
+    lo = max(0.5, duration * 0.08)
+    hi = min(duration - 0.4, duration * 0.85)
+    if hi <= lo:
+        return max(0.5, duration / 2)
+    return random.uniform(lo, hi)
+
+
 def _extract_cover(path: Path) -> Path | None:
     tmp = Path(tempfile.gettempdir()) / f"bili_cover_{uuid.uuid4().hex}.jpg"
+    ss = _cover_seek_seconds(path)
+    vf = (
+        f"scale={COVER_W}:{COVER_H}:force_original_aspect_ratio=increase,"
+        f"crop={COVER_W}:{COVER_H}"
+    )
     cmd = [
         ffmpeg_bin.ffmpeg_exe(),
         "-y",
         "-ss",
-        "1",
+        f"{ss:.3f}",
         "-i",
         str(path),
         "-frames:v",
         "1",
+        "-vf",
+        vf,
         "-q:v",
         "3",
         str(tmp),
     ]
     try:
-        subprocess.run(cmd, check=True, capture_output=True, timeout=30)
+        subprocess.run(cmd, check=True, capture_output=True, timeout=45)
     except (FileNotFoundError, subprocess.SubprocessError, OSError):
         return None
     if tmp.is_file() and tmp.stat().st_size > 0:

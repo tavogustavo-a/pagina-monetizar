@@ -5656,6 +5656,21 @@ def _chain_public_row(r: Any) -> dict[str, Any]:
         session_ok = int(r["session_ok"] or 0)
     if "last_error" in keys:
         last_error = str(r["last_error"] or "")
+    followers = None
+    followers_ready = False
+    if str(r["platform_id"] or "") == "bilibili_qr" and extra.strip().startswith("{"):
+        import json
+
+        try:
+            payload = json.loads(extra)
+        except json.JSONDecodeError:
+            payload = {}
+        if isinstance(payload, dict) and payload.get("followers") is not None:
+            try:
+                followers = int(payload.get("followers") or 0)
+                followers_ready = followers >= 1000
+            except (TypeError, ValueError):
+                followers = None
     return {
         "id": r["id"],
         "platform_id": r["platform_id"],
@@ -5667,6 +5682,8 @@ def _chain_public_row(r: Any) -> dict[str, Any]:
         "extra_mask": _mask_secret(extra) if extra else "",
         "session_ok": bool(session_ok),
         "last_error": last_error,
+        "followers": followers,
+        "followers_ready": followers_ready,
         "updated_at": r["updated_at"],
     }
 
@@ -5821,6 +5838,22 @@ def update_chain_browser_session(
                     oid,
                 ),
             )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_chain_extra(account_id: str, extra: str) -> None:
+    oid = (account_id or "").strip()
+    if not oid:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            "UPDATE chain_accounts SET extra = ?, updated_at = ? WHERE id = ?",
+            (extra or "", now, oid),
+        )
         conn.commit()
     finally:
         conn.close()

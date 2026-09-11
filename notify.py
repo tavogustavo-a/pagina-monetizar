@@ -216,6 +216,43 @@ def send_bilibili_qr_session_alert(*, login: str, code: str, lang: str = "es") -
     return sent_any
 
 
+def send_bilibili_followers_alert(
+    *,
+    login: str,
+    followers: int,
+    goal: int = 1000,
+    lang: str = "es",
+) -> bool:
+    """Avisa cuando la cuenta llega al umbral de fans para pedir 创作激励."""
+    if not smtp_configured():
+        return False
+    import db
+    from i18n import t
+
+    emails = db.list_admin_notification_emails()
+    if not emails:
+        return False
+    subject = t(
+        "bilibili_qr.followers_alert_subject",
+        lang,
+        site=site_config.SITE_NAME,
+        login=login,
+        followers=followers,
+    )
+    body = t(
+        "bilibili_qr.followers_alert_body",
+        lang,
+        login=login,
+        followers=followers,
+        goal=goal,
+    )
+    sent_any = False
+    for to in emails:
+        if send_plain_email(to=to, subject=subject, body=body):
+            sent_any = True
+    return sent_any
+
+
 def send_publish_failure_alert(
     *,
     video_title: str,
