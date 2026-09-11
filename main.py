@@ -5360,6 +5360,7 @@ def api_bilibili_qr_start(request: Request, body: BilibiliQrStartBody):
         "ok": True,
         "job_id": result.get("job_id"),
         "account_id": result.get("account_id"),
+        "qr_png": result.get("qr_png") or "",
     }
 
 
@@ -5394,7 +5395,7 @@ def api_bilibili_qr_status(request: Request, job_id: str):
             name=f" ({nick})" if nick else "",
         )
     elif status in {"expired", "captcha", "website_changed", "browser_error", "browser_busy", "cancelled"} or (
-        err and status not in {"starting", "waiting"}
+        err and status not in {"starting", "waiting", "scanned"}
     ):
         out["ok"] = False
         out["error"] = _bilibili_qr_error(lang, err or status)

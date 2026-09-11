@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import http.cookiejar
 import json
 import random
 import re
@@ -9,7 +10,10 @@ import shutil
 import threading
 import time
 import uuid
+import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -17,16 +21,22 @@ from urllib.parse import urlparse
 import db
 import notify
 import playwright_session
+import proxy_util
 import publish_schedule
 
 PLATFORM_ID = "bilibili_qr"
 SERVER_PLATFORM_ID = "bilibili"
 QR_SECRET = "qr-session"
 HOME_URL = "https://www.bilibili.com/"
-LOGIN_URL = "https://passport.bilibili.com/login"
 MEMBER_URL = "https://member.bilibili.com/"
 QR_WAIT_S = 12 * 60
-QR_TICK_MS = 900
+QR_TICK_MS = 1200
+PASSPORT_GENERATE = "https://passport.bilibili.com/x/passport-login/web/qrcode/generate"
+PASSPORT_POLL = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll"
+_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
 KEEP_DAYS_MIN = 3
 KEEP_DAYS_MAX = 5
 RETRY_HOURS_MIN = 8
@@ -48,31 +58,9 @@ _CAPTCHA_RE = re.compile(
     r"phone code|otp|验证码|人机|短信",
     re.I,
 )
-_QR_EXPIRED_RE = re.compile(
-    r"二维码已失效|二维码过期|二维码失效|点击刷新|click to refresh qr",
-    re.I,
-)
 
 _jobs: dict[str, dict[str, Any]] = {}
 _jobs_lock = threading.Lock()
-
-_QR_IMG_SELECTORS = [
-    ".login-scan img",
-    ".qrcode-img img",
-    ".login-panel img",
-    "img[src*='qrcode']",
-    "img[src*='qr']",
-    ".qr-code img",
-    ".scan-code img",
-    "canvas",
-]
-_QR_BOX_SELECTORS = [
-    ".login-scan",
-    ".qrcode-img",
-    ".login-scan-box",
-    ".qr-code",
-    ".scan-code",
-]
 
 
 def _jobs_dir() -> Path:
@@ -156,26 +144,44 @@ def start_qr_login(*, link_name: str, account_id: str = "") -> dict[str, Any]:
         name = name or str(existing.get("name") or existing.get("login") or "")
     else:
         oid = str(uuid.uuid4())
+    proxy_url = db.get_active_proxy_url_for_source("chain", oid)
+    if not proxy_url and name:
+        proxy_url = db.get_active_proxy_url_for_account_name(name)
+    proxy_url = (proxy_url or "").strip()
+    jar = http.cookiejar.CookieJar()
+    try:
+        opener = _passport_opener(proxy_url, jar)
+        png, key, err = _passport_generate(opener)
+    except OSError:
+        return {"ok": False, "error": "browser_error"}
+    except Exception:
+        return {"ok": False, "error": "website_changed"}
+    if not png or not key:
+        return {"ok": False, "error": err or "website_changed"}
+    qr_b64 = base64.b64encode(png).decode("ascii")
     job_id = str(uuid.uuid4())
     job = {
         "id": job_id,
         "account_id": oid,
         "link_name": name,
         "is_new": is_new,
-        "status": "starting",
-        "qr_png": "",
+        "status": "waiting",
+        "qr_png": qr_b64,
         "message": "",
         "nickname": "",
         "error": "",
         "cancel": False,
         "created_at": time.time(),
+        "qrcode_key": key,
+        "cookiejar": jar,
+        "proxy_url": proxy_url,
     }
     with _jobs_lock:
         _jobs[job_id] = job
         _persist_job(job)
     thread = threading.Thread(target=_run_qr_job, args=(job_id,), daemon=True)
     thread.start()
-    return {"ok": True, "job_id": job_id, "account_id": oid}
+    return {"ok": True, "job_id": job_id, "account_id": oid, "qr_png": qr_b64}
 
 
 def get_qr_job(job_id: str) -> dict[str, Any] | None:
@@ -307,12 +313,16 @@ def _run_qr_job(job_id: str) -> None:
         oid = str(job.get("account_id") or "")
         link_name = str(job.get("link_name") or "")
         is_new = bool(job.get("is_new"))
+        jar = job.get("cookiejar")
+        key = str(job.get("qrcode_key") or "")
+        proxy_url = str(job.get("proxy_url") or "")
     stored = db.get_chain_account_raw(oid) or {}
-
-    def body(page) -> tuple[bool, str]:
-        return _qr_login_flow(page, job_id)
-
-    ok, code = _with_browser(oid, body, link_name=link_name)
+    ok, code = _poll_until_login(job_id, jar, key, proxy_url)
+    nick = ""
+    if ok:
+        ok, code = _apply_cookies_and_verify(oid, jar, link_name)
+        if ok:
+            nick = code if code and code != "ok" else ""
     with _jobs_lock:
         job = _jobs.get(job_id) or job
         if job.get("cancel"):
@@ -323,16 +333,15 @@ def _run_qr_job(job_id: str) -> None:
         elif ok:
             job["status"] = "ok"
             job["error"] = ""
-            if code and code not in {"ok"}:
-                job["nickname"] = code
+            if nick:
+                job["nickname"] = nick
         else:
             job["status"] = code or "error"
             job["error"] = code or "error"
             job["qr_png"] = job.get("qr_png") or ""
         _persist_job(job)
-    nick = ""
     with _jobs_lock:
-        nick = str((_jobs.get(job_id) or {}).get("nickname") or "")
+        nick = str((_jobs.get(job_id) or {}).get("nickname") or nick)
     label = link_name or str(stored.get("name") or "") or (nick if nick != "ok" else "")
     if ok:
         try:
@@ -360,70 +369,175 @@ def _run_qr_job(job_id: str) -> None:
     remove_profile(oid)
 
 
-def _qr_login_flow(page, job_id: str) -> tuple[bool, str]:
-    _set_job(job_id, status="waiting")
-    try:
-        page.goto(LOGIN_URL, wait_until="domcontentloaded")
-    except Exception:
+def _poll_until_login(
+    job_id: str,
+    jar: http.cookiejar.CookieJar | None,
+    key: str,
+    proxy_url: str,
+) -> tuple[bool, str]:
+    if jar is None or not key:
         return False, "website_changed"
-    page.wait_for_timeout(800)
-    _open_qr_tab(page)
     try:
-        page.wait_for_selector(
-            ".login-scan img, .qrcode-img img, img[src*='qrcode'], img[src*='qr'], canvas",
-            timeout=20_000,
-        )
-    except Exception:
-        pass
-    page.wait_for_timeout(400)
-    if _looks_logged_in(page):
-        nick = _nickname(page)
-        _set_job(job_id, nickname=nick)
-        return True, nick or "ok"
-    if _looks_captcha(page):
-        return False, "captcha"
+        opener = _passport_opener(proxy_url, jar)
+    except OSError:
+        return False, "browser_error"
     deadline = time.time() + QR_WAIT_S
-    last_png = b""
-    saw_qr = False
     while time.time() < deadline:
         if _job_cancelled(job_id):
             return False, "cancelled"
-        if _looks_captcha(page):
-            return False, "captcha"
-        if _looks_logged_in(page):
-            nick = _nickname(page)
-            _set_job(job_id, nickname=nick)
-            return True, nick or "ok"
-        if _qr_expired(page):
-            _click_qr_refresh(page)
-            page.wait_for_timeout(500)
-        png = _qr_png(page)
-        if png:
-            saw_qr = True
-            if png != last_png:
-                last_png = png
-                _set_job(
-                    job_id,
-                    status="waiting",
-                    qr_png=base64.b64encode(png).decode("ascii"),
-                )
-        page.wait_for_timeout(QR_TICK_MS)
-    if not saw_qr:
-        return False, "website_changed"
+        try:
+            payload = _passport_poll(opener, key)
+        except Exception:
+            time.sleep(QR_TICK_MS / 1000)
+            continue
+        try:
+            inner = int(payload.get("code"))
+        except (TypeError, ValueError):
+            inner = -1
+        if inner == 0:
+            return True, "ok"
+        if inner == 86090:
+            _set_job(job_id, status="scanned")
+        elif inner == 86038:
+            try:
+                png, new_key, err = _passport_generate(opener)
+            except Exception:
+                return False, "expired"
+            if not png or not new_key:
+                return False, err or "expired"
+            key = new_key
+            with _jobs_lock:
+                job = _jobs.get(job_id)
+                if job:
+                    job["qrcode_key"] = key
+            _set_job(
+                job_id,
+                status="waiting",
+                qr_png=base64.b64encode(png).decode("ascii"),
+            )
+        time.sleep(QR_TICK_MS / 1000)
     return False, "expired"
 
 
-def _open_qr_tab(page) -> None:
-    _click_first(
-        page,
-        [
-            'div.login-tab:has-text("二维码")',
-            'li:has-text("二维码登录")',
-            'div:has-text("二维码登录")',
-            ".qrcode-login",
-            ".login-scan",
-        ],
+def _apply_cookies_and_verify(
+    oid: str,
+    jar: http.cookiejar.CookieJar | None,
+    link_name: str,
+) -> tuple[bool, str]:
+    cookies = _playwright_cookies(jar)
+    if not cookies:
+        return False, "website_changed"
+
+    def body(page) -> tuple[bool, str]:
+        for item in cookies:
+            try:
+                page.context.add_cookies([item])
+            except Exception:
+                continue
+        return _ensure_session(page)
+
+    return _with_browser(oid, body, link_name=link_name)
+
+
+def _passport_headers() -> dict[str, str]:
+    return {
+        "User-Agent": _UA,
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://www.bilibili.com/",
+        "Origin": "https://www.bilibili.com",
+    }
+
+
+def _passport_opener(proxy_url: str, jar: http.cookiejar.CookieJar):
+    cookie = urllib.request.HTTPCookieProcessor(jar)
+    if (proxy_url or "").strip():
+        opener = proxy_util._make_proxy_opener(proxy_url)
+        opener.add_handler(cookie)
+        return opener
+    return urllib.request.build_opener(cookie)
+
+
+def _http_json(opener, url: str) -> dict[str, Any]:
+    req = urllib.request.Request(url, headers=_passport_headers())
+    with opener.open(req, timeout=25) as resp:
+        raw = resp.read().decode("utf-8", errors="replace")
+    data = json.loads(raw)
+    return data if isinstance(data, dict) else {}
+
+
+def _passport_warmup(opener) -> None:
+    try:
+        req = urllib.request.Request(HOME_URL, headers=_passport_headers())
+        opener.open(req, timeout=20).read()
+    except Exception:
+        pass
+
+
+def _passport_generate(opener) -> tuple[bytes, str, str]:
+    _passport_warmup(opener)
+    data = _http_json(opener, PASSPORT_GENERATE)
+    payload = data.get("data") if isinstance(data.get("data"), dict) else {}
+    url = str(payload.get("url") or "").strip()
+    key = str(payload.get("qrcode_key") or "").strip()
+    if data.get("code") not in (0, "0") or not url or not key:
+        return b"", "", "website_changed"
+    png = _png_from_login_url(url)
+    if not png:
+        return b"", "", "website_changed"
+    return png, key, ""
+
+
+def _passport_poll(opener, key: str) -> dict[str, Any]:
+    q = urllib.parse.quote(key, safe="")
+    data = _http_json(opener, f"{PASSPORT_POLL}?qrcode_key={q}")
+    payload = data.get("data") if isinstance(data.get("data"), dict) else {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _png_from_login_url(url: str) -> bytes:
+    try:
+        import qrcode
+    except ImportError:
+        return b""
+    qr = qrcode.QRCode(
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=8,
+        border=2,
     )
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _playwright_cookies(jar: http.cookiejar.CookieJar | None) -> list[dict[str, Any]]:
+    if jar is None:
+        return []
+    out: list[dict[str, Any]] = []
+    for c in jar:
+        name = str(c.name or "").strip()
+        value = str(c.value or "")
+        if not name:
+            continue
+        domain = str(c.domain or "").strip() or ".bilibili.com"
+        rest = getattr(c, "_rest", {}) or {}
+        item: dict[str, Any] = {
+            "name": name,
+            "value": value,
+            "domain": domain,
+            "path": c.path or "/",
+            "secure": bool(c.secure),
+            "httpOnly": bool(rest.get("HttpOnly") or rest.get("httponly")),
+        }
+        if c.expires:
+            try:
+                item["expires"] = float(c.expires)
+            except (TypeError, ValueError):
+                pass
+        out.append(item)
+    return out
 
 
 def _ensure_session(page) -> tuple[bool, str]:
@@ -480,61 +594,6 @@ def _set_job(job_id: str, **fields: Any) -> None:
         _persist_job(job)
 
 
-def _qr_png(page) -> bytes:
-    frames = [page]
-    try:
-        frames.extend(page.frames)
-    except Exception:
-        pass
-    seen: set[int] = set()
-    for fr in frames:
-        if id(fr) in seen:
-            continue
-        seen.add(id(fr))
-        for sel in _QR_IMG_SELECTORS:
-            el = _first_visible(fr, [sel])
-            if el is None:
-                continue
-            try:
-                data = el.screenshot()
-                if data and len(data) > 80:
-                    return data
-            except Exception:
-                continue
-        for sel in _QR_BOX_SELECTORS:
-            el = _first_visible(fr, [sel])
-            if el is None:
-                continue
-            try:
-                data = el.screenshot()
-                if data and len(data) > 80:
-                    return data
-            except Exception:
-                continue
-    return b""
-
-
-def _qr_expired(page) -> bool:
-    try:
-        text = (page.inner_text("body") or "")[:4_000]
-    except Exception:
-        return False
-    return bool(_QR_EXPIRED_RE.search(text))
-
-
-def _click_qr_refresh(page) -> None:
-    _click_first(
-        page,
-        [
-            'button:has-text("刷新")',
-            'a:has-text("刷新")',
-            'button:has-text("Refresh")',
-            ".login-scan",
-            ".qrcode-img",
-        ],
-    )
-
-
 def _nickname(page) -> str:
     try:
         cookies = page.context.cookies()
@@ -577,17 +636,6 @@ def _first_visible(page, selectors: list[str]):
         except Exception:
             continue
     return None
-
-
-def _click_first(page, selectors: list[str]) -> bool:
-    el = _first_visible(page, selectors)
-    if el is None:
-        return False
-    try:
-        el.click()
-        return True
-    except Exception:
-        return False
 
 
 def _looks_captcha(page) -> bool:

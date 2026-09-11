@@ -625,6 +625,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Scan with the Bilibili app. The code updates by itself when Bilibili refreshes it.",
         "es": "Escanea con la app de Bilibili. El código se actualiza solo cuando Bilibili lo renueva.",
     },
+    "servers.bilibili_qr_generating": {
+        "en": "Preparing the QR code…",
+        "es": "Preparando el código QR…",
+    },
+    "servers.bilibili_qr_scanned": {
+        "en": "Scanned. Confirm the login in the Bilibili app.",
+        "es": "Escaneado. Confirma el inicio de sesión en la app de Bilibili.",
+    },
     "servers.bilibili_qr_cancel": {"en": "Cancel scan", "es": "Cancelar escaneo"},
     "bilibili_qr.connected": {
         "en": "Bilibili web session connected{name}.",

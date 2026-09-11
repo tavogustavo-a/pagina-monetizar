@@ -1536,6 +1536,10 @@
       var img = root.querySelector(".js-bilibili-qr-img");
       var msgEl = root.querySelector(".js-bilibili-qr-msg");
       var cancelBtn = root.querySelector(".js-bilibili-qr-cancel");
+      var waitEl = root.querySelector(".js-bilibili-qr-wait");
+      var waitingText = {{ t('servers.bilibili_qr_waiting') | tojson }};
+      var scannedText = {{ t('servers.bilibili_qr_scanned') | tojson }};
+      var generatingText = {{ t('servers.bilibili_qr_generating') | tojson }};
       var pollMisses = 0;
 
       function currentLinkName() {
@@ -1553,7 +1557,18 @@
 
       function hideBox() {
         if (box) box.hidden = true;
-        if (img) img.removeAttribute("src");
+        if (img) {
+          img.removeAttribute("src");
+          img.hidden = true;
+        }
+      }
+
+      function showQrPng(b64) {
+        if (!b64 || !img) return;
+        img.src = "data:image/png;base64," + b64;
+        img.hidden = false;
+        if (box) box.hidden = false;
+        pollMisses = 0;
       }
 
       function pollJob(jobId) {
@@ -1575,10 +1590,12 @@
               startBtn.disabled = false;
               return;
             }
-            if (body.qr_png && img) {
-              img.src = "data:image/png;base64," + body.qr_png;
-              if (box) box.hidden = false;
-              pollMisses = 0;
+            if (body.qr_png) {
+              showQrPng(body.qr_png);
+            }
+            if (waitEl && status === "scanned") waitEl.textContent = scannedText;
+            if (waitEl && (status === "waiting" || status === "starting") && body.qr_png) {
+              waitEl.textContent = waitingText;
             }
             if (status === "ok") {
               stopBilibiliQrPoll(false);
@@ -1588,7 +1605,7 @@
               window.location.reload();
               return;
             }
-            if (status === "waiting" || status === "starting") {
+            if (status === "waiting" || status === "starting" || status === "scanned") {
               pollMisses = 0;
               return;
             }
@@ -1617,6 +1634,12 @@
         stopBilibiliQrPoll();
         startBtn.disabled = true;
         showMsg("", true);
+        if (box) box.hidden = false;
+        if (img) {
+          img.removeAttribute("src");
+          img.hidden = true;
+        }
+        if (waitEl) waitEl.textContent = generatingText;
         fetch("/admin/api/bilibili/qr/start", {
           method: "POST",
           credentials: "same-origin",
@@ -1627,17 +1650,20 @@
           .then(function (x) {
             if (!x.res.ok || !x.body.ok) {
               startBtn.disabled = false;
+              hideBox();
               showMsg((x.body && x.body.error) || errorMsg, false);
               return;
             }
             qrJobId = String(x.body.job_id || "");
             pollMisses = 0;
-            if (box) box.hidden = false;
+            if (x.body.qr_png) showQrPng(x.body.qr_png);
+            if (waitEl) waitEl.textContent = waitingText;
             pollJob(qrJobId);
             qrPollTimer = setInterval(function () { pollJob(qrJobId); }, 900);
           })
           .catch(function () {
             startBtn.disabled = false;
+            hideBox();
             showMsg(networkMsg, false);
           });
       }
