@@ -5135,7 +5135,11 @@ def api_chain_save(request: Request, body: ChainAccountBody):
     if pid == "odysee" and extra:
         extra = odysee.normalize_channel_id(extra) or extra
     ok, detail = chain.probe_account(pid, login, secret, extra)
-    if not ok:
+    unverified = pid == "odysee" and (
+        "email_unverified" in str(detail or "").lower()
+        or "unverified" in str(detail or "").lower()
+    )
+    if not ok and not unverified:
         return JSONResponse(
             {
                 "ok": False,
@@ -5147,7 +5151,7 @@ def api_chain_save(request: Request, body: ChainAccountBody):
         row = db.upsert_chain_account(
             account_id=body.id,
             platform_id=pid,
-            name=body.name or detail,
+            name=body.name or (detail if ok else login),
             login=login,
             secret=body.secret,
             extra=extra,
@@ -5166,7 +5170,7 @@ def api_chain_save(request: Request, body: ChainAccountBody):
     return {
         "ok": True,
         "account": row,
-        "message": i18n.t("servers.chain_saved", lang, name=detail),
+        "message": i18n.t("servers.chain_saved", lang, name=detail if ok else login),
     }
 
 

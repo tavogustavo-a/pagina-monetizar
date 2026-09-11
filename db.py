@@ -319,6 +319,7 @@ def _ensure_chain_accounts_table() -> None:
     finally:
         conn.close()
     _ensure_column("chain_accounts", "auth_token", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column("chain_accounts", "imap_json", "TEXT NOT NULL DEFAULT ''")
 
 
 def _ensure_x_funding_tables() -> None:
@@ -5778,18 +5779,21 @@ def upsert_chain_account(
         if not secret_val:
             raise ValueError("missing_fields")
         if pid == "odysee":
-            auth_token_val = chain_mod.odysee_auth_token_for_save(
-                login_val, secret_val, auth_token_val
-            )
+            try:
+                auth_token_val = chain_mod.odysee_auth_token_for_save(
+                    login_val, secret_val, auth_token_val
+                )
+            except Exception:
+                pass
         label = (name or "").strip() or (link_name or "").strip() or login_val or pid
         account_label = (link_name or "").strip() or label
         created = existing["created_at"] if existing else now
         conn.execute(
             """
             INSERT INTO chain_accounts (
-                id, platform_id, name, login, secret, extra, auth_token,
+                id, platform_id, name, login, secret, extra, auth_token, imap_json,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 platform_id = excluded.platform_id,
                 name = excluded.name,
@@ -5797,9 +5801,21 @@ def upsert_chain_account(
                 secret = excluded.secret,
                 extra = excluded.extra,
                 auth_token = excluded.auth_token,
+                imap_json = excluded.imap_json,
                 updated_at = excluded.updated_at
             """,
-            (oid, pid, label, login_val, secret_val, extra_val, auth_token_val, created, now),
+            (
+                oid,
+                pid,
+                label,
+                login_val,
+                secret_val,
+                extra_val,
+                auth_token_val,
+                "",
+                created,
+                now,
+            ),
         )
         try:
             _release_other_links_for_platform(
