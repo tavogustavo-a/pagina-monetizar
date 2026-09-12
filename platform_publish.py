@@ -351,7 +351,15 @@ def publish_to_platform(
 
             proxy_url = db.get_active_proxy_url_for_account(account_link_id)
             with proxy_util.using_proxy(proxy_url):
-                ok, message = _publish_to_platform(**kwargs)
+                try:
+                    ok, message = _publish_to_platform(**kwargs)
+                except Exception as e:
+                    nice = proxy_util.humanize_network_failure(e, lang)
+                    return "fail", nice or t("pub.publish_crash", lang, error=str(e)[:180])
+                if not ok:
+                    nice = proxy_util.humanize_network_failure(message, lang)
+                    if nice:
+                        message = nice
                 return _final_status(ok), message
 
 
@@ -412,16 +420,22 @@ def _publish_to_platform(
             temps.append(size_tmp)
 
         send_title, send_desc = texts_for_platform(pid, title, description)
-        return _dispatch_platform(
-            pid,
-            file_path=send_path,
-            content_type=content_type,
-            title=send_title,
-            description=send_desc,
-            lang=lang,
-            tiktok_config_id=tiktok_config_id,
-            account_link_id=account_link_id,
-        )
+        try:
+            return _dispatch_platform(
+                pid,
+                file_path=send_path,
+                content_type=content_type,
+                title=send_title,
+                description=send_desc,
+                lang=lang,
+                tiktok_config_id=tiktok_config_id,
+                account_link_id=account_link_id,
+            )
+        except Exception as e:
+            import proxy_util
+
+            nice = proxy_util.humanize_network_failure(e, lang)
+            return False, nice or t("pub.publish_crash", lang, error=str(e)[:180])
     finally:
         for tmp in temps:
             try:

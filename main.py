@@ -1806,7 +1806,7 @@ def _publication_log_groups(lang: str, user: db.User, *, limit: int = 200) -> li
     groups = db.list_publication_log_groups(limit=limit, viewer=user)
     for group in groups:
         for entry in group.get("entries") or []:
-            pid = str(entry.get("platform_id") or "")
+            pid = platforms.canonical_platform_id(str(entry.get("platform_id") or ""))
             entry["platform_name"] = i18n.t(f"platform.{pid}", lang) if pid else pid
     return _filter_log_groups_for_viewer(groups, user)
 
@@ -2617,11 +2617,19 @@ async def admin_upload_video(request: Request):
     description = (form.get("description") or "").strip()
     tiktoker_config_id = (form.get("tiktoker_config_id") or "").strip()
     account_link_id = (form.get("account_link_id") or "").strip()
-    selected_platforms = [
-        p
-        for p in form.getlist("platforms")
-        if p in platforms.PLATFORM_IDS and platforms.is_publish_enabled(p)
-    ]
+    selected_platforms = []
+    seen_sel: set[str] = set()
+    for p in form.getlist("platforms"):
+        pid = platforms.canonical_platform_id(str(p or "").strip())
+        if (
+            not pid
+            or pid in seen_sel
+            or pid not in platforms.PLATFORM_IDS
+            or not platforms.is_publish_enabled(pid)
+        ):
+            continue
+        seen_sel.add(pid)
+        selected_platforms.append(pid)
     upload = form.get("file")
     video_temp_token = (form.get("video_temp_token") or "").strip().lower()
 
@@ -2676,12 +2684,20 @@ async def admin_upload_video(request: Request):
                 message=_msg(request, "pub.flash.select_account_publish"),
             )
         acc = choices_by_id[account_link_id]
-        allowed_platforms = set(acc.get("platform_ids") or [])
+        allowed_platforms = {
+            platforms.canonical_platform_id(str(p))
+            for p in (acc.get("platform_ids") or [])
+            if str(p).strip()
+        }
         selected_platforms = [p for p in selected_platforms if p in allowed_platforms]
     elif len(choices_by_id) == 1:
         account_link_id = publish_choices[0]["id"]
         acc = choices_by_id[account_link_id]
-        allowed_platforms = set(acc.get("platform_ids") or [])
+        allowed_platforms = {
+            platforms.canonical_platform_id(str(p))
+            for p in (acc.get("platform_ids") or [])
+            if str(p).strip()
+        }
         selected_platforms = [p for p in selected_platforms if p in allowed_platforms]
     elif account_link_id not in choices_by_id:
         return _publicaciones_result(
@@ -2692,16 +2708,28 @@ async def admin_upload_video(request: Request):
     else:
         acc = choices_by_id.get(account_link_id)
         if acc:
-            allowed_platforms = set(acc.get("platform_ids") or [])
+            allowed_platforms = {
+                platforms.canonical_platform_id(str(p))
+                for p in (acc.get("platform_ids") or [])
+                if str(p).strip()
+            }
             selected_platforms = [p for p in selected_platforms if p in allowed_platforms]
 
     if db.user_is_publisher_mode(u):
         acc = choices_by_id.get(account_link_id) or {}
-        selected_platforms = [
-            str(p)
-            for p in (acc.get("platform_ids") or [])
-            if platforms.is_publish_enabled(str(p)) and platforms.is_ui_visible(str(p))
-        ]
+        selected_platforms = []
+        seen_pub: set[str] = set()
+        for p in acc.get("platform_ids") or []:
+            pid = platforms.canonical_platform_id(str(p))
+            if (
+                not pid
+                or pid in seen_pub
+                or not platforms.is_publish_enabled(pid)
+                or not platforms.is_ui_visible(pid)
+            ):
+                continue
+            seen_pub.add(pid)
+            selected_platforms.append(pid)
         if "tiktok" not in selected_platforms:
             selected_platforms.append("tiktok")
         if not tiktoker_config_id:
@@ -2998,16 +3026,28 @@ def admin_retry_pending_publish(
         platforms_list = json.loads(row.get("platforms_json") or "[]")
     except (TypeError, ValueError):
         platforms_list = []
-    leftover = [str(p).strip() for p in platforms_list if str(p).strip()]
+    leftover = [
+        platforms.canonical_platform_id(str(p).strip())
+        for p in platforms_list
+        if str(p).strip()
+    ]
+    leftover = [p for p in leftover if p]
     original = set(leftover)
-    wanted = [str(p).strip() for p in (platform or []) if str(p).strip()]
-    if wanted:
-        leftover = [
-            p
-            for p in wanted
-            if p in platforms.PLATFORM_IDS
-            and (platforms.is_publish_enabled(p) or p in original)
-        ]
+    wanted_raw = [str(p).strip() for p in (platform or []) if str(p).strip()]
+    if wanted_raw:
+        leftover = []
+        seen_w: set[str] = set()
+        for p in wanted_raw:
+            pid = platforms.canonical_platform_id(p)
+            if (
+                not pid
+                or pid in seen_w
+                or pid not in platforms.PLATFORM_IDS
+                or not (platforms.is_publish_enabled(pid) or pid in original)
+            ):
+                continue
+            seen_w.add(pid)
+            leftover.append(pid)
     if not leftover:
         db.set_scheduled_awaiting_retry(sched_id, platforms_list, "")
         request.session["admin_error"] = _msg(request, "pub.flash.no_platforms")
@@ -3038,11 +3078,16 @@ def api_pending_set_platforms(request: Request, sched_id: str, body: PendingPlat
         current = json.loads(row.get("platforms_json") or "[]")
     except (TypeError, ValueError):
         current = []
-    current_ids = [str(p).strip() for p in current if str(p).strip()]
+    current_ids = [
+        platforms.canonical_platform_id(str(p).strip())
+        for p in current
+        if str(p).strip()
+    ]
     wanted = [str(p).strip() for p in (body.platforms or []) if str(p).strip()]
     leftover: list[str] = []
     seen: set[str] = set()
-    for pid in wanted:
+    for pid_raw in wanted:
+        pid = platforms.canonical_platform_id(pid_raw)
         if pid in seen or pid not in platforms.PLATFORM_IDS:
             continue
         if not platforms.is_publish_enabled(pid) and pid not in current_ids:
@@ -5171,6 +5216,8 @@ def _chain_fail_error(lang: str, platform_id: str, detail: str) -> str:
         return i18n.t("odysee.err_auth", lang)
     if msg == "proxy_rejected":
         return i18n.t("odysee.err_auth_proxy", lang)
+    if msg == "proxy_slow":
+        return i18n.t("pub.proxy.timeout", lang)
     if "authentication required" in low or "signin_not_logged_in" in low:
         return i18n.t("odysee.err_auth", lang)
     if "invalid application" in low or "app_id" in low:

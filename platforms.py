@@ -326,6 +326,32 @@ PLATFORMS: list[dict[str, Any]] = [
 
 PLATFORM_IDS = {str(p["id"]) for p in PLATFORMS}
 
+# IDs internos (p. ej. sesión QR) que en UI y publicación son otra plataforma.
+PLATFORM_ALIASES = {
+    "bilibili_qr": "bilibili",
+}
+
+
+def canonical_platform_id(platform_id: str) -> str:
+    pid = (platform_id or "").strip()
+    return PLATFORM_ALIASES.get(pid, pid)
+
+
+def platform_id_lookup_ids(platform_id: str) -> tuple[str, ...]:
+    """IDs a buscar en BD para una plataforma de UI (p. ej. bilibili + bilibili_qr)."""
+    pid = canonical_platform_id(platform_id)
+    if not pid:
+        return ()
+    extras = [alias for alias, target in PLATFORM_ALIASES.items() if target == pid]
+    out: list[str] = [pid]
+    raw = (platform_id or "").strip()
+    if raw and raw not in out:
+        out.append(raw)
+    for alias in extras:
+        if alias not in out:
+            out.append(alias)
+    return tuple(out)
+
 STAT_KEYS = ("views", "likes", "comments", "videos", "shares", "followers")
 
 # Columnas de estadísticas del panel (conteos locales; no hay recolector de APIs).

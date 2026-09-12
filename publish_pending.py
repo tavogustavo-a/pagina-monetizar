@@ -155,7 +155,8 @@ def process_saved_jobs() -> int:
         payload = job.get("payload") if isinstance(job.get("payload"), dict) else {}
         lang = str(payload.get("lang") or "es")
         if age > MAX_WAIT_SECONDS:
-            _finish(log_id, "fail", t("pub.pending_timeout", lang))
+            key = "pub.pending_timeout_proxy" if payload.get("proxy_url") else "pub.pending_timeout"
+            _finish(log_id, "fail", t(key, lang))
             done += 1
             continue
         try:

@@ -680,9 +680,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The internal browser is already in use. Wait a minute and try again.",
         "es": "El navegador interno ya está ocupado. Espera un minuto y reintenta.",
     },
-    "bilibili_qr.err_browser": {
-        "en": "The internal browser could not open Bilibili.com.",
-        "es": "El navegador interno no pudo abrir Bilibili.com.",
+    "bilibili_qr.err_proxy": {
+        "en": "The linked proxy was too slow or blocked the Bilibili.com session. Test the proxy in Proxies, then scan the QR again.",
+        "es": "El proxy vinculado iba demasiado lento o bloqueó la sesión de Bilibili.com. Prueba el proxy en Proxys y vuelve a escanear el QR.",
     },
     "bilibili_qr.err_expired": {
         "en": "The QR code expired. Click Connect with QR code again.",
@@ -1063,6 +1063,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Could not reach the server. Check your connection and try again.",
         "es": "No se pudo contactar con el servidor. Revisa tu conexión e inténtalo de nuevo.",
     },
+    "api.err.proxy": {
+        "en": "The linked proxy was too slow or failed during this check. Test it in Proxies and try again.",
+        "es": "El proxy vinculado iba demasiado lento o falló en esta comprobación. Pruébalo en Proxys e inténtalo de nuevo.",
+    },
     "api.err.detail": {
         "en": "{detail}",
         "es": "{detail}",
@@ -1224,9 +1228,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The internal browser is already in use (another Bilibili.tv account). Wait a minute and try again.",
         "es": "El navegador interno ya está ocupado (otra cuenta de Bilibili.tv). Espera un minuto y reintenta.",
     },
-    "bilibili_tv.err_browser": {
-        "en": "The internal browser could not open Bilibili.tv. The post was not sent.",
-        "es": "El navegador interno no pudo abrir Bilibili.tv. El post no se envió.",
+    "bilibili_tv.err_proxy": {
+        "en": "The linked proxy was too slow or blocked Bilibili.tv. Test the proxy in Proxies, then try again. The post was not sent.",
+        "es": "El proxy vinculado iba demasiado lento o bloqueó Bilibili.tv. Prueba el proxy en Proxys e inténtalo de nuevo. El post no se envió.",
     },
     "bilibili_tv.saved_captcha": {
         "en": "Account saved. Bilibili.tv asked for captcha or SMS — the session is not active until you complete that check.",
@@ -1255,6 +1259,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "dtube.err_browser": {
         "en": "The internal browser could not open d.tube. The post was not sent.",
         "es": "El navegador interno no pudo abrir d.tube. El post no se envió.",
+    },
+    "dtube.err_proxy": {
+        "en": "The linked proxy was too slow or blocked d.tube. Test the proxy in Proxies, then try again. The post was not sent.",
+        "es": "El proxy vinculado iba demasiado lento o bloqueó d.tube. Prueba el proxy en Proxys e inténtalo de nuevo. El post no se envió.",
     },
     "dtube.err_upload": {
         "en": "d.tube did not confirm the upload (error or timeout). Check the account on d.tube before retrying.",
@@ -2072,6 +2080,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Odysee videos must be MP4, MOV, AVI, WMV, FLV, MKV, WebM or M4V.",
         "es": "Los videos de Odysee deben ser MP4, MOV, AVI, WMV, FLV, MKV, WebM o M4V.",
     },
+    "pub.publish_crash": {
+        "en": "Publish failed: {error}",
+        "es": "Falló la publicación: {error}",
+    },
     "pub.platform_paused": {
         "en": "{platform} publishing is paused until the platform’s upload API is available again.",
         "es": "La publicación en {platform} está pausada hasta que vuelva a estar disponible la API de subida.",
@@ -2176,9 +2188,57 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Sent. {n} platform(s) accepted the video and are still processing/reviewing it. The log will update automatically when they accept it.",
         "es": "Enviado. {n} plataforma(s) aceptaron el video y siguen procesándolo/revisándolo. El registro se actualizará solo cuando lo acepten.",
     },
+    "pub.net.timeout": {
+        "en": "The platform did not respond in time. Try again; if it keeps happening, wait a minute and republish.",
+        "es": "La plataforma no respondió a tiempo. Inténtalo de nuevo; si sigue, espera un minuto y republica.",
+    },
+    "pub.proxy.slow": {
+        "en": "The linked proxy was too slow or dropped the connection. The post was not marked as sent. Test the proxy in Proxies, then republish.",
+        "es": "El proxy vinculado iba demasiado lento o cortó la conexión. El post no se marcó como enviado. Prueba el proxy en Proxys y luego republica.",
+    },
+    "pub.proxy.timeout": {
+        "en": "The linked proxy timed out (residential proxies are often slow on large uploads). The post was not marked as sent. Test the proxy in Proxies, then republish.",
+        "es": "El proxy vinculado agotó el tiempo (los residenciales suelen ir lentos con videos grandes). El post no se marcó como enviado. Prueba el proxy en Proxys y luego republica.",
+    },
+    "pub.proxy.reset": {
+        "en": "The linked proxy closed the connection mid-upload. The post was not marked as sent. Try again or use another proxy.",
+        "es": "El proxy vinculado cerró la conexión a mitad de la subida. El post no se marcó como enviado. Reintenta o usa otro proxy.",
+    },
+    "pub.proxy.refused": {
+        "en": "The linked proxy refused the connection. Check host, port and that it is active.",
+        "es": "El proxy vinculado rechazó la conexión. Revisa host, puerto y que esté activo.",
+    },
+    "pub.proxy.unreachable": {
+        "en": "This server cannot reach the linked proxy. Check the address or pick another proxy.",
+        "es": "Este servidor no alcanza el proxy vinculado. Revisa la dirección o elige otro proxy.",
+    },
+    "pub.proxy.auth": {
+        "en": "The linked proxy rejected the username or password.",
+        "es": "El proxy vinculado rechazó el usuario o la contraseña.",
+    },
+    "pub.proxy.denied": {
+        "en": "The linked proxy denied access to this destination.",
+        "es": "El proxy vinculado denegó el acceso a este destino.",
+    },
+    "pub.proxy.ssl": {
+        "en": "Secure connection through the linked proxy failed.",
+        "es": "Falló la conexión segura a través del proxy vinculado.",
+    },
+    "pub.proxy.socks_fail": {
+        "en": "The SOCKS handshake with the linked proxy failed.",
+        "es": "Falló el protocolo SOCKS con el proxy vinculado.",
+    },
+    "pub.proxy.host_unresolved": {
+        "en": "Could not resolve the linked proxy host.",
+        "es": "No se pudo resolver el host del proxy vinculado.",
+    },
     "pub.pending_timeout": {
         "en": "The platform accepted the video but did not finish reviewing it in time. Check the app (YouTube Studio / Instagram) and the info icon.",
         "es": "La plataforma aceptó el video pero no terminó de revisarlo a tiempo. Revisa la app (YouTube Studio / Instagram) y el icono i.",
+    },
+    "pub.pending_timeout_proxy": {
+        "en": "The platform accepted the video, but the linked proxy was too slow to finish the review check. Check YouTube Studio / Instagram; republish only if it is not there.",
+        "es": "La plataforma aceptó el video, pero el proxy vinculado iba demasiado lento para terminar la revisión. Mira YouTube Studio / Instagram; republica solo si no está ahí.",
     },
     "pub.flash.partial": {
         "en": "Saved locally. {ok} OK, {fail} still pending — an admin can republish or cancel below.",
@@ -2202,6 +2262,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Republishing…",
         "es": "Republicando…",
     },
+    "pub.retry_btn": {"en": "Republish", "es": "Republicar"},
     "pub.retry_modal_title": {
         "en": "Platforms to republish",
         "es": "Plataformas a republicar",

@@ -208,8 +208,99 @@ def _make_proxy_opener(proxy_url: str):
     return urllib.request.build_opener(proxy_handler_for(proxy_url))
 
 
+def proxy_is_active() -> bool:
+    return bool((_active_proxy_url.get() or "").strip())
+
+
+def scaled_timeout(base: float, *, kind: str = "http") -> float:
+    """Más margen con proxy residencial lento (subidas y navegación)."""
+    try:
+        value = float(base)
+    except (TypeError, ValueError):
+        value = 45.0
+    if value <= 0:
+        value = 45.0
+    if not proxy_is_active():
+        return value
+    if kind == "upload" or value >= 120:
+        return min(max(value * 2.0, value + 180), 900)
+    if kind == "nav":
+        return min(max(value * 2.0, value + 45), 180)
+    return min(max(value * 2.0, value + 30), 180)
+
+
+def resolve_urlopen_timeout(timeout, data=None) -> float:
+    default_none = timeout is socket._GLOBAL_DEFAULT_TIMEOUT or timeout is None
+    if default_none:
+        return scaled_timeout(90.0 if proxy_is_active() else 45.0, kind="http")
+    try:
+        value = float(timeout)
+    except (TypeError, ValueError):
+        value = 45.0
+    kind = "http"
+    size = 0
+    try:
+        if data is not None:
+            size = len(data)  # type: ignore[arg-type]
+    except TypeError:
+        size = 0
+    if size >= 50_000 or value >= 120:
+        kind = "upload"
+    return scaled_timeout(value, kind=kind)
+
+
+def is_retryable_proxy_code(code: str) -> bool:
+    return code in {"timeout", "reset", "refused", "unreachable"}
+
+
+def run_slow_retry(fn, *, attempts: int = 2, pause_s: float = 2.5):
+    """Un reintento si el proxy se queda colgado (comprobaciones, no subidas)."""
+    import time
+
+    last: BaseException | None = None
+    tries = max(1, int(attempts))
+    for i in range(tries):
+        try:
+            return fn()
+        except Exception as e:
+            last = e
+            if i + 1 >= tries or not is_retryable_proxy_code(classify_proxy_error(e)):
+                raise
+            time.sleep(pause_s)
+    assert last is not None
+    raise last
+
+
+def humanize_network_failure(raw: str | BaseException, lang: str) -> str:
+    """Mensaje claro si falló por proxy lento/caído o red. Vacío si no aplica."""
+    from i18n import t
+
+    code = classify_proxy_error(raw)
+    using = proxy_is_active()
+    if code == "timeout":
+        return t("pub.proxy.timeout" if using else "pub.net.timeout", lang)
+    if using and code in {
+        "reset",
+        "refused",
+        "unreachable",
+        "auth",
+        "denied",
+        "ssl",
+        "socks_fail",
+        "host_unresolved",
+    }:
+        return t(f"pub.proxy.{code}", lang)
+    if using and code in {"http_status", "test_failed"}:
+        text = str(raw or "").lower()
+        if any(n in text for n in ("timed out", "timeout", "proxy", "tunnel", "socks")):
+            return t("pub.proxy.slow", lang)
+    return ""
+
+
 def _proxied_urlopen(url, data=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, **kwargs):
     proxy_url = (_active_proxy_url.get() or "").strip()
+    if timeout is not socket._GLOBAL_DEFAULT_TIMEOUT or proxy_url:
+        timeout = resolve_urlopen_timeout(timeout, data)
     if not proxy_url:
         return _orig_urlopen(url, data, timeout, **kwargs)
     opener = _make_proxy_opener(proxy_url)
@@ -240,14 +331,20 @@ install_urlopen_proxy_hook()
 
 
 def classify_proxy_error(exc: BaseException | str) -> str:
+    if isinstance(exc, TimeoutError) or isinstance(exc, socket.timeout):
+        return "timeout"
     text = str(exc or "").lower()
     reason = getattr(exc, "reason", None)
     if reason is not None:
         text = f"{text} {reason}".lower()
+        if isinstance(reason, (TimeoutError, socket.timeout)):
+            return "timeout"
     errno = getattr(exc, "errno", None)
     if errno is None and reason is not None:
         errno = getattr(reason, "errno", None)
     code = getattr(exc, "code", None)
+    if any(n in text for n in ("timeout", "timed out", "time-out", "timedout")):
+        return "timeout"
 
     if code == 407 or "407" in text or "authentication" in text or "proxy_auth" in text:
         return "auth"

@@ -1110,6 +1110,8 @@ def _ensure_user_account_links_table() -> None:
 
 
 def _account_link_platform_ids(conn: sqlite3.Connection, link_name: str) -> list[str]:
+    from platforms import canonical_platform_id
+
     rows = conn.execute(
         """
         SELECT DISTINCT platform_id
@@ -1121,7 +1123,15 @@ def _account_link_platform_ids(conn: sqlite3.Connection, link_name: str) -> list
         """,
         (link_name,),
     ).fetchall()
-    return [str(r["platform_id"]) for r in rows]
+    seen: set[str] = set()
+    out: list[str] = []
+    for r in rows:
+        pid = canonical_platform_id(str(r["platform_id"] or ""))
+        if not pid or pid in seen:
+            continue
+        seen.add(pid)
+        out.append(pid)
+    return out
 
 
 def _account_link_platform_sources(
@@ -1140,8 +1150,10 @@ def _account_link_platform_sources(
         (link_name,),
     ).fetchall()
     out: dict[str, str] = {}
+    from platforms import canonical_platform_id
+
     for r in rows:
-        pid = str(r["platform_id"] or "").strip()
+        pid = canonical_platform_id(str(r["platform_id"] or "").strip())
         if not pid or pid in out:
             continue
         out[pid] = str(r["source_kind"] or "manual") or "manual"
@@ -7313,23 +7325,26 @@ def get_account_link_name(link_id: str) -> str | None:
 
 def get_account_platform_row(account_link_id: str, platform_id: str) -> dict[str, Any] | None:
     """Fila de server_accounts de esa cuenta en ese servidor."""
+    from platforms import platform_id_lookup_ids
+
     seed_admin_if_missing()
     name = get_account_link_name(account_link_id)
-    pid = (platform_id or "").strip()
-    if not name or not pid:
+    ids = platform_id_lookup_ids(platform_id)
+    if not name or not ids:
         return None
     conn = _connect()
     try:
+        placeholders = ",".join("?" for _ in ids)
         row = conn.execute(
-            """
+            f"""
             SELECT * FROM server_accounts
             WHERE lower(trim(name)) = lower(trim(?))
-              AND platform_id = ?
+              AND platform_id IN ({placeholders})
               AND active = 1
             ORDER BY updated_at DESC
             LIMIT 1
             """,
-            (name, pid),
+            (name, *ids),
         ).fetchone()
         return dict(row) if row else None
     finally:
@@ -7866,9 +7881,10 @@ def sync_server_accounts_from_links() -> None:
                 last_ok = ""
                 if "last_ok_at" in keys:
                     last_ok = str(row["last_ok_at"] or "").strip()
-                if not session_ok:
-                    if pid in chain_mod.QR_PLATFORM_IDS and not last_ok:
-                        phantom_qr.append(cid)
+                # QR nunca confirmado → no listar. Sesión caducada sí: para que
+                # Bilibili.com siga en la cuenta y el envío deje registro de fallo.
+                if not session_ok and pid in chain_mod.QR_PLATFORM_IDS and not last_ok:
+                    phantom_qr.append(cid)
                     continue
             live_chain.add(cid)
             label = str(row["name"] or "").strip() or str(row["login"] or "").strip() or "chain"

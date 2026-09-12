@@ -10,6 +10,7 @@ import proxy_util
 
 LOCK_WAIT_S = 240
 NAV_TIMEOUT_MS = 45_000
+NAV_TIMEOUT_PROXY_MS = 90_000
 _BROWSER_LOCK = threading.Lock()
 
 
@@ -40,7 +41,7 @@ def playwright_ready() -> tuple[bool, str]:
     return True, ""
 
 
-def classify_launch_error(exc: BaseException) -> str:
+def classify_launch_error(exc: BaseException, *, proxy: bool = False) -> str:
     msg = str(exc or "").lower()
     if (
         "executable doesn't exist" in msg
@@ -49,9 +50,21 @@ def classify_launch_error(exc: BaseException) -> str:
         or ("executable" in msg and "exist" in msg)
     ):
         return "playwright_missing"
-    if "proxy" in msg or "err_proxy" in msg or "tunnel" in msg:
-        return "browser_error"
+    if (
+        "timeout" in msg
+        or "timed out" in msg
+        or "proxy" in msg
+        or "err_proxy" in msg
+        or "tunnel" in msg
+        or "err_socks" in msg
+        or "err_connection" in msg
+    ):
+        return "proxy_slow" if proxy else "timeout"
     return "browser_error"
+
+
+def is_nav_timeout(exc: BaseException) -> bool:
+    return classify_launch_error(exc, proxy=True) in {"proxy_slow", "timeout"}
 
 
 def playwright_proxy(proxy_url: str) -> dict[str, str] | None:
@@ -109,16 +122,18 @@ def with_persistent_browser(
         proxy = playwright_proxy(proxy_url)
         if proxy:
             kwargs["proxy"] = proxy
+        nav_ms = NAV_TIMEOUT_PROXY_MS if proxy else NAV_TIMEOUT_MS
         try:
             with sync_playwright() as p:
                 context = p.chromium.launch_persistent_context(**kwargs)
                 try:
                     page = context.pages[0] if context.pages else context.new_page()
-                    page.set_default_timeout(NAV_TIMEOUT_MS)
+                    page.set_default_timeout(nav_ms)
+                    page.set_default_navigation_timeout(nav_ms)
                     return fn(page)
                 finally:
                     context.close()
         except Exception as e:
-            return False, classify_launch_error(e)
+            return False, classify_launch_error(e, proxy=bool(proxy))
     finally:
         _BROWSER_LOCK.release()

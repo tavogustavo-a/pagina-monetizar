@@ -156,8 +156,11 @@ def start_qr_login(*, link_name: str, account_id: str = "") -> dict[str, Any]:
     try:
         opener = _passport_opener(proxy_url, jar)
         png, key, err = _passport_generate(opener)
-    except OSError:
-        return {"ok": False, "error": "browser_error"}
+    except OSError as e:
+        import proxy_util
+
+        code = proxy_util.classify_proxy_error(e)
+        return {"ok": False, "error": "proxy_slow" if code in {"timeout", "reset", "refused", "unreachable"} else "browser_error"}
     except Exception:
         return {"ok": False, "error": "website_changed"}
     if not png or not key:
@@ -292,7 +295,7 @@ def run_keep_alive_if_due() -> None:
     row = due[0]
     oid = str(row.get("id") or "")
     ok, code = keep_alive_account(row)
-    soon = (not ok) and code in {"session_dead", "browser_error"}
+    soon = (not ok) and code in {"session_dead", "browser_error", "proxy_slow", "timeout"}
     next_at = pick_next_keepalive(except_id=oid, soon=soon)
     _record_session(oid, ok, code, row, next_keepalive_at=next_at)
 
@@ -981,6 +984,8 @@ def publish_video(
             "website_changed": "bilibili_qr.err_website",
             "browser_busy": "bilibili_qr.err_busy",
             "browser_error": "bilibili_qr.err_browser",
+            "proxy_slow": "bilibili_qr.err_proxy",
+            "timeout": "bilibili_qr.err_proxy",
             "playwright_missing": "bilibili_tv.err_playwright",
         }.get((err or "").strip(), "bilibili_qr.err_session")
         return False, t(key, lang)
@@ -1001,9 +1006,11 @@ def publish_video(
             return False, t("bilibili_qr.err_session", lang)
         if detail == "website_changed":
             return False, t("bilibili_qr.err_website", lang)
-        return False, t("pub.bilibili.upload_fail", lang, error=detail[:180])
+        nice = proxy_util.humanize_network_failure(e, lang)
+        return False, nice or t("pub.bilibili.upload_fail", lang, error=detail[:180])
     except Exception as e:
-        return False, t("pub.bilibili.upload_fail", lang, error=str(e)[:180])
+        nice = proxy_util.humanize_network_failure(e, lang)
+        return False, nice or t("pub.bilibili.upload_fail", lang, error=str(e)[:180])
     if not resource_id:
         return False, t("pub.bilibili.upload_fail", lang, error="no id")
     return True, t("pub.bilibili.ok", lang, id=resource_id)

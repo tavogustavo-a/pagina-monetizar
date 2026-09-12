@@ -499,14 +499,22 @@ def _login_error_text(page) -> str:
 def _ensure_session(page, email: str, password: str) -> tuple[bool, str]:
     try:
         page.goto(BASE_URL, wait_until="domcontentloaded")
-    except Exception:
+    except Exception as e:
+        import playwright_session
+
+        if playwright_session.is_nav_timeout(e):
+            raise
         return False, "browser_error"
     page.wait_for_timeout(4500)
     if _looks_logged_in(page):
         return True, email
     try:
         page.goto(LOGIN_URL, wait_until="domcontentloaded")
-    except Exception:
+    except Exception as e:
+        import playwright_session
+
+        if playwright_session.is_nav_timeout(e):
+            raise
         return False, "browser_error"
     page.wait_for_timeout(4000)
     if _looks_logged_in(page):
@@ -610,7 +618,11 @@ def _fill_upload_title(page, title: str) -> bool:
 def _browser_upload(page, path: Path, title: str, description: str) -> tuple[bool, str]:
     try:
         page.goto(UPLOAD_URL, wait_until="domcontentloaded")
-    except Exception:
+    except Exception as e:
+        import playwright_session
+
+        if playwright_session.is_nav_timeout(e):
+            raise
         return False, "browser_error"
     page.wait_for_timeout(5000)
     file_input = page.query_selector("input[type=file]")
@@ -729,7 +741,7 @@ def run_daily_keep_alive_if_due() -> None:
     row = due[0]
     oid = str(row.get("id") or "")
     ok, code = keep_alive_account(row)
-    soon = (not ok) and code in {"session_dead", "login_failed", "browser_error"}
+    soon = (not ok) and code in {"session_dead", "login_failed", "browser_error", "proxy_slow", "timeout"}
     db.update_chain_browser_session(
         oid,
         session_ok=ok,
@@ -784,6 +796,8 @@ def _publish_via_browser(
         "website_changed": "dtube.err_website",
         "browser_busy": "dtube.err_busy",
         "browser_error": "dtube.err_browser",
+        "proxy_slow": "dtube.err_proxy",
+        "timeout": "dtube.err_proxy",
         "playwright_missing": "bilibili_tv.err_playwright",
         "login_failed": "dtube.err_login",
         "upload_failed": "dtube.err_upload",

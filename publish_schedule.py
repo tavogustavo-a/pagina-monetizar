@@ -70,7 +70,7 @@ def remaining_platform_ids(failures: list[dict]) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
     for item in failures:
-        pid = str(item.get("platform_id") or "").strip()
+        pid = platforms.canonical_platform_id(str(item.get("platform_id") or "").strip())
         if not pid or pid in seen:
             continue
         seen.add(pid)
@@ -137,20 +137,49 @@ def execute_video_publish(
     sched_id = (retry_sched_id or "").strip() or None
 
     x_use_funding = not db.account_wants_own_x_api(account_link_id)
-    for pid in selected_platforms:
-        if not platforms.is_publish_enabled(pid):
+    seen_pids: set[str] = set()
+    for raw_pid in selected_platforms:
+        pid = platforms.canonical_platform_id(str(raw_pid or "").strip())
+        if not pid or pid in seen_pids:
             continue
-        status, message = platform_publish.publish_to_platform(
-            pid,
-            file_path=path,
-            content_type=content_type,
-            title=video.title,
-            description=video.description,
-            lang=lang,
-            tiktok_config_id=tiktoker_config_id if pid == "tiktok" else None,
-            account_link_id=account_link_id,
-            x_use_funding=bool(x_use_funding) if pid == "x" else False,
-        )
+        seen_pids.add(pid)
+        try:
+            if not platforms.is_publish_enabled(pid):
+                status, message = (
+                    "fail",
+                    i18n.t(
+                        "pub.platform_paused",
+                        lang,
+                        platform=i18n.t(f"platform.{pid}", lang),
+                    ),
+                )
+            else:
+                status, message = platform_publish.publish_to_platform(
+                    pid,
+                    file_path=path,
+                    content_type=content_type,
+                    title=video.title,
+                    description=video.description,
+                    lang=lang,
+                    tiktok_config_id=tiktoker_config_id if pid == "tiktok" else None,
+                    account_link_id=account_link_id,
+                    x_use_funding=bool(x_use_funding) if pid == "x" else False,
+                )
+        except Exception as e:
+            status, message = (
+                "fail",
+                i18n.t("pub.publish_crash", lang, error=str(e)[:180]),
+            )
+            try:
+                import proxy_util
+
+                proxy_url = db.get_active_proxy_url_for_account(account_link_id)
+                with proxy_util.using_proxy(proxy_url):
+                    nice = proxy_util.humanize_network_failure(e, lang)
+                if nice:
+                    message = nice
+            except Exception:
+                pass
         if status not in ("ok", "fail", "skipped", "pending"):
             status = "fail"
         if status == "ok":

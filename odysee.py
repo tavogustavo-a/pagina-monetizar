@@ -691,4 +691,5 @@ def publish_video(
             return False, t("odysee.err_auth", lang)
         return False, t("pub.odysee.upload_fail", lang, error=code[:180])
     except Exception as e:
-        return False, t("pub.odysee.upload_fail", lang, error=str(e)[:180])
+        nice = proxy_util.humanize_network_failure(e, lang)
+        return False, nice or t("pub.odysee.upload_fail", lang, error=str(e)[:180])

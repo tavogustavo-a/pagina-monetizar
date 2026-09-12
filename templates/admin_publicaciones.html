@@ -1000,7 +1000,7 @@
         if (requireSelection && !hasFilter) {
           show = false;
         } else if (hasFilter) {
-          show = ids.indexOf(pid) !== -1;
+          show = ids.indexOf(pid) !== -1 || (pid === "bilibili" && ids.indexOf("bilibili_qr") !== -1);
         } else {
           show = true;
         }
@@ -1012,7 +1012,7 @@
         }
         var viaEl = row.querySelector("[data-platform-via]");
         if (viaEl) {
-          var kind = platformSources ? platformSources[pid] || "" : "";
+          var kind = platformSources ? (platformSources[pid] || (pid === "bilibili" ? platformSources.bilibili_qr : "") || "") : "";
           var label = "";
           if (show && kind === "vmos") label = viaVmos;
           else if (show && kind === "filehost") label = viaFilehost;

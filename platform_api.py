@@ -120,7 +120,23 @@ def test_platform(
         if draft is not None:
             db.set_credentials_account_name(str(draft.get("name") or ""))
             _set_test_overlay(pid, draft)
-        ok, message = testers[pid](lang)
+        import proxy_util
+
+        name = str((draft or {}).get("name") or db.credentials_account_name() or "")
+        proxy_url = db.get_active_proxy_url_for_account_name(name) if name else ""
+        def _run():
+            return testers[pid](lang)
+
+        with proxy_util.using_proxy(proxy_url):
+            try:
+                ok, message = proxy_util.run_slow_retry(_run)
+            except Exception as e:
+                nice = proxy_util.humanize_network_failure(e, lang)
+                ok, message = False, nice or t("api.err.proxy" if proxy_url else "api.err.network", lang)
+            if not ok:
+                nice = proxy_util.humanize_network_failure(message, lang)
+                if nice:
+                    message = nice
         if save_result:
             db.save_platform_test_result(pid, ok, message)
         return {"ok": ok, "message": message, **db.get_platform_credentials_public(pid)}
@@ -158,7 +174,18 @@ def _verify_account_platform_with_proxy(
 
     proxy_url = db.get_active_proxy_url_for_account(account_link_id)
     with proxy_util.using_proxy(proxy_url):
-        return _verify_account_platform_inner(platform_id, account_link_id, lang)
+        try:
+            return proxy_util.run_slow_retry(
+                lambda: _verify_account_platform_inner(platform_id, account_link_id, lang)
+            )
+        except Exception as e:
+            from i18n import t
+
+            nice = proxy_util.humanize_network_failure(e, lang)
+            return {
+                "ok": False,
+                "message": nice or t("api.err.proxy" if proxy_url else "api.err.network", lang),
+            }
 
 
 def _verify_account_platform_inner(
@@ -532,7 +559,7 @@ def _humanize_api_error(lang: str, platform_id: str, raw: str) -> str:
         (("redirect_uri_mismatch", "redirect uri"), "api.err.redirect_mismatch"),
         (("quota", "rate limit", "ratelimit", "too many requests"), "api.err.rate_limit"),
         (
-            ("ssl", "certificate", "connection refused", "timed out", "timeout", "network"),
+            ("ssl", "certificate", "connection refused", "timed out", "timeout", "network", "proxy", "tunnel"),
             "api.err.network",
         ),
     )
@@ -540,6 +567,14 @@ def _humanize_api_error(lang: str, platform_id: str, raw: str) -> str:
         if any(n in low for n in needles):
             if key in {"api.err.token_expired", "api.err.bad_client", "api.err.permission_denied"}:
                 return t(key, lang, platform=platform)
+            if key == "api.err.network":
+                import proxy_util
+
+                nice = proxy_util.humanize_network_failure(text, lang)
+                if nice:
+                    return nice
+                if proxy_util.proxy_is_active():
+                    return t("api.err.proxy", lang)
             return t(key, lang)
     detail = text.replace("https://", "").replace("http://", "")
     if len(detail) > 140:

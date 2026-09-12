@@ -61,6 +61,15 @@ def probe_account(
                 return True, detail
             if not (proxy_url or "").strip():
                 return False, "need_proxy"
+            import proxy_util
+
+            if proxy_util.classify_proxy_error(detail) in {
+                "timeout",
+                "reset",
+                "refused",
+                "unreachable",
+            }:
+                return False, "proxy_slow"
             return False, "proxy_rejected"
     if pid == "dtube":
         with _account_proxy(pid, account_id, link_name):

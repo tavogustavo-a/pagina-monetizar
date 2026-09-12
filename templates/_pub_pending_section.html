@@ -232,6 +232,7 @@
           }
 
           function addItem(pid) {
+            pid = pid === "bilibili_qr" ? "bilibili" : pid;
             if (!pid || listEl.querySelector('[data-platform="' + pid + '"]')) return;
             var name = labels[pid] || pid;
             var li = document.createElement("li");
@@ -307,7 +308,10 @@
               form.setAttribute("action", btn.getAttribute("data-action") || "");
               if (nextEl) nextEl.value = btn.getAttribute("data-next") || "";
               if (addBox) addBox.hidden = true;
-              render(ids.map(function (p) { return String(p || "").trim(); }).filter(Boolean));
+              render(ids.map(function (p) {
+                var id = String(p || "").trim();
+                return id === "bilibili_qr" ? "bilibili" : id;
+              }).filter(Boolean));
               modal.classList.add("is-open");
               modal.setAttribute("aria-hidden", "false");
             });

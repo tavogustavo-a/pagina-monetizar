@@ -137,6 +137,8 @@ def publish_video(
         "website_changed": "bilibili_tv.err_website",
         "browser_busy": "bilibili_tv.err_busy",
         "browser_error": "bilibili_tv.err_browser",
+        "proxy_slow": "bilibili_tv.err_proxy",
+        "timeout": "bilibili_tv.err_proxy",
         "playwright_missing": "bilibili_tv.err_playwright",
         "login_failed": "bilibili_tv.err_login",
     }.get((code or "").strip())
@@ -223,7 +225,7 @@ def run_daily_keep_alive_if_due() -> None:
     row = due[0]
     oid = str(row.get("id") or "")
     ok, code = keep_alive_account(row)
-    soon = (not ok) and code in {"session_dead", "login_failed", "browser_error"}
+    soon = (not ok) and code in {"session_dead", "login_failed", "browser_error", "proxy_slow", "timeout"}
     next_at = pick_next_keepalive(except_id=oid, soon=soon)
     _record_session(oid, ok, code, row, next_keepalive_at=next_at)
 
@@ -306,7 +308,11 @@ def _visit_and_check_login(page) -> bool:
     for url in (HOME_URL, STUDIO_HOME_URL):
         try:
             page.goto(url, wait_until="domcontentloaded")
-        except Exception:
+        except Exception as e:
+            import playwright_session
+
+            if playwright_session.is_nav_timeout(e):
+                raise
             continue
         page.wait_for_timeout(800)
         _dismiss_noise(page)
@@ -336,7 +342,11 @@ def _studio_upload(page, path: Path, title: str, description: str) -> tuple[bool
         pass
     try:
         page.goto(STUDIO_NEW_URL, wait_until="domcontentloaded")
-    except Exception:
+    except Exception as e:
+        import playwright_session
+
+        if playwright_session.is_nav_timeout(e):
+            raise
         return False, "website_changed"
     page.wait_for_timeout(1500)
     if _looks_captcha(page):

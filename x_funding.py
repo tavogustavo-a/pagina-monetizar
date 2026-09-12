@@ -83,19 +83,35 @@ def check_account(row: dict[str, Any], threshold: int) -> dict[str, Any]:
     if not token:
         result["detail"] = "missing_token"
         return result
+    import proxy_util
+
+    name = str(row.get("account_name") or "").strip()
+    proxy_url = proxy_util.active_proxy_url()
+    if not proxy_url and name:
+        proxy_url = db.get_active_proxy_url_for_account_name(name)
     try:
-        if x_publish._should_refresh(row):
-            try:
-                row = x_publish._refresh_row(row)
-                token = str(row.get("access_token") or token).strip()
-            except ValueError:
-                pass
-        metrics = _fetch_metrics(token)
+        def _run():
+            local_row = row
+            local_token = token
+            if x_publish._should_refresh(local_row):
+                try:
+                    local_row = x_publish._refresh_row(local_row)
+                    local_token = str(local_row.get("access_token") or local_token).strip()
+                except ValueError:
+                    pass
+            return _fetch_metrics(local_token)
+
+        with proxy_util.using_proxy(proxy_url):
+            metrics = proxy_util.run_slow_retry(_run)
     except ValueError as e:
         result["detail"] = str(e)[:200]
+        nice = proxy_util.humanize_network_failure(e, "es")
+        if nice:
+            result["detail"] = nice
         return result
     except Exception as e:
-        result["detail"] = str(e)[:200]
+        nice = proxy_util.humanize_network_failure(e, "es")
+        result["detail"] = nice or str(e)[:200]
         return result
     followers = metrics["followers"]
     meets = followers >= threshold
@@ -163,13 +179,17 @@ def check_due_for_oauth(oauth_account_id: str) -> bool:
 
 def maybe_check_on_publish(account_link_id: str | None) -> None:
     """Si esa cuenta X no se revisó en 7 días, usa esta publicación para consultar seguidores."""
+    import proxy_util
+
     oid = db.resolve_oauth_account_id("x", account_link_id=account_link_id)
     if not oid or not check_due_for_oauth(oid):
         return
     raw = db.get_oauth_account_row(oid)
     if not raw:
         return
-    res = check_account(raw, min_followers())
+    proxy_url = db.get_active_proxy_url_for_account(account_link_id)
+    with proxy_util.using_proxy(proxy_url):
+        res = check_account(raw, min_followers())
     db.save_x_monetize_check(
         oauth_account_id=oid,
         username=res["username"],
