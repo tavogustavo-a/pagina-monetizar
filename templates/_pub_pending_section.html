@@ -36,6 +36,7 @@
                     type="button"
                     class="pub-log-view js-pub-retry-open"
                     data-action="{{ url_for('admin_retry_pending_publish', sched_id=row.id) }}"
+                    data-sched-id="{{ row.id }}"
                     data-next="{{ pub_retry_next or '' }}"
                     data-platforms="{{ row.platforms_json | e }}"
                     aria-label="{{ t('pub.log_view') }}"
@@ -53,6 +54,7 @@
                     type="button"
                     class="btn btn-accent btn-sm js-pub-retry-open"
                     data-action="{{ url_for('admin_retry_pending_publish', sched_id=row.id) }}"
+                    data-sched-id="{{ row.id }}"
                     data-next="{{ pub_retry_next or '' }}"
                     data-platforms="{{ row.platforms_json | e }}"
                   >{{ t('pub.retry_btn') }}</button>
@@ -88,101 +90,262 @@
             <input type="hidden" name="next" id="pub-retry-next" value="" />
             <ul class="pub-log-detail-list" id="pub-retry-list"></ul>
             <p class="sub api-msg--fail" id="pub-retry-need-one" hidden>{{ t('pub.retry_need_one') }}</p>
+            <div class="pub-retry-add" id="pub-retry-add" hidden>
+              <p class="sub">{{ t('pub.retry_add_title') }}</p>
+              <ul class="pub-retry-add__list" id="pub-retry-add-list"></ul>
+              <p class="sub" id="pub-retry-add-none" hidden>{{ t('pub.retry_add_none') }}</p>
+              <button type="button" class="btn btn-ghost btn-sm" id="pub-retry-add-apply">{{ t('pub.retry_add_apply') }}</button>
+            </div>
             <div class="api-form__actions">
               <button type="button" class="btn btn-ghost" data-close-pub-retry>{{ t('servers.modal_close') }}</button>
+              <button type="button" class="btn btn-ghost" id="pub-retry-add-open">{{ t('pub.retry_add_btn') }}</button>
               <button type="submit" class="btn btn-accent" id="pub-retry-submit">{{ t('pub.retry_btn') }}</button>
             </div>
           </form>
         </div>
       </div>
-      <script type="application/json" id="pub-retry-labels-json">{% set seen = [] %}{
-        {%- for row in pending_retry_publications -%}
-          {%- for pid in row.platforms_json | fromjson -%}
-            {%- if pid not in seen -%}
-              {%- if seen.append(pid) %}{% endif -%}
-            {%- endif -%}
-          {%- endfor -%}
+      <div id="pub-retry-drop-modal" class="equipo-modal equipo-modal--stack" aria-hidden="true">
+        <div class="equipo-modal__backdrop" data-close-retry-drop tabindex="-1"></div>
+        <div class="equipo-modal__panel server-modal__panel extractor-confirm__panel" role="dialog" aria-modal="true" aria-labelledby="pub-retry-drop-title">
+          <div class="equipo-modal__accent" aria-hidden="true"></div>
+          <div class="equipo-modal__head">
+            <div><h2 id="pub-retry-drop-title"></h2></div>
+            <button type="button" class="equipo-modal__close" data-close-retry-drop aria-label="{{ t('servers.modal_close') }}">×</button>
+          </div>
+          <div class="server-modal__body">
+            <p class="extractor-confirm__body" id="pub-retry-drop-body"></p>
+            <div class="extractor-confirm__actions">
+              <button type="button" class="btn btn-ghost" data-close-retry-drop>{{ t('pub.cancel_pending_btn') }}</button>
+              <button type="button" class="btn btn-accent" id="pub-retry-drop-ok">{{ t('pub.retry_remove_ok') }}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <script type="application/json" id="pub-retry-catalog-json">[
+        {%- for p in publish_platforms -%}
+        {"id": {{ p.id | tojson }}, "name": {{ p.name | tojson }}, "enabled": {{ (p.publish_enabled if p.publish_enabled is defined else true) | tojson }}}{% if not loop.last %},{% endif %}
         {%- endfor -%}
-        {%- for pid in seen -%}
-          {{ pid | tojson }}: {{ t('platform.' ~ pid) | tojson }}{% if not loop.last %},{% endif %}
-        {%- endfor -%}
-      }</script>
+      ]</script>
       <script>
         (function () {
           var modal = document.getElementById("pub-retry-modal");
+          var dropModal = document.getElementById("pub-retry-drop-modal");
           var form = document.getElementById("pub-retry-form");
           var listEl = document.getElementById("pub-retry-list");
           var nextEl = document.getElementById("pub-retry-next");
           var needEl = document.getElementById("pub-retry-need-one");
           var submitBtn = document.getElementById("pub-retry-submit");
-          var labelsEl = document.getElementById("pub-retry-labels-json");
+          var catalogEl = document.getElementById("pub-retry-catalog-json");
+          var addBox = document.getElementById("pub-retry-add");
+          var addList = document.getElementById("pub-retry-add-list");
+          var addNone = document.getElementById("pub-retry-add-none");
+          var addOpen = document.getElementById("pub-retry-add-open");
+          var addApply = document.getElementById("pub-retry-add-apply");
+          var dropTitle = document.getElementById("pub-retry-drop-title");
+          var dropBody = document.getElementById("pub-retry-drop-body");
+          var dropOk = document.getElementById("pub-retry-drop-ok");
           if (!modal || !form || !listEl) return;
+          var catalog = [];
+          try { catalog = JSON.parse(catalogEl && catalogEl.textContent ? catalogEl.textContent : "[]"); } catch (e) { catalog = []; }
           var labels = {};
-          try { labels = JSON.parse(labelsEl && labelsEl.textContent ? labelsEl.textContent : "{}"); } catch (e) { labels = {}; }
+          catalog.forEach(function (p) { if (p && p.id) labels[p.id] = p.name || p.id; });
           var removeTpl = {{ t('pub.retry_remove') | tojson }};
+          var removeTitleTpl = {{ t('pub.retry_remove_title') | tojson }};
+          var removeBody = {{ t('pub.retry_remove_body') | tojson }};
           var lastTrigger = null;
+          var pendingDrop = null;
+          var currentSchedId = "";
+          var saveFail = {{ t('pub.retry_save_fail') | tojson }};
 
           function fmt(tpl, name) {
             return String(tpl || "").replace("{name}", name);
           }
 
+          function currentIds() {
+            return Array.prototype.map.call(listEl.querySelectorAll("[data-platform]"), function (el) {
+              return el.getAttribute("data-platform");
+            });
+          }
+
+          function syncButtons(ids) {
+            var raw = JSON.stringify(ids);
+            document.querySelectorAll(".js-pub-retry-open").forEach(function (btn) {
+              if (btn.getAttribute("data-sched-id") !== currentSchedId) return;
+              btn.setAttribute("data-platforms", raw);
+            });
+          }
+
+          function persist(ids, onOk) {
+            if (!currentSchedId) {
+              if (onOk) onOk(ids);
+              return;
+            }
+            fetch("/admin/api/publicaciones/pending/" + encodeURIComponent(currentSchedId) + "/platforms", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json", Accept: "application/json" },
+              body: JSON.stringify({ platforms: ids }),
+            })
+              .then(function (r) { return r.json().then(function (j) { return { res: r, body: j }; }); })
+              .then(function (x) {
+                if (!x.res.ok || !x.body || !x.body.ok) {
+                  if (needEl) {
+                    needEl.hidden = false;
+                    needEl.textContent = saveFail;
+                  }
+                  return;
+                }
+                var saved = x.body.platforms || ids;
+                syncButtons(saved);
+                if (onOk) onOk(saved);
+              })
+              .catch(function () {
+                if (needEl) {
+                  needEl.hidden = false;
+                  needEl.textContent = saveFail;
+                }
+              });
+          }
+
+          function closeDrop() {
+            if (!dropModal) return;
+            dropModal.classList.remove("is-open");
+            dropModal.setAttribute("aria-hidden", "true");
+            pendingDrop = null;
+          }
+
           function close() {
+            closeDrop();
+            if (addBox) addBox.hidden = true;
             modal.classList.remove("is-open");
             modal.setAttribute("aria-hidden", "true");
             if (lastTrigger) lastTrigger.focus();
           }
 
+          function addItem(pid) {
+            if (!pid || listEl.querySelector('[data-platform="' + pid + '"]')) return;
+            var name = labels[pid] || pid;
+            var li = document.createElement("li");
+            li.className = "pub-log-detail-list__item pub-retry-item";
+            li.setAttribute("data-platform", pid);
+            var head = document.createElement("div");
+            head.className = "pub-log-detail-list__head pub-retry-item__head";
+            var drop = document.createElement("button");
+            drop.type = "button";
+            drop.className = "pub-retry-drop";
+            drop.setAttribute("aria-label", fmt(removeTpl, name));
+            drop.title = fmt(removeTpl, name);
+            drop.textContent = "×";
+            drop.addEventListener("click", function () {
+              pendingDrop = li;
+              if (dropTitle) dropTitle.textContent = fmt(removeTitleTpl, name);
+              if (dropBody) dropBody.textContent = removeBody;
+              if (dropModal) {
+                dropModal.classList.add("is-open");
+                dropModal.setAttribute("aria-hidden", "false");
+              }
+            });
+            var hidden = document.createElement("input");
+            hidden.type = "hidden";
+            hidden.name = "platform";
+            hidden.value = pid;
+            var strong = document.createElement("strong");
+            strong.textContent = name;
+            head.appendChild(drop);
+            head.appendChild(strong);
+            li.appendChild(hidden);
+            li.appendChild(head);
+            listEl.appendChild(li);
+          }
+
           function render(ids) {
             listEl.innerHTML = "";
-            ids.forEach(function (pid) {
-              var name = labels[pid] || pid;
+            ids.forEach(addItem);
+            if (needEl) needEl.hidden = true;
+            fillAddList();
+          }
+
+          function fillAddList() {
+            if (!addList) return;
+            addList.innerHTML = "";
+            var have = {};
+            currentIds().forEach(function (id) { have[id] = true; });
+            var n = 0;
+            catalog.forEach(function (p) {
+              if (!p || !p.id || have[p.id] || p.enabled === false) return;
+              n += 1;
               var li = document.createElement("li");
-              li.className = "pub-log-detail-list__item pub-retry-item";
-              li.setAttribute("data-platform", pid);
-              var head = document.createElement("div");
-              head.className = "pub-log-detail-list__head pub-retry-item__head";
-              var drop = document.createElement("button");
-              drop.type = "button";
-              drop.className = "pub-retry-drop";
-              drop.setAttribute("aria-label", fmt(removeTpl, name));
-              drop.title = fmt(removeTpl, name);
-              drop.textContent = "×";
-              drop.addEventListener("click", function () {
-                li.remove();
-                if (needEl) needEl.hidden = listEl.querySelectorAll("[data-platform]").length > 0;
-              });
-              var hidden = document.createElement("input");
-              hidden.type = "hidden";
-              hidden.name = "platform";
-              hidden.value = pid;
-              var strong = document.createElement("strong");
-              strong.textContent = name;
-              head.appendChild(drop);
-              head.appendChild(strong);
-              li.appendChild(hidden);
-              li.appendChild(head);
-              listEl.appendChild(li);
+              var lab = document.createElement("label");
+              var cb = document.createElement("input");
+              cb.type = "checkbox";
+              cb.value = p.id;
+              lab.appendChild(cb);
+              lab.appendChild(document.createTextNode(" " + (p.name || p.id)));
+              li.appendChild(lab);
+              addList.appendChild(li);
             });
+            if (addNone) addNone.hidden = n > 0;
+            if (addApply) addApply.hidden = n < 1;
           }
 
           document.querySelectorAll(".js-pub-retry-open").forEach(function (btn) {
             btn.addEventListener("click", function () {
               lastTrigger = btn;
+              currentSchedId = btn.getAttribute("data-sched-id") || "";
               var ids = [];
               try { ids = JSON.parse(btn.getAttribute("data-platforms") || "[]"); } catch (e) { ids = []; }
               if (!Array.isArray(ids)) ids = [];
               form.setAttribute("action", btn.getAttribute("data-action") || "");
               if (nextEl) nextEl.value = btn.getAttribute("data-next") || "";
-              if (needEl) needEl.hidden = true;
+              if (addBox) addBox.hidden = true;
               render(ids.map(function (p) { return String(p || "").trim(); }).filter(Boolean));
               modal.classList.add("is-open");
               modal.setAttribute("aria-hidden", "false");
             });
           });
 
+          if (addOpen) {
+            addOpen.addEventListener("click", function () {
+              fillAddList();
+              if (addBox) addBox.hidden = !addBox.hidden;
+            });
+          }
+          if (addApply) {
+            addApply.addEventListener("click", function () {
+              if (!addList) return;
+              addList.querySelectorAll("input:checked").forEach(function (cb) {
+                addItem(cb.value);
+              });
+              persist(currentIds(), function () {
+                if (needEl) needEl.hidden = currentIds().length > 0;
+                fillAddList();
+              });
+            });
+          }
+          if (dropOk) {
+            dropOk.addEventListener("click", function () {
+              if (!pendingDrop) {
+                closeDrop();
+                return;
+              }
+              var dropId = pendingDrop.getAttribute("data-platform");
+              var next = currentIds().filter(function (id) { return id !== dropId; });
+              if (next.length < 1) {
+                closeDrop();
+                if (needEl) needEl.hidden = false;
+                return;
+              }
+              persist(next, function () {
+                if (pendingDrop) pendingDrop.remove();
+                closeDrop();
+                if (needEl) needEl.hidden = currentIds().length > 0;
+                fillAddList();
+              });
+            });
+          }
+
           form.addEventListener("submit", function (e) {
-            var n = listEl.querySelectorAll("[data-platform]").length;
-            if (n < 1) {
+            if (currentIds().length < 1) {
               e.preventDefault();
               if (needEl) needEl.hidden = false;
               return;
@@ -193,8 +356,18 @@
           modal.querySelectorAll("[data-close-pub-retry]").forEach(function (el) {
             el.addEventListener("click", close);
           });
+          if (dropModal) {
+            dropModal.querySelectorAll("[data-close-retry-drop]").forEach(function (el) {
+              el.addEventListener("click", closeDrop);
+            });
+          }
           document.addEventListener("keydown", function (e) {
-            if (e.key === "Escape" && modal.classList.contains("is-open")) close();
+            if (e.key !== "Escape") return;
+            if (dropModal && dropModal.classList.contains("is-open")) {
+              closeDrop();
+              return;
+            }
+            if (modal.classList.contains("is-open")) close();
           });
         })();
       </script>

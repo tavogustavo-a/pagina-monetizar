@@ -419,6 +419,10 @@ class FilehostAccountBody(BaseModel):
     link_name: str = ""
 
 
+class PendingPlatformsBody(BaseModel):
+    platforms: list[str] = []
+
+
 class ChainAccountBody(BaseModel):
     id: str = ""
     platform_id: str = ""
@@ -2996,10 +3000,15 @@ def admin_retry_pending_publish(
     except (TypeError, ValueError):
         platforms_list = []
     leftover = [str(p).strip() for p in platforms_list if str(p).strip()]
+    original = set(leftover)
     wanted = [str(p).strip() for p in (platform or []) if str(p).strip()]
     if wanted:
-        allow = set(leftover)
-        leftover = [p for p in wanted if p in allow]
+        leftover = [
+            p
+            for p in wanted
+            if p in platforms.PLATFORM_IDS
+            and (platforms.is_publish_enabled(p) or p in original)
+        ]
     if not leftover:
         db.set_scheduled_awaiting_retry(sched_id, platforms_list, "")
         request.session["admin_error"] = _msg(request, "pub.flash.no_platforms")
@@ -3033,6 +3042,38 @@ def admin_retry_pending_publish(
     else:
         request.session["admin_ok"] = _msg(request, "pub.flash.retry_all_ok", n=ok_n)
     return done()
+
+
+@app.post("/admin/api/publicaciones/pending/{sched_id}/platforms")
+def api_pending_set_platforms(request: Request, sched_id: str, body: PendingPlatformsBody):
+    try:
+        _require_publish_retry_admin(request)
+    except PermissionError as e:
+        if str(e) == "login_required":
+            return JSONResponse({"ok": False, "error": "login"}, status_code=401)
+        return JSONResponse({"ok": False, "error": "forbidden"}, status_code=403)
+    row = db.get_scheduled_publication(sched_id)
+    if not row or str(row.get("status") or "") != "awaiting_retry":
+        return JSONResponse({"ok": False, "error": "gone"}, status_code=404)
+    try:
+        current = json.loads(row.get("platforms_json") or "[]")
+    except (TypeError, ValueError):
+        current = []
+    current_ids = [str(p).strip() for p in current if str(p).strip()]
+    wanted = [str(p).strip() for p in (body.platforms or []) if str(p).strip()]
+    leftover: list[str] = []
+    seen: set[str] = set()
+    for pid in wanted:
+        if pid in seen or pid not in platforms.PLATFORM_IDS:
+            continue
+        if not platforms.is_publish_enabled(pid) and pid not in current_ids:
+            continue
+        seen.add(pid)
+        leftover.append(pid)
+    if not leftover:
+        return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
+    db.set_scheduled_awaiting_retry(sched_id, leftover, str(row.get("error_message") or ""))
+    return {"ok": True, "platforms": leftover}
 
 
 @app.post("/admin/publicaciones/pending/{sched_id}/cancel", name="admin_cancel_pending_publish")

@@ -2158,9 +2158,29 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Do not republish {name}",
         "es": "Quitar {name} de esta republicación",
     },
+    "pub.retry_remove_title": {
+        "en": "Remove {name}?",
+        "es": "¿Quitar {name}?",
+    },
+    "pub.retry_remove_body": {
+        "en": "This platform will not be republished. You can add it again below if you change your mind.",
+        "es": "Esta plataforma no se republicará. Si te arrepientes, puedes volver a agregarla abajo.",
+    },
+    "pub.retry_remove_ok": {"en": "Remove", "es": "Quitar"},
+    "pub.retry_add_btn": {"en": "Add platforms", "es": "Agregar plataformas"},
+    "pub.retry_add_title": {"en": "Add platforms", "es": "Agregar plataformas"},
+    "pub.retry_add_none": {
+        "en": "No more platforms to add.",
+        "es": "No hay más plataformas para agregar.",
+    },
+    "pub.retry_add_apply": {"en": "Add", "es": "Agregar"},
     "pub.retry_need_one": {
         "en": "Leave at least one platform, or cancel the whole job.",
         "es": "Deja al menos una plataforma, o cancela el envío.",
+    },
+    "pub.retry_save_fail": {
+        "en": "Could not save the platform list. Try again.",
+        "es": "No se pudo guardar la lista de plataformas. Inténtalo otra vez.",
     },
     "pub.cancel_pending_btn": {"en": "Cancel", "es": "Cancelar"},
     "pub.cancel_pending_confirm": {
