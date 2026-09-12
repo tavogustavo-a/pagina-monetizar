@@ -1416,7 +1416,7 @@
         var testBtnHide = form.querySelector(".js-chain-test-btn");
         if (testBtnHide) {
           var pid = (form.getAttribute("data-platform-id") || (form.querySelector('[name="platform_id"]') || {}).value || "");
-          testBtnHide.hidden = pid === "odysee" || pid === "bilibili_tv";
+          testBtnHide.hidden = pid === "odysee" || pid === "bilibili_tv" || pid === "dtube";
         }
         bindSecretToggles(form);
 
@@ -1426,15 +1426,15 @@
           var msgEl = form.querySelector(".js-chain-form-msg");
           var submit = form.querySelector('button[type="submit"]');
           var pid = (form.getAttribute("data-platform-id") || payload.platform_id || "");
+          var isSlowSave = pid === "bilibili_tv" || pid === "dtube" || pid === "odysee";
           if (msgEl) {
             msgEl.hidden = false;
-            var isBrowserLogin = pid === "bilibili_tv" || pid === "dtube";
-            msgEl.textContent = isBrowserLogin ? chainConnectingMsg : networkMsg;
+            msgEl.textContent = isSlowSave ? chainConnectingMsg : networkMsg;
             msgEl.className = "sub js-chain-form-msg";
           }
           if (submit) {
             submit.disabled = true;
-            if (pid === "bilibili_tv" || pid === "dtube") submit.textContent = chainConnectingBtn;
+            if (isSlowSave) submit.textContent = chainConnectingBtn;
           }
           fetch("/admin/api/chain", {
             method: "POST",
@@ -1459,11 +1459,18 @@
                   msgEl.hidden = false;
                   msgEl.textContent = (x.body && (x.body.error || x.body.message)) || errorMsg;
                   msgEl.className = "sub js-chain-form-msg api-msg--fail";
+                  try { msgEl.scrollIntoView({ block: "nearest" }); } catch (err) {}
                 }
                 return;
               }
               rememberAccountPickerRestore();
-              window.location.reload();
+              if (msgEl) {
+                msgEl.hidden = false;
+                msgEl.textContent = (x.body && x.body.message) || chainSaveLabel;
+                msgEl.className = "sub js-chain-form-msg api-msg--ok";
+                try { msgEl.scrollIntoView({ block: "nearest" }); } catch (err) {}
+              }
+              window.setTimeout(function () { window.location.reload(); }, 900);
             })
             .catch(function () {
               if (submit) {

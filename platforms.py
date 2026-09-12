@@ -146,12 +146,8 @@ PLATFORMS: list[dict[str, Any]] = [
         "id": "dtube",
         "icon": "⛓️",
         "has_api": True,
-        "api_kind": "hive",
+        "api_kind": "browser",
         "token_renewal": "manual",
-        # Pausado y oculto en Servidores/Publicaciones. El módulo dtube.py
-        # sigue montado: para reactivar pon ui_visible y publish_enabled en True.
-        "publish_enabled": False,
-        "ui_visible": False,
         "video": "yes",
         "photo": "no",
         "comment": "no",

@@ -3455,7 +3455,7 @@ def user_has_queued_file_hash(user_id: str, file_hash: str) -> bool:
             FROM scheduled_publications sp
             JOIN videos v ON v.id = sp.video_id
             WHERE sp.user_id = ?
-              AND sp.status IN ('pending', 'processing', 'awaiting_retry')
+              AND sp.status IN ('pending', 'processing', 'awaiting_retry', 'retrying')
               AND lower(v.file_hash) = ?
             LIMIT 1
             """,
@@ -8529,20 +8529,61 @@ def set_scheduled_awaiting_retry(
         conn.close()
 
 
-def mark_scheduled_retry_processing(sched_id: str) -> bool:
+def mark_scheduled_retry_processing(sched_id: str, platforms: list[str] | None = None) -> bool:
+    """Pasa de awaiting_retry a retrying (la publicación corre en segundo plano)."""
+    import json
+
     seed_admin_if_missing()
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        if platforms is not None:
+            cur = conn.execute(
+                """
+                UPDATE scheduled_publications
+                SET status = 'retrying',
+                    platforms_json = ?,
+                    processed_at = ?,
+                    error_message = ''
+                WHERE id = ? AND status = 'awaiting_retry'
+                """,
+                (json.dumps(platforms), now, sched_id),
+            )
+        else:
+            cur = conn.execute(
+                """
+                UPDATE scheduled_publications
+                SET status = 'retrying',
+                    processed_at = ?,
+                    error_message = ''
+                WHERE id = ? AND status = 'awaiting_retry'
+                """,
+                (now, sched_id),
+            )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def reclaim_stuck_retries(*, older_than_hours: int = 2) -> int:
+    """Si el proceso murió a mitad de una republicación, vuelve a la cola."""
+    seed_admin_if_missing()
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=max(1, older_than_hours))).isoformat()
     conn = _connect()
     try:
         cur = conn.execute(
             """
             UPDATE scheduled_publications
-            SET status = 'processing'
-            WHERE id = ? AND status = 'awaiting_retry'
+            SET status = 'awaiting_retry',
+                error_message = 'retry_interrupted'
+            WHERE status = 'retrying'
+              AND (processed_at IS NULL OR processed_at < ?)
             """,
-            (sched_id,),
+            (cutoff,),
         )
         conn.commit()
-        return cur.rowcount > 0
+        return cur.rowcount
     finally:
         conn.close()
 
@@ -8556,7 +8597,7 @@ def list_awaiting_retry_publications(
     try:
         if scope is not None and not scope:
             return []
-        where = "sp.status = 'awaiting_retry'"
+        where = "sp.status IN ('awaiting_retry', 'retrying')"
         extra, extra_params = _scheduled_viewer_sql(viewer)
         where = f"{where} {extra}".strip()
         params: list[Any] = list(extra_params)

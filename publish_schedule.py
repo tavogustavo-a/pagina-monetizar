@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import threading
 import uuid
 
 import db
@@ -226,9 +227,91 @@ def execute_video_publish(
     return ok_n, fail_n, pending_n, failures_for_email
 
 
+def _run_retry_job(sched_id: str, upload_dir: Path) -> None:
+    """Publica en segundo plano una fila en estado retrying."""
+    row = db.get_scheduled_publication(sched_id)
+    if not row or str(row.get("status") or "") != "retrying":
+        return
+    try:
+        video = db.get_video_by_id(row["video_id"])
+        if not video:
+            db.complete_scheduled_publication(sched_id, "failed", "Video not found")
+            return
+        try:
+            platforms_list = json.loads(row.get("platforms_json") or "[]")
+        except (TypeError, ValueError):
+            platforms_list = []
+        if not isinstance(platforms_list, list):
+            platforms_list = []
+        path = upload_dir / video.file_name
+        if not path.is_file():
+            persist_awaiting_retry(
+                sched_id=sched_id,
+                user_id=row["user_id"],
+                video_id=row["video_id"],
+                failures=[{"platform_id": p} for p in platforms_list],
+                tiktoker_config_id=(row.get("tiktok_config_id") or "").strip(),
+                content_type=row.get("content_type") or "video",
+                lang=row.get("lang") or "es",
+                account_link_id=(row.get("account_link_id") or "").strip(),
+                error_message="Video file missing",
+            )
+            return
+        execute_video_publish(
+            upload_dir=upload_dir,
+            user_id=row["user_id"],
+            video=video,
+            selected_platforms=[str(p).strip() for p in platforms_list if str(p).strip()],
+            tiktoker_config_id=(row.get("tiktok_config_id") or "").strip(),
+            content_type=row.get("content_type") or "video",
+            lang=row.get("lang") or "es",
+            account_link_id=(row.get("account_link_id") or "").strip(),
+            retry_sched_id=sched_id,
+            x_use_funding=bool(row.get("x_use_funding") or 0),
+        )
+        db.release_publish_file_lock_if_idle(
+            row["user_id"], getattr(video, "file_hash", "") or ""
+        )
+    except (OSError, Exception) as e:
+        try:
+            raw_platforms = json.loads(row.get("platforms_json") or "[]")
+        except (TypeError, ValueError):
+            raw_platforms = []
+        if not isinstance(raw_platforms, list):
+            raw_platforms = []
+        persist_awaiting_retry(
+            sched_id=sched_id,
+            user_id=row["user_id"],
+            video_id=row["video_id"],
+            failures=[{"platform_id": p} for p in raw_platforms],
+            tiktoker_config_id=(row.get("tiktok_config_id") or "").strip(),
+            content_type=row.get("content_type") or "video",
+            lang=row.get("lang") or "es",
+            account_link_id=(row.get("account_link_id") or "").strip(),
+            error_message=str(e),
+        )
+
+
+def enqueue_retry(*, sched_id: str, leftover: list[str], upload_dir: Path) -> bool:
+    """Marca la republicación y la lanza en un hilo. Devuelve False si ya no estaba en cola."""
+    if not db.mark_scheduled_retry_processing(sched_id, leftover):
+        return False
+    threading.Thread(
+        target=_run_retry_job,
+        args=(sched_id, upload_dir),
+        daemon=True,
+        name=f"pub-retry-{sched_id[:8]}",
+    ).start()
+    return True
+
+
 def process_due_scheduled_publications(*, upload_dir: Path) -> int:
     """Procesa publicaciones pendientes cuya hora ya llegó. Devuelve cuántas se procesaron."""
     processed = 0
+    try:
+        db.reclaim_stuck_retries()
+    except Exception:
+        pass
     for row in db.list_due_scheduled_publications():
         sched_id = row["id"]
         if not db.mark_scheduled_processing(sched_id):

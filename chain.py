@@ -13,12 +13,12 @@ PLATFORM_IDS = frozenset({"odysee", "dtube", "bilibili_tv", "bilibili_qr"})
 
 API_KIND = {
     "odysee": "lbry",
-    "dtube": "hive",
+    "dtube": "browser",
     "bilibili_tv": "browser",
     "bilibili_qr": "browser",
 }
 
-NO_TEST_IDS = frozenset({"odysee", "bilibili_tv", "bilibili_qr"})
+NO_TEST_IDS = frozenset({"odysee", "dtube", "bilibili_tv", "bilibili_qr"})
 
 SERVER_PLATFORM = {"bilibili_qr": "bilibili"}
 

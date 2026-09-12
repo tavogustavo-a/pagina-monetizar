@@ -2980,9 +2980,6 @@ def admin_retry_pending_publish(
     if not row or str(row.get("status") or "") != "awaiting_retry":
         request.session["admin_error"] = _msg(request, "pub.flash.pending_gone")
         return done()
-    if not db.mark_scheduled_retry_processing(sched_id):
-        request.session["admin_error"] = _msg(request, "pub.flash.pending_gone")
-        return done()
     video = db.get_video_by_id(row["video_id"])
     if not video:
         db.complete_scheduled_publication(sched_id, "failed", "Video not found")
@@ -3015,34 +3012,14 @@ def admin_retry_pending_publish(
         db.set_scheduled_awaiting_retry(sched_id, platforms_list, "")
         request.session["admin_error"] = _msg(request, "pub.flash.no_platforms")
         return done()
-    ok_n, fail_n, pending_n, _ = publish_schedule.execute_video_publish(
+    if not publish_schedule.enqueue_retry(
+        sched_id=sched_id,
+        leftover=leftover,
         upload_dir=UPLOAD_DIR,
-        user_id=row["user_id"],
-        video=video,
-        selected_platforms=leftover,
-        tiktoker_config_id=(row.get("tiktok_config_id") or "").strip(),
-        content_type=row.get("content_type") or "video",
-        lang=row.get("lang") or lang,
-        account_link_id=(row.get("account_link_id") or "").strip(),
-        retry_sched_id=sched_id,
-    )
-    db.release_publish_file_lock_if_idle(
-        row["user_id"], getattr(video, "file_hash", "") or ""
-    )
-    if fail_n and (ok_n or pending_n):
-        request.session["admin_ok"] = _msg(
-            request, "pub.flash.partial", ok=ok_n + pending_n, fail=fail_n
-        )
-    elif fail_n:
-        request.session["admin_error"] = _msg(
-            request, "pub.flash.partial", ok=ok_n, fail=fail_n
-        )
-    elif pending_n:
-        request.session["admin_ok"] = _msg(
-            request, "pub.flash.pending_review", n=pending_n
-        )
-    else:
-        request.session["admin_ok"] = _msg(request, "pub.flash.retry_all_ok", n=ok_n)
+    ):
+        request.session["admin_error"] = _msg(request, "pub.flash.pending_gone")
+        return done()
+    request.session["admin_ok"] = _msg(request, "pub.flash.retry_queued")
     return done()
 
 
@@ -5230,8 +5207,9 @@ def api_chain_save(request: Request, body: ChainAccountBody):
         raw = db.get_chain_account_raw(body.id)
         if raw:
             login = login or str(raw.get("login") or "")
-            secret = secret or str(raw.get("secret") or "")
             extra = extra or str(raw.get("extra") or "")
+            if secret in ("unchanged", "x" * 19) or not secret:
+                secret = str(raw.get("secret") or "")
     if pid == "odysee" and extra:
         extra = odysee.normalize_channel_id(extra) or extra
     dtube_browser = pid == "dtube" and "@" in login
@@ -5312,6 +5290,14 @@ def api_chain_save(request: Request, body: ChainAccountBody):
         or "unverified" in str(detail or "").lower()
     )
     if not ok and not unverified:
+        if pid == "odysee" and body.id:
+            stored = db.get_chain_account_raw(body.id) or {}
+            db.update_chain_browser_session(
+                str(body.id),
+                session_ok=False,
+                last_ok_at=str(stored.get("last_ok_at") or ""),
+                last_error=str(detail or ""),
+            )
         return JSONResponse(
             {
                 "ok": False,
@@ -5339,6 +5325,13 @@ def api_chain_save(request: Request, body: ChainAccountBody):
         if code == "unknown_platform":
             return JSONResponse({"ok": False, "error": "Unknown platform."}, status_code=404)
         return JSONResponse({"ok": False, "error": str(e)}, status_code=404)
+    if pid == "odysee":
+        db.update_chain_browser_session(
+            str(row.get("id") or ""),
+            session_ok=bool(ok),
+            last_ok_at=datetime.now(timezone.utc).isoformat() if ok else "",
+            last_error="" if ok else str(detail or ""),
+        )
     return {
         "ok": True,
         "account": row,

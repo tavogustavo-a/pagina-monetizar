@@ -28,10 +28,14 @@
             </thead>
             <tbody>
               {% for row in pending_retry_publications %}
+              {% set busy = row.status == 'retrying' %}
               <tr>
                 <td>{{ row.video_title or '—' }}</td>
                 <td>{{ row.user_username or row.uploader_username or row.account_name or '—' }}</td>
                 <td>
+                  {% if busy %}
+                  <span class="badge">{{ t('pub.retry_in_progress') }}</span>
+                  {% else %}
                   <button
                     type="button"
                     class="pub-log-view js-pub-retry-open"
@@ -48,8 +52,12 @@
                     </svg>
                     <span>{{ t('pub.log_view') }}</span>
                   </button>
+                  {% endif %}
                 </td>
                 <td class="pub-pending-actions">
+                  {% if busy %}
+                  <span class="sub">{{ t('pub.retry_in_progress') }}</span>
+                  {% else %}
                   <button
                     type="button"
                     class="btn btn-accent btn-sm js-pub-retry-open"
@@ -69,6 +77,7 @@
                     {% endif %}
                     <button type="submit" class="btn btn-ghost btn-sm btn-user-delete">{{ t('pub.cancel_pending_btn') }}</button>
                   </form>
+                  {% endif %}
                 </td>
               </tr>
               {% endfor %}

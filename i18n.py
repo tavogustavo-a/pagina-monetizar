@@ -260,8 +260,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Solo video. En Servidores entra con el email y la contraseña de Odysee (no hay OAuth público). El panel publica con TUS + stream_create de LBRY.",
     },
     "limits.note.dtube": {
-        "en": "Hive account stays saved. Publishing is paused: DTube’s IPFS upload cluster has no DNS. Code remains ready if the uploader returns.",
-        "es": "La cuenta Hive se guarda. La publicación está pausada: el cluster IPFS de DTube no tiene DNS. El código queda listo por si el uploader vuelve.",
+        "en": "Video only. Sign in from Servers with the d.tube email and password. The panel keeps the browser session and re-logs in if cookies expire.",
+        "es": "Solo vídeo. En Servidores entra con el email y la contraseña de d.tube. El panel guarda la sesión del navegador y vuelve a entrar si caducan las cookies.",
     },
     "servers.intro": {
         "en": "Connect creator accounts on each platform. TikTok is available now; more platforms are coming soon.",
@@ -408,6 +408,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Bilibili.tv password",
         "es": "Contraseña de Bilibili.tv",
     },
+    "servers.chain_field_email_dtube": {"en": "DTube email", "es": "Email de DTube"},
+    "servers.chain_field_password_dtube": {
+        "en": "DTube password",
+        "es": "Contraseña de DTube",
+    },
     "servers.chain_field_hive": {"en": "DTube username", "es": "Usuario de DTube"},
     "servers.chain_field_wif": {"en": "Posting key", "es": "Clave posting"},
     "servers.chain_field_channel": {
@@ -416,8 +421,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "servers.chain_save": {"en": "Save account", "es": "Guardar cuenta"},
     "servers.chain_connecting": {
-        "en": "Connecting to Bilibili.tv… this can take a minute. Do not close this window.",
-        "es": "Conectando con Bilibili.tv… puede tardar un minuto. No cierres esta ventana.",
+        "en": "Connecting… this can take a minute. Do not close this window.",
+        "es": "Conectando… puede tardar un minuto. No cierres esta ventana.",
     },
     "servers.chain_connecting_btn": {"en": "Connecting…", "es": "Conectando…"},
     "servers.chain_saved": {
@@ -425,12 +430,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Cuenta guardada ({name}).",
     },
     "servers.chain_missing": {
-        "en": "Odysee and Bilibili.tv need email and password. DTube needs username and posting key.",
-        "es": "Odysee y Bilibili.tv piden email y contraseña. DTube pide usuario de DTube y clave posting.",
+        "en": "Odysee, DTube and Bilibili.tv need email and password.",
+        "es": "Odysee, DTube y Bilibili.tv piden email y contraseña.",
     },
     "servers.chain_test": {"en": "Test API", "es": "Probar API"},
     "servers.chain_badge_odysee": {"en": "LBRY", "es": "LBRY"},
-    "servers.chain_badge_dtube": {"en": "Hive", "es": "Hive"},
+    "servers.chain_badge_dtube": {"en": "Browser", "es": "Navegador"},
     "servers.chain_badge_bilibili_tv": {"en": "Browser", "es": "Navegador"},
     "servers.chain_badge": {"en": "Chain", "es": "Cadena"},
     "servers.chain_session_ok": {"en": "Session active", "es": "Sesión activa"},
@@ -1152,8 +1157,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Error de conexión: {error}",
     },
     "odysee.err_auth": {
-        "en": "Odysee did not accept this email and password. Use the password from odysee.com (set one in Accounts if you only sign in with Google). The channel field is not used for this test.",
-        "es": "Odysee no aceptó este email y contraseña. Usa la de odysee.com (en Accounts pon una si solo entras con Google). El campo del canal no se usa en esta prueba.",
+        "en": "Odysee rejected the login from this server (same message as a wrong password). If you can sign in at odysee.com, the VPS IP is blocked: assign a residential proxy to this account in Proxies, Save account again, then republish.",
+        "es": "Odysee rechazó el login desde este servidor (el mismo aviso que si la contraseña fallara). Si en odysee.com sí entra, la IP del VPS está bloqueada: en Proxys vincula un proxy residencial a esta cuenta, vuelve a Guardar cuenta y luego republica.",
     },
     "odysee.err_app_id": {
         "en": "Odysee blocked the test before checking your password (invalid install ID). Reload Servers and try again.",
@@ -2180,12 +2185,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Pendientes de republicar",
     },
     "pub.pending_hint": {
-        "en": "These videos stay available until an admin republishes the remaining platforms or cancels.",
-        "es": "Estos videos siguen disponibles hasta que un admin republica en las plataformas restantes o cancela.",
+        "en": "These videos stay available until an admin republishes the remaining platforms or cancels. Republish runs in the background; you can leave the page.",
+        "es": "Estos videos siguen disponibles hasta que un admin republica en las plataformas restantes o cancela. Republicar trabaja en segundo plano; puedes salir de la página.",
     },
     "pub.pending_col_user": {"en": "User", "es": "Usuario"},
     "pub.pending_col_actions": {"en": "Actions", "es": "Acciones"},
-    "pub.retry_btn": {"en": "Republish", "es": "Republicar"},
+    "pub.retry_in_progress": {
+        "en": "Republishing…",
+        "es": "Republicando…",
+    },
     "pub.retry_modal_title": {
         "en": "Platforms to republish",
         "es": "Plataformas a republicar",
@@ -2227,9 +2235,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Remaining publish cancelled by an admin.",
         "es": "Publicación restante cancelada por un administrador.",
     },
-    "pub.flash.retry_all_ok": {
-        "en": "Republished to {n} remaining platform(s).",
-        "es": "Republicado en {n} plataforma(s) restante(s).",
+    "pub.flash.retry_queued": {
+        "en": "Republish started in the background. You can leave this page; the log will update when each platform finishes.",
+        "es": "Republicación en segundo plano. Puedes salir de esta página; el registro se actualiza cuando termine cada plataforma.",
     },
     "pub.flash.pending_cancelled": {
         "en": "Remaining publications cancelled. The video is no longer queued.",
@@ -3323,20 +3331,20 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Solo video. Se usa el proxy vinculado.",
     },
     "apidoc.dtube.step1": {
-        "en": "Hive account: export posting WIF (never the owner key).",
-        "es": "Cuenta Hive: exporta el posting WIF (nunca la owner key).",
+        "en": "Create or use a d.tube account with email and password.",
+        "es": "Cuenta de d.tube con email y contraseña.",
     },
     "apidoc.dtube.step2": {
-        "en": "Servers → Connect. Save Hive username and posting WIF. Test.",
-        "es": "Servidores → Conectar. Guarda usuario Hive y posting WIF. Prueba.",
+        "en": "Servers → Connect. Save email and password. The panel keeps the browser session.",
+        "es": "Servidores → Conectar. Guarda email y contraseña. El panel mantiene la sesión del navegador.",
     },
     "apidoc.dtube.step3": {
-        "en": "Publishing is paused: cluster.d.tube has no DNS. Hive credentials stay saved.",
-        "es": "Publicación pausada: cluster.d.tube no tiene DNS. Las credenciales Hive se quedan guardadas.",
+        "en": "If the session expires, the panel logs in again automatically. Cloudflare Turnstile on upload may still block automated publishing.",
+        "es": "Si la sesión caduca, el panel vuelve a entrar solo. El Turnstile de Cloudflare en la subida puede seguir bloqueando la publicación automática.",
     },
     "apidoc.dtube.extra": {
-        "en": "",
-        "es": "",
+        "en": "Video only. Linked proxy is used.",
+        "es": "Solo vídeo. Se usa el proxy vinculado.",
     },
     "apidoc.extra_none": {"en": "None", "es": "Ninguno"},
     "apidoc.tiktok.step1": {
