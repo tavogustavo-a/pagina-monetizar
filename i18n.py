@@ -2151,6 +2151,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Could not encrypt the Snapchat video (AES-256-CBC). Install the Python package cryptography on the server.",
         "es": "No se pudo cifrar el vídeo de Snapchat (AES-256-CBC). Instala el paquete Python cryptography en el servidor.",
     },
+    "pub.snapchat.need_allowlist": {
+        "en": "Snapchat rejected the upload with 403 (permission denied). The Public Profile API is allowlist-only: email dev-support@snap.com with your OAuth Client ID (from Snap Business Manager, not the Developer Portal) and your use case, and make sure the connected account has the Profile Admin role. Nothing was marked as sent.",
+        "es": "Snapchat rechazó la subida con 403 (permiso denegado). La Public Profile API es solo por allowlist: escribe a dev-support@snap.com con tu Client ID de OAuth (de Snap Business Manager, NO del Developer Portal) y tu caso de uso, y asegúrate de que la cuenta conectada tenga el rol Profile Admin. No se marcó nada como enviado.",
+    },
     "pub.flash.no_platforms": {
         "en": "Select at least one platform.",
         "es": "Selecciona al menos una plataforma.",

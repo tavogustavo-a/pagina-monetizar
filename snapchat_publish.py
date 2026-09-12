@@ -35,6 +35,21 @@ def locale() -> str:
     return (os.environ.get("SNAPCHAT_LOCALE") or "en_US").strip() or "en_US"
 
 
+def _debug(message: str) -> None:
+    """Registra el fallo en oauth_debug.log para diagnosticar el 403 en producción."""
+    try:
+        import time
+
+        from db_engine import DATA_DIR
+
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        with (DATA_DIR / "oauth_debug.log").open("a", encoding="utf-8") as fh:
+            fh.write(f"{stamp} [snapchat] {message}\n")
+    except Exception:
+        pass
+
+
 def _parse_json(raw: str) -> dict[str, Any]:
     try:
         data = json.loads(raw) if raw else {}
@@ -52,6 +67,25 @@ def _api_error(data: dict[str, Any], fallback: str = "") -> str:
         or ""
     ).strip()
     return (msg or fallback or "Snapchat API error")[:220]
+
+
+def _is_permission_error(message: str) -> bool:
+    low = (message or "").lower()
+    return any(
+        m in low
+        for m in (
+            "authorization_permission_denied",
+            "permission_denied",
+            "permission denied",
+            "not authorized",
+            "unauthorized",
+            "forbidden",
+            "http 403",
+            " 403",
+            "allowlist",
+            "access_denied",
+        )
+    )
 
 
 def _parse_iso(value: str) -> datetime | None:
@@ -137,7 +171,9 @@ def _request(
     except urllib.error.HTTPError as e:
         raw = e.read().decode("utf-8", errors="replace") if e.fp else ""
         parsed = _parse_json(raw)
-        raise ValueError(_api_error(parsed, raw or str(e))) from e
+        detail = _api_error(parsed, raw or str(e))
+        # Adjunta el código HTTP para que publish_video distinga 403 (allowlist) de 401 (token).
+        raise ValueError(f"http {e.code}: {detail}") from e
     parsed = _parse_json(raw)
     status = str(parsed.get("request_status") or "").upper()
     if parsed and status not in ("", "SUCCESS", "PARTIAL"):
@@ -502,7 +538,12 @@ def publish_video(
             msg = str(e).lower()
             if str(e) == "need_openssl":
                 return False, t("pub.snapchat.need_openssl", lang)
-            if "token" in msg or "401" in msg or "expired" in msg or "unauthorized" in msg:
+            # 403 = permisos/allowlist (no se reintenta). 401/token caducado → refrescar y reintentar.
+            is_403 = "http 403" in msg
+            is_401 = not is_403 and (
+                "http 401" in msg or "401" in msg or "expired" in msg or "unauthorized" in msg
+            )
+            if is_401:
                 row = _refresh_row(row)
                 token = str(row.get("access_token") or "").strip()
                 result_id = _run(token)
@@ -516,6 +557,9 @@ def publish_video(
             return False, t("pub.snapchat.no_token", lang)
         if str(e) == "need_openssl":
             return False, t("pub.snapchat.need_openssl", lang)
+        if "http 403" in str(e).lower() or _is_permission_error(str(e)):
+            _debug(f"publish 403/permiso: {str(e)[:200]}")
+            return False, t("pub.snapchat.need_allowlist", lang)
         return False, t("pub.snapchat.upload_fail", lang, error=str(e)[:180])
     except Exception as e:
         return False, t("pub.snapchat.upload_fail", lang, error=str(e)[:180])
