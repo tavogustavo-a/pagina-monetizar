@@ -5167,6 +5167,10 @@ def _chain_fail_error(lang: str, platform_id: str, detail: str) -> str:
         return i18n.t("api.chain.fail", lang, error=msg or "error")
     if msg in {"email_password_required", "missing_fields"}:
         return i18n.t("servers.chain_missing", lang)
+    if msg == "need_proxy":
+        return i18n.t("odysee.err_auth", lang)
+    if msg == "proxy_rejected":
+        return i18n.t("odysee.err_auth_proxy", lang)
     if "authentication required" in low or "signin_not_logged_in" in low:
         return i18n.t("odysee.err_auth", lang)
     if "invalid application" in low or "app_id" in low:
@@ -5249,7 +5253,12 @@ def api_chain_save(request: Request, body: ChainAccountBody):
         if probe_secret in ("unchanged", "x" * 19) or not probe_secret:
             probe_secret = str(stored.get("secret") or "")
         ok, detail = chain.probe_account(
-            pid, login, probe_secret, "", account_id=str(row.get("id") or "")
+            pid,
+            login,
+            probe_secret,
+            "",
+            account_id=str(row.get("id") or ""),
+            link_name=body.link_name or "",
         )
         now = datetime.now(timezone.utc).isoformat()
         prev_ok = str(stored.get("last_ok_at") or "")
@@ -5284,7 +5293,9 @@ def api_chain_save(request: Request, body: ChainAccountBody):
             {"ok": False, "error": _chain_fail_error(lang, pid, detail)},
             status_code=400,
         )
-    ok, detail = chain.probe_account(pid, login, secret, extra, account_id=body.id or "")
+    ok, detail = chain.probe_account(
+        pid, login, secret, extra, account_id=body.id or "", link_name=body.link_name or ""
+    )
     unverified = pid == "odysee" and (
         "email_unverified" in str(detail or "").lower()
         or "unverified" in str(detail or "").lower()
@@ -5368,6 +5379,7 @@ def api_chain_test(request: Request, body: ChainAccountBody):
         secret,
         extra,
         account_id=body.id or "",
+        link_name=body.link_name or "",
     )
     if not ok:
         return JSONResponse(

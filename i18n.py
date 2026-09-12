@@ -548,8 +548,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Guarda el Client ID y el Secret de esta cuenta (con «Usar API propia de X» marcado), o añade una app en Config X y deja esa casilla sin marcar.",
     },
     "servers.x_api_inherit_hint": {
-        "en": "By default this name publishes through Config X (one app, or split across several). Check “Use own X API” only if this name has its own developer app.",
-        "es": "Por defecto este nombre publica por Config X (una app, o varias si hay más). Marca «Usar API propia de X» solo si este nombre tiene su propia app de desarrollador.",
+        "en": "",
+        "es": "",
     },
     "servers.x_use_own_api": {
         "en": "Use own X API",
@@ -558,6 +558,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "servers.x_use_own_api_hint": {
         "en": "Checked: this account’s Client ID and Secret are used. Unchecked: Config X is used (one app if there is only one; if there are several, posts are split).",
         "es": "Marcado: se usan el Client ID y el Secret de esta cuenta. Sin marcar: se usa Config X (si hay una app, esa; si hay varias, se reparte).",
+    },
+    "servers.x_use_own_api_info_btn": {
+        "en": "About own X API",
+        "es": "Acerca de API propia de X",
     },
     "servers.x_own_api_needs_keys": {
         "en": "To use this account’s own X API, save Client ID and Secret first.",
@@ -628,8 +632,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Sesión web (código QR)",
     },
     "servers.bilibili_qr_hint": {
-        "en": "No company Open Platform app. Scan the QR with the Bilibili app on your phone. The panel keeps that browser session and publishes 稿件 with it. Keep-alive every 3–5 days at 3 am (panel time), not every day; fan count is checked then and when you connect. If cookies die, scan again — there is no password to sign in alone. Link a proxy to this account in Proxies and keep the same one, or the session often dies when the IP changes.",
-        "es": "Sin app de empresa en Open Platform. Escanea el QR con la app de Bilibili en el móvil. El panel guarda esa sesión del navegador y con ella publica 稿件. Keep-alive cada 3–5 días a las 3 am (hora del panel), no cada día; los fans se consultan al conectar y en esa visita. Si las cookies mueren, vuelves a escanear: no hay contraseña para entrar solo. Vincula un proxy a esta cuenta en Proxys y no lo cambies, o la sesión suele caer al cambiar la IP.",
+        "en": "",
+        "es": "",
     },
     "servers.connect_with_bilibili_qr": {
         "en": "Connect with QR code",
@@ -749,8 +753,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Snapchat inició sesión, pero no devolvió un perfil público. Usa el Client ID OAuth de Business Manager (no Snap Kit), gúardalo en Servidores y conecta con la cuenta dueña de ese perfil (p. ej. juancarl1294 / Kirth Melo). Si no existe, créalo en Snapchat.",
     },
     "servers.snapchat_client_hint": {
-        "en": "Paste the Confidential OAuth Client ID from Snap Business Manager (Business Details), not a Snap Kit Staging ID. The panel already calls the Business Content Management API (businessapi.snapchat.com).",
-        "es": "Pega el Client ID OAuth Confidential de Snap Business Manager (Business Details), no el de Snap Kit Staging. Este panel ya llama a la Content Management API de Business (businessapi.snapchat.com).",
+        "en": "",
+        "es": "",
     },
     "servers.snapchat_need_allowlist": {
         "en": "The app is not allowed to read Public Profiles. In Snap Business Manager the OAuth app needs Public Profile API access (allowlist). Send the Client ID to Snap if that toggle is missing, then connect again.",
@@ -1155,6 +1159,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "api.chain.fail": {
         "en": "Connection error: {error}",
         "es": "Error de conexión: {error}",
+    },
+    "odysee.err_auth_proxy": {
+        "en": "Odysee still rejected the login through the proxy linked to this account. Keep the proxy on, Save account again, then republish.",
+        "es": "Odysee también rechazó el login por el proxy vinculado a esta cuenta. Deja el proxy activo, vuelve a Guardar cuenta y luego republica.",
     },
     "odysee.err_auth": {
         "en": "Odysee rejected the login from this server (same message as a wrong password). If you can sign in at odysee.com, the VPS IP is blocked: assign a residential proxy to this account in Proxies, Save account again, then republish.",

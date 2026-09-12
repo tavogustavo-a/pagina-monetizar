@@ -5964,7 +5964,7 @@ def upsert_chain_account(
             raise ValueError("missing_fields")
         if pid == "odysee":
             try:
-                with chain_mod._account_proxy(pid, oid):
+                with chain_mod._account_proxy(pid, oid, link_name):
                     auth_token_val = chain_mod.odysee_auth_token_for_save(
                         login_val, secret_val, auth_token_val
                     )
@@ -10218,6 +10218,21 @@ def get_active_proxy_url_for_source(source_kind: str, source_ref: str) -> str:
     finally:
         conn.close()
     return get_active_proxy_url_for_account_name(name)
+
+
+def get_active_proxy_url_for_chain(account_id: str = "", link_name: str = "") -> str:
+    """Proxy de la cuenta de Servidores (KIRTH MELO, etc.), no solo el id interno de Odysee."""
+    aid = (account_id or "").strip()
+    if aid:
+        url = get_active_proxy_url_for_source("chain", aid)
+        if url:
+            return url
+        raw = get_chain_account_raw(aid) or {}
+        for label in (raw.get("name"), raw.get("login")):
+            url = get_active_proxy_url_for_account_name(str(label or ""))
+            if url:
+                return url
+    return get_active_proxy_url_for_account_name((link_name or "").strip())
 
 
 def create_proxy(

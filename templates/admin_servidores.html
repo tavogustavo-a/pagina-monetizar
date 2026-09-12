@@ -520,13 +520,27 @@
       </label>
       {% endif %}
       {% if platform.id == 'x' %}
-      <label class="field servers-x-own-api">
-        <span class="servers-x-own-api__row">
-          <input type="checkbox" name="use_own_x_api" class="js-x-use-own-api" value="1" />
-          <span>{{ t('servers.x_use_own_api') }}</span>
-        </span>
-      </label>
-      <p class="sub">{{ t('servers.x_use_own_api_hint') }}</p>
+      <div class="field servers-x-own-api">
+        <div class="servers-x-own-api__row">
+          <label class="servers-x-own-api__label">
+            <input type="checkbox" name="use_own_x_api" class="js-x-use-own-api" value="1" />
+            <span>{{ t('servers.x_use_own_api') }}</span>
+          </label>
+          <button
+            type="button"
+            class="servers-info-btn servers-x-own-api__info js-panel-info-open"
+            data-info-title="{{ t('servers.x_use_own_api') }}"
+            data-info-text="{{ t('servers.x_use_own_api_hint') }}"
+            aria-label="{{ t('servers.x_use_own_api_info_btn') }}"
+            title="{{ t('servers.x_use_own_api_info_btn') }}"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h.008v.008H11.25v-.008zM12 17.25h.01M12 21a9 9 0 100-18 9 9 0 000 18z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v.008M12 11.25V16.5" />
+            </svg>
+          </button>
+        </div>
+      </div>
       {% endif %}
       <div class="api-form__actions">
         <button type="submit" class="btn btn-accent">{{ t('api.save') }}</button>
@@ -661,7 +675,6 @@
     {% endif %}
 
     {% if platform.id == 'x' %}
-    <p class="sub">{{ t('servers.x_api_inherit_hint') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.x_redirect_hint') }} <code>{{ x_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     <a href="/oauth/x/connect" class="btn btn-x js-oauth-connect">
@@ -729,7 +742,6 @@
 
     {% if platform.id == 'snapchat' %}
     <p class="sub servers-oauth-copy">{{ t('servers.oauth_save_then_connect') }}</p>
-    <p class="sub">{{ t('servers.snapchat_client_hint') }}</p>
     <p class="sub servers-oauth-redirect">{{ t('servers.snapchat_redirect_hint') }} <code>{{ snapchat_redirect_uri }}</code></p>
     <div class="server-modal__linked">
     <a href="/oauth/snapchat/connect" class="btn btn-snapchat js-oauth-connect">

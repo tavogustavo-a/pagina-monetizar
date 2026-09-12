@@ -32,18 +32,16 @@ def extra_field(platform_id: str) -> str:
     return "channel" if (platform_id or "").strip() == "odysee" else ""
 
 
-def _account_proxy(platform_id: str, account_id: str):
+def _account_proxy(platform_id: str, account_id: str, link_name: str = ""):
     """Contexto con el proxy vinculado a la cuenta (o sin proxy si no hay)."""
     import db
     import proxy_util
 
     proxy_url = ""
-    aid = (account_id or "").strip()
-    if aid:
-        try:
-            proxy_url = db.get_active_proxy_url_for_source("chain", aid)
-        except Exception:
-            proxy_url = ""
+    try:
+        proxy_url = db.get_active_proxy_url_for_chain(account_id, link_name)
+    except Exception:
+        proxy_url = ""
     return proxy_util.using_proxy(proxy_url)
 
 
@@ -53,13 +51,19 @@ def probe_account(
     secret: str,
     extra: str = "",
     account_id: str = "",
+    link_name: str = "",
 ) -> tuple[bool, str]:
     pid = (platform_id or "").strip()
     if pid == "odysee":
-        with _account_proxy(pid, account_id):
-            return odysee.probe_account(login, secret, extra)
+        with _account_proxy(pid, account_id, link_name) as proxy_url:
+            ok, detail = odysee.probe_account(login, secret, extra)
+            if ok:
+                return True, detail
+            if not (proxy_url or "").strip():
+                return False, "need_proxy"
+            return False, "proxy_rejected"
     if pid == "dtube":
-        with _account_proxy(pid, account_id):
+        with _account_proxy(pid, account_id, link_name):
             return dtube.probe_account(login, secret, extra, account_id=account_id)
     if pid == "bilibili_tv":
         return bilibili_tv.probe_account(login, secret, extra, account_id=account_id)

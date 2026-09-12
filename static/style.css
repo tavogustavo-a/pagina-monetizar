@@ -11512,9 +11512,20 @@ ul.proxys-list .proxys-row__actions {
 .servers-x-own-api__row {
   display: flex;
   align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.servers-x-own-api__label {
+  display: flex;
+  align-items: center;
   gap: 0.5rem;
   font-size: 0.86rem;
   cursor: pointer;
+}
+.servers-x-own-api__info {
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
 }
 .servers-x-own-api input {
   width: auto;

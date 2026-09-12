@@ -253,6 +253,7 @@ def _verify_chain_account(
         str(row.get("secret") or ""),
         str(row.get("extra") or ""),
         account_id=str(row.get("id") or ""),
+        link_name=str(row.get("name") or ""),
     )
     if ok:
         message = t("api.chain.ok", lang, name=detail)
@@ -1226,6 +1227,7 @@ def _test_chain(platform_id: str, lang: str) -> tuple[bool, str]:
         str(raw.get("secret") or ""),
         str(raw.get("extra") or ""),
         account_id=str(raw.get("id") or ""),
+        link_name=str(raw.get("name") or ""),
     )
     if ok:
         return True, t("api.chain.ok", lang, name=detail)
