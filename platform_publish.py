@@ -358,7 +358,18 @@ def publish_to_platform(
                     return "fail", nice or t("pub.publish_crash", lang, error=str(e)[:180])
                 if not ok:
                     nice = proxy_util.humanize_network_failure(message, lang)
-                    if nice:
+                    # No pisar el mensaje de la plataforma (allowlist, sesión, etc.)
+                    # si no es un fallo claro de red/proxy.
+                    if nice and proxy_util.classify_proxy_error(message) in {
+                        "timeout",
+                        "reset",
+                        "refused",
+                        "unreachable",
+                        "auth",
+                        "ssl",
+                        "socks_fail",
+                        "host_unresolved",
+                    }:
                         message = nice
                 return _final_status(ok), message
 

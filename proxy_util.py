@@ -346,9 +346,13 @@ def classify_proxy_error(exc: BaseException | str) -> str:
     if any(n in text for n in ("timeout", "timed out", "time-out", "timedout")):
         return "timeout"
 
-    if code == 407 or "407" in text or "authentication" in text or "proxy_auth" in text:
+    if code == 407 or "407" in text or "proxy authentication" in text or "proxy_auth" in text:
         return "auth"
-    if code in (401, 403) or "403" in text:
+    # 401/403 de la red (Snap, Odysee, etc.) no es el proxy. Solo si el propio proxy lo dice.
+    if (
+        "proxy" in text
+        and any(n in text for n in ("403", "401", "denied", "forbidden", "denied access"))
+    ):
         return "denied"
     if code and 400 <= int(code) < 600:
         return "http_status"
