@@ -1428,12 +1428,13 @@
           var pid = (form.getAttribute("data-platform-id") || payload.platform_id || "");
           if (msgEl) {
             msgEl.hidden = false;
-            msgEl.textContent = pid === "bilibili_tv" ? chainConnectingMsg : networkMsg;
+            var isBrowserLogin = pid === "bilibili_tv" || pid === "dtube";
+            msgEl.textContent = isBrowserLogin ? chainConnectingMsg : networkMsg;
             msgEl.className = "sub js-chain-form-msg";
           }
           if (submit) {
             submit.disabled = true;
-            if (pid === "bilibili_tv") submit.textContent = chainConnectingBtn;
+            if (pid === "bilibili_tv" || pid === "dtube") submit.textContent = chainConnectingBtn;
           }
           fetch("/admin/api/chain", {
             method: "POST",

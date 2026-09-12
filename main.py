@@ -153,9 +153,11 @@ async def lifespan(app: FastAPI):
             try:
                 import bilibili_tv
                 import bilibili_web
+                import dtube
 
                 await asyncio.to_thread(bilibili_tv.run_daily_keep_alive_if_due)
                 await asyncio.to_thread(bilibili_web.run_keep_alive_if_due)
+                await asyncio.to_thread(dtube.run_daily_keep_alive_if_due)
             except Exception:
                 pass
             await asyncio.sleep(300)
@@ -5168,6 +5170,22 @@ def _chain_fail_error(lang: str, platform_id: str, detail: str) -> str:
         if key:
             return i18n.t(key, lang)
         return i18n.t("api.chain.fail", lang, error=msg or "error")
+    if pid == "dtube":
+        key = {
+            "email_password_required": "servers.chain_missing",
+            "missing_fields": "servers.chain_missing",
+            "need_saved_account": "servers.chain_missing",
+            "playwright_missing": "bilibili_tv.err_playwright",
+            "website_changed": "dtube.err_website",
+            "captcha": "dtube.err_captcha",
+            "session_dead": "dtube.err_session",
+            "login_failed": "dtube.err_login",
+            "browser_busy": "dtube.err_busy",
+            "browser_error": "dtube.err_browser",
+        }.get(msg)
+        if key:
+            return i18n.t(key, lang)
+        return i18n.t("api.chain.fail", lang, error=msg or "error")
     if pid != "odysee":
         return i18n.t("api.chain.fail", lang, error=msg or "error")
     if msg in {"email_password_required", "missing_fields"}:
@@ -5216,10 +5234,13 @@ def api_chain_save(request: Request, body: ChainAccountBody):
             extra = extra or str(raw.get("extra") or "")
     if pid == "odysee" and extra:
         extra = odysee.normalize_channel_id(extra) or extra
-    if pid == "bilibili_tv":
+    dtube_browser = pid == "dtube" and "@" in login
+    if pid == "bilibili_tv" or dtube_browser:
         import bilibili_tv
+        import dtube as dtube_mod
 
-        ready, err = bilibili_tv.playwright_ready()
+        browser_mod = bilibili_tv if pid == "bilibili_tv" else dtube_mod
+        ready, err = browser_mod.playwright_ready()
         if not ready:
             return JSONResponse(
                 {"ok": False, "error": _chain_fail_error(lang, pid, err)},
@@ -5256,7 +5277,7 @@ def api_chain_save(request: Request, body: ChainAccountBody):
         prev_ok = str(stored.get("last_ok_at") or "")
         next_at = ""
         if ok or str(detail or "") == "captcha":
-            next_at = bilibili_tv.pick_next_keepalive(
+            next_at = browser_mod.pick_next_keepalive(
                 except_id=str(row.get("id") or "")
             )
         db.update_chain_browser_session(
@@ -5273,16 +5294,19 @@ def api_chain_save(request: Request, body: ChainAccountBody):
                 "message": i18n.t("servers.chain_saved", lang, name=detail or login),
             }
         if str(detail or "") == "captcha":
+            captcha_key = (
+                "bilibili_tv.saved_captcha" if pid == "bilibili_tv" else "dtube.saved_captcha"
+            )
             return {
                 "ok": True,
                 "account": row,
-                "message": i18n.t("bilibili_tv.saved_captcha", lang),
+                "message": i18n.t(captcha_key, lang),
             }
         return JSONResponse(
             {"ok": False, "error": _chain_fail_error(lang, pid, detail)},
             status_code=400,
         )
-    ok, detail = chain.probe_account(pid, login, secret, extra)
+    ok, detail = chain.probe_account(pid, login, secret, extra, account_id=body.id or "")
     unverified = pid == "odysee" and (
         "email_unverified" in str(detail or "").lower()
         or "unverified" in str(detail or "").lower()

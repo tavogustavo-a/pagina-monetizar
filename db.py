@@ -3144,6 +3144,10 @@ def _delete_chain_account_on_conn(conn: sqlite3.Connection, account_id: str) -> 
         import bilibili_web
 
         bilibili_web.remove_profile(oid)
+    elif pid == "dtube":
+        import dtube
+
+        dtube.remove_profile(oid)
 
 
 def _delete_server_account_on_conn(conn: sqlite3.Connection, account_id: str) -> None:
@@ -5960,9 +5964,10 @@ def upsert_chain_account(
             raise ValueError("missing_fields")
         if pid == "odysee":
             try:
-                auth_token_val = chain_mod.odysee_auth_token_for_save(
-                    login_val, secret_val, auth_token_val
-                )
+                with chain_mod._account_proxy(pid, oid):
+                    auth_token_val = chain_mod.odysee_auth_token_for_save(
+                        login_val, secret_val, auth_token_val
+                    )
             except Exception:
                 pass
         label = (name or "").strip() or (link_name or "").strip() or login_val or pid

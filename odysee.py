@@ -85,20 +85,39 @@ def _debug(message: str) -> None:
         pass
 
 
+def _build_opener(proxy_url: str) -> urllib.request.OpenerDirector:
+    handlers: list = [urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())]
+    if proxy_url:
+        import proxy_util
+
+        handlers.append(proxy_util.proxy_handler_for(proxy_url))
+    return urllib.request.build_opener(*handlers)
+
+
+def _current_proxy_url() -> str:
+    try:
+        import proxy_util
+
+        return proxy_util.active_proxy_url()
+    except Exception:
+        return ""
+
+
 def _opener() -> urllib.request.OpenerDirector:
+    """Opener con cookies que respeta el proxy de la cuenta (using_proxy)."""
+    proxy_url = _current_proxy_url()
     op = getattr(_TLS, "opener", None)
-    if op is None:
-        op = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
-        )
+    if op is None or getattr(_TLS, "opener_proxy", None) != proxy_url:
+        op = _build_opener(proxy_url)
         _TLS.opener = op
+        _TLS.opener_proxy = proxy_url
     return op
 
 
 def _reset_http_session() -> None:
-    _TLS.opener = urllib.request.build_opener(
-        urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
-    )
+    proxy_url = _current_proxy_url()
+    _TLS.opener = _build_opener(proxy_url)
+    _TLS.opener_proxy = proxy_url
 
 
 def _request(

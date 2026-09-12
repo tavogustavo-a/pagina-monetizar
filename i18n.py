@@ -395,8 +395,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Entra con el email y la contraseña de bilibili.tv.",
     },
     "servers.chain_hint_dtube": {
-        "en": "",
-        "es": "",
+        "en": "Sign in with your d.tube email and password. Legacy accounts: Hive username and posting key (WIF).",
+        "es": "Entra con el email y la contraseña de d.tube. Cuentas antiguas: usuario de Hive y posting key (WIF).",
     },
     "servers.chain_field_email": {"en": "Odysee email", "es": "Email de Odysee"},
     "servers.chain_field_password": {
@@ -1218,6 +1218,38 @@ MESSAGES: dict[str, dict[str, str]] = {
     "bilibili_tv.saved_captcha": {
         "en": "Account saved. Bilibili.tv asked for captcha or SMS — the session is not active until you complete that check.",
         "es": "Cuenta guardada. Bilibili.tv pidió captcha o SMS: la sesión no está activa hasta que completes esa comprobación.",
+    },
+    "dtube.err_website": {
+        "en": "Could not use the d.tube website (login or upload form changed). Nothing was marked as sent.",
+        "es": "No se pudo usar la web de d.tube (cambió el login o el formulario de subida). No se marcó nada como enviado.",
+    },
+    "dtube.err_captcha": {
+        "en": "Cloudflare on d.tube asked for human verification (Turnstile) and blocked the automated upload. The video was not sent.",
+        "es": "Cloudflare en d.tube pidió verificación humana (Turnstile) y bloqueó la subida automática. El vídeo no se envió.",
+    },
+    "dtube.err_session": {
+        "en": "The d.tube session expired and re-login failed. Open Servers and save the account again.",
+        "es": "La sesión de d.tube caducó y el re-login falló. Abre Servidores y vuelve a guardar la cuenta.",
+    },
+    "dtube.err_login": {
+        "en": "d.tube did not accept this email and password.",
+        "es": "d.tube no aceptó este email y contraseña.",
+    },
+    "dtube.err_busy": {
+        "en": "The internal browser is already in use. Wait a minute and try again.",
+        "es": "El navegador interno ya está ocupado. Espera un minuto y reintenta.",
+    },
+    "dtube.err_browser": {
+        "en": "The internal browser could not open d.tube. The post was not sent.",
+        "es": "El navegador interno no pudo abrir d.tube. El post no se envió.",
+    },
+    "dtube.err_upload": {
+        "en": "d.tube did not confirm the upload (error or timeout). Check the account on d.tube before retrying.",
+        "es": "d.tube no confirmó la subida (error o tiempo agotado). Revisa la cuenta en d.tube antes de reintentar.",
+    },
+    "dtube.saved_captcha": {
+        "en": "Account saved. d.tube asked for extra verification — the session is not active until you complete that check.",
+        "es": "Cuenta guardada. d.tube pidió una verificación extra: la sesión no está activa hasta que completes esa comprobación.",
     },
     "bilibili_tv.alert_subject": {
         "en": "[{site}] Bilibili.tv session: {login}",

@@ -252,6 +252,7 @@ def _verify_chain_account(
         str(row.get("login") or ""),
         str(row.get("secret") or ""),
         str(row.get("extra") or ""),
+        account_id=str(row.get("id") or ""),
     )
     if ok:
         message = t("api.chain.ok", lang, name=detail)

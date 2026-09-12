@@ -174,7 +174,13 @@ _orig_urlopen = urllib.request.urlopen
 _urlopen_patched = False
 
 
-def _make_proxy_opener(proxy_url: str):
+def active_proxy_url() -> str:
+    """URL del proxy activo en el contexto de publicación actual ('' si no hay)."""
+    return (_active_proxy_url.get() or "").strip()
+
+
+def proxy_handler_for(proxy_url: str):
+    """Devuelve un handler urllib para enrutar por el proxy dado."""
     data = parse_proxy_line(proxy_url)
     protocol = normalize_protocol(str(data.get("protocol") or "http"))
     if protocol.startswith("socks"):
@@ -186,7 +192,7 @@ def _make_proxy_opener(proxy_url: str):
         kind = socks.SOCKS5 if protocol == "socks5" else socks.SOCKS4
         user = str(data.get("username") or "") or None
         password = str(data.get("password") or "") or None
-        handler = SocksiPyHandler(
+        return SocksiPyHandler(
             kind,
             str(data["host"]),
             int(data["port"]),
@@ -194,10 +200,12 @@ def _make_proxy_opener(proxy_url: str):
             username=user,
             password=password,
         )
-        return urllib.request.build_opener(handler)
     handler_url = _proxy_handler_url(data)
-    handler = urllib.request.ProxyHandler({"http": handler_url, "https": handler_url})
-    return urllib.request.build_opener(handler)
+    return urllib.request.ProxyHandler({"http": handler_url, "https": handler_url})
+
+
+def _make_proxy_opener(proxy_url: str):
+    return urllib.request.build_opener(proxy_handler_for(proxy_url))
 
 
 def _proxied_urlopen(url, data=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, **kwargs):

@@ -168,7 +168,9 @@ def get_hive_account(username: str) -> dict[str, Any]:
     return acc
 
 
-def probe_account(login: str, secret: str, extra: str = "") -> tuple[bool, str]:
+def probe_account(login: str, secret: str, extra: str = "", account_id: str = "") -> tuple[bool, str]:
+    if is_email_account(login):
+        return _browser_probe(login, secret, account_id)
     name = hive_username(login)
     wif = (secret or "").strip()
     if not name or not wif:
@@ -408,6 +410,390 @@ def _broadcast(username: str, wif: str, title: str, body: str, permlink: str, me
     return f"https://d.tube/#!/v/{username}/{permlink}"
 
 
+# ====================================================================
+# Modo navegador: cuentas email de d.tube (login web + sesión persistente).
+# d.tube usa Supabase: el token vive en localStorage y se renueva solo al
+# abrir la web con el perfil guardado; si muere, se reloguea con email/pass.
+# La subida exige un Cloudflare Turnstile; si no se resuelve, se reporta
+# error claro (nunca se simula el envío).
+# ====================================================================
+
+BASE_URL = "https://d.tube/"
+LOGIN_URL = "https://d.tube/auth/login"
+UPLOAD_URL = "https://d.tube/upload"
+PUBLISH_LOCK_S = 20 * 60
+TURNSTILE_WAIT_S = 90
+UPLOAD_WAIT_S = 10 * 60
+KEEP_DAYS_MIN = 3
+KEEP_DAYS_MAX = 5
+RETRY_HOURS_MIN = 8
+RETRY_HOURS_MAX = 20
+
+
+def is_email_account(login: str, secret: str = "") -> bool:
+    """Cuenta nueva de d.tube (email); las antiguas usan usuario Hive + WIF."""
+    return "@" in (login or "").strip()
+
+
+def profile_dir(account_id: str) -> Path:
+    from db_engine import DATA_DIR
+
+    safe = "".join(ch for ch in (account_id or "").strip() if ch.isalnum() or ch in "-_")
+    return DATA_DIR / "dtube_profiles" / (safe or "_invalid")
+
+
+def remove_profile(account_id: str) -> None:
+    import shutil
+
+    path = profile_dir(account_id)
+    if path.is_dir():
+        shutil.rmtree(path, ignore_errors=True)
+
+
+def playwright_ready() -> tuple[bool, str]:
+    import playwright_session
+
+    return playwright_session.playwright_ready()
+
+
+def _with_browser(account_id: str, fn, *, lock_wait_s: int | None = None) -> tuple[bool, str]:
+    import db
+    import playwright_session
+
+    proxy_url = db.get_active_proxy_url_for_source("chain", account_id)
+    kwargs: dict[str, Any] = {"proxy_url": proxy_url, "locale": "en-US"}
+    if lock_wait_s is not None:
+        kwargs["lock_wait_s"] = lock_wait_s
+    return playwright_session.with_persistent_browser(profile_dir(account_id), fn, **kwargs)
+
+
+def _looks_logged_in(page) -> bool:
+    try:
+        el = page.query_selector("a[href='/upload'], a[href*='/upload']")
+        if el and el.is_visible():
+            return True
+        for sel in ("a", "button"):
+            for cand in page.query_selector_all(sel):
+                try:
+                    txt = (cand.inner_text() or "").strip().lower()
+                except Exception:
+                    continue
+                if txt == "upload" and cand.is_visible():
+                    return True
+    except Exception:
+        return False
+    return False
+
+
+def _login_error_text(page) -> str:
+    try:
+        body = " ".join((page.inner_text("body") or "").split()).lower()
+    except Exception:
+        return ""
+    for marker in ("invalid login", "invalid email", "incorrect", "wrong password", "invalid credentials"):
+        if marker in body:
+            return marker
+    return ""
+
+
+def _ensure_session(page, email: str, password: str) -> tuple[bool, str]:
+    try:
+        page.goto(BASE_URL, wait_until="domcontentloaded")
+    except Exception:
+        return False, "browser_error"
+    page.wait_for_timeout(4500)
+    if _looks_logged_in(page):
+        return True, email
+    try:
+        page.goto(LOGIN_URL, wait_until="domcontentloaded")
+    except Exception:
+        return False, "browser_error"
+    page.wait_for_timeout(4000)
+    if _looks_logged_in(page):
+        return True, email
+    em_input = page.query_selector("input[type=email]")
+    pw_input = page.query_selector("input[type=password]")
+    if not em_input or not pw_input:
+        return False, "website_changed"
+    try:
+        em_input.fill(email)
+        pw_input.fill(password)
+    except Exception:
+        return False, "website_changed"
+    clicked = False
+    for btn in page.query_selector_all("button"):
+        try:
+            txt = (btn.inner_text() or "").strip().lower()
+        except Exception:
+            continue
+        if txt == "login" and btn.is_visible():
+            try:
+                btn.click()
+                clicked = True
+                break
+            except Exception:
+                continue
+    if not clicked:
+        return False, "website_changed"
+    for _ in range(10):
+        page.wait_for_timeout(2000)
+        if _looks_logged_in(page):
+            return True, email
+        if _login_error_text(page):
+            return False, "login_failed"
+    if "/auth/login" in (page.url or ""):
+        return False, "login_failed"
+    return False, "website_changed"
+
+
+def _turnstile_token(page) -> str:
+    tok = page.query_selector("input[name='cf-turnstile-response']")
+    if not tok:
+        return ""
+    try:
+        return str(tok.evaluate("e => e.value || ''") or "")
+    except Exception:
+        return ""
+
+
+def _try_click_turnstile(page) -> None:
+    """Intenta pulsar el checkbox 'Verify you are human' del widget."""
+    try:
+        box = page.evaluate(
+            """() => {
+                const inp = document.querySelector("input[name='cf-turnstile-response']");
+                if (!inp) return null;
+                let host = inp.parentElement;
+                while (host && host.offsetHeight < 20) host = host.parentElement;
+                if (!host) return null;
+                const r = host.getBoundingClientRect();
+                return {x: r.x, y: r.y, w: r.width, h: r.height};
+            }"""
+        )
+    except Exception:
+        return
+    if not box:
+        return
+    try:
+        x = float(box["x"]) + 30
+        y = float(box["y"]) + float(box["h"]) / 2
+        page.mouse.move(x - 7, y - 4)
+        page.wait_for_timeout(350)
+        page.mouse.click(x, y)
+    except Exception:
+        pass
+
+
+def _wait_turnstile(page, wait_s: int = TURNSTILE_WAIT_S) -> bool:
+    deadline = time.time() + wait_s
+    while time.time() < deadline:
+        if _turnstile_token(page):
+            return True
+        _try_click_turnstile(page)
+        page.wait_for_timeout(3000)
+    return bool(_turnstile_token(page))
+
+
+def _fill_upload_title(page, title: str) -> bool:
+    for el in page.query_selector_all("input[type=text]"):
+        ph = (el.get_attribute("placeholder") or "").lower()
+        if "search" in ph:
+            continue
+        try:
+            el.fill(title)
+            return True
+        except Exception:
+            continue
+    return False
+
+
+def _browser_upload(page, path: Path, title: str, description: str) -> tuple[bool, str]:
+    try:
+        page.goto(UPLOAD_URL, wait_until="domcontentloaded")
+    except Exception:
+        return False, "browser_error"
+    page.wait_for_timeout(5000)
+    file_input = page.query_selector("input[type=file]")
+    if not file_input:
+        return False, "session_dead" if "/auth/login" in (page.url or "") else "website_changed"
+    try:
+        file_input.set_input_files(str(path))
+    except Exception:
+        return False, "website_changed"
+    page.wait_for_timeout(1200)
+    if not _fill_upload_title(page, title):
+        return False, "website_changed"
+    try:
+        page.fill("textarea", description or title)
+    except Exception:
+        pass
+    if not _wait_turnstile(page):
+        return False, "captcha"
+    btn = None
+    for cand in page.query_selector_all("button"):
+        try:
+            txt = (cand.inner_text() or "").strip().lower()
+        except Exception:
+            continue
+        if "upload video" in txt:
+            btn = cand
+            break
+    if not btn:
+        return False, "website_changed"
+    try:
+        for _ in range(20):
+            if not btn.evaluate("e => e.disabled"):
+                break
+            page.wait_for_timeout(1000)
+        btn.click()
+    except Exception:
+        return False, "website_changed"
+    deadline = time.time() + UPLOAD_WAIT_S
+    while time.time() < deadline:
+        page.wait_for_timeout(4000)
+        url = str(page.url or "")
+        if "/v/" in url:
+            return True, url
+        try:
+            body = " ".join((page.inner_text("body") or "").split()).lower()
+        except Exception:
+            body = ""
+        if "upload failed" in body or ("error" in body and "upload" in body):
+            return False, "upload_failed"
+        if "uploaded successfully" in body or "upload complete" in body:
+            return True, url or "https://d.tube/"
+    return False, "upload_timeout"
+
+
+def keep_alive_account(account: dict[str, Any]) -> tuple[bool, str]:
+    oid = str(account.get("id") or "").strip()
+    em = str(account.get("login") or "").strip()
+    pw = str(account.get("secret") or "").strip()
+    if not oid:
+        return False, "need_saved_account"
+    return _with_browser(oid, lambda page: _ensure_session(page, em, pw))
+
+
+def pick_next_keepalive(*, except_id: str = "", soon: bool = False) -> str:
+    import random
+    from datetime import timedelta, timezone as _tz
+
+    import publish_schedule
+
+    now_local = publish_schedule.now_publish_tz()
+    if soon:
+        candidate = now_local + timedelta(
+            hours=random.randint(RETRY_HOURS_MIN, RETRY_HOURS_MAX),
+            minutes=random.randint(0, 59),
+        )
+    else:
+        days = random.randint(KEEP_DAYS_MIN, KEEP_DAYS_MAX)
+        candidate = (now_local + timedelta(days=days)).replace(
+            hour=random.randint(0, 23),
+            minute=random.randint(0, 59),
+            second=0,
+            microsecond=0,
+        )
+        if candidate <= now_local:
+            candidate += timedelta(days=1)
+    return candidate.astimezone(_tz.utc).isoformat()
+
+
+def run_daily_keep_alive_if_due() -> None:
+    """Reconexión automática: visita d.tube y reloguea si la sesión caducó."""
+    from datetime import datetime, timezone as _tz
+
+    import db
+
+    now = datetime.now(_tz.utc)
+    due: list[dict[str, Any]] = []
+    for row in db.list_chain_accounts_raw("dtube"):
+        oid = str(row.get("id") or "").strip()
+        if not oid or not is_email_account(str(row.get("login") or "")):
+            continue
+        nxt = str(row.get("next_keepalive_at") or "").strip()
+        if not nxt:
+            db.update_chain_next_keepalive(oid, pick_next_keepalive(except_id=oid))
+            continue
+        try:
+            parsed = datetime.fromisoformat(nxt)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=_tz.utc)
+        except ValueError:
+            continue
+        if parsed <= now:
+            due.append(row)
+    if not due:
+        return
+    due.sort(key=lambda r: str(r.get("next_keepalive_at") or ""))
+    row = due[0]
+    oid = str(row.get("id") or "")
+    ok, code = keep_alive_account(row)
+    soon = (not ok) and code in {"session_dead", "login_failed", "browser_error"}
+    db.update_chain_browser_session(
+        oid,
+        session_ok=ok,
+        last_ok_at=now.isoformat() if ok else str(row.get("last_ok_at") or ""),
+        last_error="" if ok else code,
+        next_keepalive_at=pick_next_keepalive(except_id=oid, soon=soon),
+    )
+
+
+def _browser_probe(login: str, secret: str, account_id: str) -> tuple[bool, str]:
+    em = (login or "").strip()
+    pw = (secret or "").strip()
+    if not em or not pw:
+        return False, "email_password_required"
+    oid = (account_id or "").strip()
+    if not oid:
+        return False, "need_saved_account"
+    return _with_browser(oid, lambda page: _ensure_session(page, em, pw))
+
+
+def _publish_via_browser(
+    *,
+    file_path: Path,
+    title: str,
+    description: str,
+    lang: str,
+    account: dict[str, Any],
+) -> tuple[bool, str]:
+    from i18n import t
+
+    oid = str(account.get("id") or "").strip()
+    em = str(account.get("login") or "").strip()
+    pw = str(account.get("secret") or "").strip()
+    if not oid or not em or not pw:
+        return False, t("pub.dtube.no_account", lang)
+    path = Path(file_path)
+    label = (title or "").strip() or path.stem
+    desc = (description or "").strip()
+
+    def body(page) -> tuple[bool, str]:
+        ok, code = _ensure_session(page, em, pw)
+        if not ok:
+            return False, code
+        return _browser_upload(page, path, label, desc)
+
+    ok, code = _with_browser(oid, body, lock_wait_s=PUBLISH_LOCK_S)
+    if ok:
+        return True, t("pub.dtube.ok", lang, url=code or "https://d.tube/")
+    key = {
+        "session_dead": "dtube.err_session",
+        "captcha": "dtube.err_captcha",
+        "website_changed": "dtube.err_website",
+        "browser_busy": "dtube.err_busy",
+        "browser_error": "dtube.err_browser",
+        "playwright_missing": "bilibili_tv.err_playwright",
+        "login_failed": "dtube.err_login",
+        "upload_failed": "dtube.err_upload",
+        "upload_timeout": "dtube.err_upload",
+    }.get((code or "").strip())
+    if key:
+        return False, t(key, lang)
+    return False, t("pub.dtube.upload_fail", lang, error=(code or "upload")[:180])
+
+
 def publish_video(
     *,
     file_path: Path,
@@ -426,6 +812,14 @@ def publish_video(
         return False, t("pub.dtube.file_missing", lang)
     if path.suffix.lower() not in VIDEO_EXT:
         return False, t("pub.dtube.bad_video", lang)
+    if is_email_account(str(account.get("login") or "")):
+        return _publish_via_browser(
+            file_path=path,
+            title=title,
+            description=description,
+            lang=lang,
+            account=account,
+        )
     user = hive_username(str(account.get("login") or ""))
     wif = str(account.get("secret") or "").strip()
     if not user or not wif:
