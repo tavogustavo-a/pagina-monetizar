@@ -101,7 +101,15 @@ def with_persistent_browser(
     ready, err = playwright_ready()
     if not ready:
         return False, err
-    got = _BROWSER_LOCK.acquire(timeout=lock_wait_s)
+    got = _BROWSER_LOCK.acquire(timeout=0)
+    if not got:
+        try:
+            import platform_publish
+
+            platform_publish.note_waiting_browser()
+        except Exception:
+            pass
+        got = _BROWSER_LOCK.acquire(timeout=lock_wait_s)
     if not got:
         return False, "browser_busy"
     try:

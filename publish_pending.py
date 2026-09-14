@@ -86,8 +86,14 @@ def attach(log_id: str) -> None:
             time.sleep(CHECK_INTERVAL_SECONDS)
             try:
                 # El hilo no hereda el ContextVar del proxy: se reactiva aquí.
-                with proxy_util.using_proxy(proxy_url):
-                    status, message = check()
+                # No retener el hueco 30 min: solo el GET de estado.
+                import platform_publish
+
+                with platform_publish.hold_named_proxy(proxy_url, timeout=8) as held:
+                    if not held:
+                        continue
+                    with proxy_util.using_proxy(proxy_url):
+                        status, message = check()
             except Exception:
                 continue
             if status in ("ok", "fail"):
@@ -118,16 +124,24 @@ def resume_job(platform_id: str, payload: dict[str, Any]) -> tuple[str, str]:
     pid = (platform_id or "").strip()
     data = payload if isinstance(payload, dict) else {}
     proxy_url = str(data.get("proxy_url") or "")
+    import platform_publish
+
     if pid == "instagram":
         import instagram_publish
 
-        with proxy_util.using_proxy(proxy_url):
-            return instagram_publish.resume_pending(data)
+        with platform_publish.hold_named_proxy(proxy_url, timeout=8) as held:
+            if not held:
+                return "pending", ""
+            with proxy_util.using_proxy(proxy_url):
+                return instagram_publish.resume_pending(data)
     if pid == "youtube":
         import youtube_publish
 
-        with proxy_util.using_proxy(proxy_url):
-            return youtube_publish.resume_pending(data)
+        with platform_publish.hold_named_proxy(proxy_url, timeout=8) as held:
+            if not held:
+                return "pending", ""
+            with proxy_util.using_proxy(proxy_url):
+                return youtube_publish.resume_pending(data)
     return "pending", ""
 
 

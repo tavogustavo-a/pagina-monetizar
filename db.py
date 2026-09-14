@@ -845,6 +845,8 @@ def _init_db_schema() -> None:
     _ensure_support_guest_table()
     _ensure_proxies_table()
     _ensure_proxy_links_table()
+    _ensure_proxy_platform_checks_table()
+    _ensure_proxy_account_sticky_table()
     _ensure_payment_methods_table()
     _ensure_purchases_table()
     _ensure_purchases_wallet_columns()
@@ -8727,6 +8729,8 @@ def list_publication_log_groups(
         pending_n = sum(1 for r in cluster if r.get("status") == "pending")
         if fail_n and (ok_n or pending_n):
             status = "mixed"
+        elif pending_n and ok_n:
+            status = "mixed"
         elif fail_n:
             status = "fail"
         elif pending_n:
@@ -9848,6 +9852,43 @@ def _ensure_proxy_links_table() -> None:
         conn.close()
 
 
+def _ensure_proxy_platform_checks_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS proxy_platform_checks (
+                proxy_id TEXT NOT NULL,
+                platform_id TEXT NOT NULL,
+                ok INTEGER NOT NULL,
+                checked_at TEXT NOT NULL,
+                PRIMARY KEY (proxy_id, platform_id),
+                FOREIGN KEY (proxy_id) REFERENCES proxies(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _ensure_proxy_account_sticky_table() -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS proxy_account_sticky (
+                account_link_id TEXT PRIMARY KEY,
+                proxy_id TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _normalize_proxy_link_tokens(links: list[str] | None) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
@@ -10153,17 +10194,42 @@ def get_proxy(proxy_id: str) -> dict[str, Any] | None:
         conn.close()
 
 
-def get_active_proxy_url_for_account(account_link_id: str | None) -> str:
-    """Proxy activo vinculado a la cuenta de servidores; vacío si no hay."""
+def _proxy_row_url(row) -> str:
     import proxy_util
 
+    data = {
+        "protocol": row["protocol"] or "http",
+        "host": row["host"] or "",
+        "port": int(row["port"] or 0),
+        "username": row["username"] or "",
+        "password": row["password"] or "",
+    }
+    stored = str(row["proxy_url"] or "").strip()
+    return stored or proxy_util.build_proxy_url(data)
+
+
+def _proxy_url_from_publish_slot() -> str | None:
+    """None si este hilo no tiene hueco; si lo tiene, la URL asignada (puede ir vacía)."""
+    try:
+        import proxy_util
+
+        bound, url = proxy_util.bound_proxy_url()
+    except Exception:
+        return None
+    if bound:
+        return url
+    return None
+
+
+def list_active_proxies_for_account(account_link_id: str | None) -> list[dict[str, str]]:
+    """Proxies activos vinculados a la cuenta, uno por fila (para publicar en paralelo)."""
     lid = (account_link_id or "").strip()
     if not lid:
-        return ""
+        return []
     seed_admin_if_missing()
     conn = _connect()
     try:
-        row = conn.execute(
+        rows = conn.execute(
             """
             SELECT p.*
             FROM proxy_links l
@@ -10171,27 +10237,220 @@ def get_active_proxy_url_for_account(account_link_id: str | None) -> str:
             WHERE l.kind = 'account'
               AND l.ref_id = ?
               AND p.active = 1
-            ORDER BY p.updated_at DESC
-            LIMIT 1
+            ORDER BY p.created_at ASC, p.id ASC
             """,
             (lid,),
+        ).fetchall()
+        out: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for row in rows:
+            pid = str(row["id"] or "").strip()
+            if not pid or pid in seen:
+                continue
+            url = _proxy_row_url(row).strip()
+            if not url:
+                continue
+            seen.add(pid)
+            out.append(
+                {
+                    "id": pid,
+                    "url": url,
+                    "last_check_ip": str(row["last_check_ip"] or "").strip(),
+                }
+            )
+        return out
+    finally:
+        conn.close()
+
+
+def get_active_proxy_url_for_account(account_link_id: str | None) -> str:
+    """Proxy activo vinculado a la cuenta de servidores; vacío si no hay."""
+    slotted = _proxy_url_from_publish_slot()
+    if slotted is not None:
+        return slotted
+    lid = (account_link_id or "").strip()
+    if not lid:
+        return ""
+    proxies = list_active_proxies_for_account(lid)
+    if not proxies:
+        return ""
+    sticky = ensure_sticky_proxy(lid)
+    if sticky:
+        return (sticky.get("url") or "").strip()
+    return (proxies[0].get("url") or "").strip()
+
+
+def list_all_active_proxies() -> list[dict[str, str]]:
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM proxies WHERE active = 1 ORDER BY created_at ASC, id ASC"
+        ).fetchall()
+        out: list[dict[str, str]] = []
+        for row in rows:
+            pid = str(row["id"] or "").strip()
+            if not pid:
+                continue
+            url = _proxy_row_url(row).strip()
+            if not url:
+                continue
+            out.append(
+                {
+                    "id": pid,
+                    "url": url,
+                    "last_check_ip": str(row["last_check_ip"] or "").strip(),
+                }
+            )
+        return out
+    finally:
+        conn.close()
+
+
+def find_proxy_id_for_url(proxy_url: str) -> str:
+    want = (proxy_url or "").strip()
+    if not want:
+        return ""
+    for item in list_all_active_proxies():
+        if (item.get("url") or "").strip() == want:
+            return str(item.get("id") or "")
+    return ""
+
+
+def get_sticky_proxy_id(account_link_id: str | None) -> str:
+    lid = (account_link_id or "").strip()
+    if not lid:
+        return ""
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT proxy_id FROM proxy_account_sticky WHERE account_link_id = ?",
+            (lid,),
+        ).fetchone()
+        return str(row["proxy_id"] or "").strip() if row else ""
+    finally:
+        conn.close()
+
+
+def set_sticky_proxy_id(account_link_id: str | None, proxy_id: str) -> None:
+    lid = (account_link_id or "").strip()
+    pid = (proxy_id or "").strip()
+    if not lid or not pid:
+        return
+    seed_admin_if_missing()
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            INSERT INTO proxy_account_sticky (account_link_id, proxy_id, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(account_link_id) DO UPDATE SET proxy_id = excluded.proxy_id,
+                updated_at = excluded.updated_at
+            """,
+            (lid, pid, now),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def ensure_sticky_proxy(account_link_id: str | None) -> dict[str, str] | None:
+    """Proxy fijo de la cuenta para Odysee/DTube/Bilibili (misma IP de sesión)."""
+    proxies = list_active_proxies_for_account(account_link_id)
+    if not proxies:
+        return None
+    by_id = {str(p.get("id") or ""): p for p in proxies}
+    sticky = get_sticky_proxy_id(account_link_id)
+    if sticky and sticky in by_id:
+        return by_id[sticky]
+    chosen = proxies[0]
+    set_sticky_proxy_id(account_link_id, str(chosen.get("id") or ""))
+    return chosen
+
+
+def save_proxy_platform_checks(proxy_id: str, results: list[dict]) -> None:
+    pid = (proxy_id or "").strip()
+    if not pid:
+        return
+    seed_admin_if_missing()
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    try:
+        for item in results or []:
+            plat = str(item.get("id") or "").strip()
+            if not plat:
+                continue
+            conn.execute(
+                """
+                INSERT INTO proxy_platform_checks (proxy_id, platform_id, ok, checked_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(proxy_id, platform_id) DO UPDATE SET
+                    ok = excluded.ok, checked_at = excluded.checked_at
+                """,
+                (pid, plat, 1 if item.get("ok") else 0, now),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def list_proxy_platform_checks(proxy_id: str) -> list[dict[str, Any]]:
+    pid = (proxy_id or "").strip()
+    if not pid:
+        return []
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT platform_id, ok, checked_at
+            FROM proxy_platform_checks
+            WHERE proxy_id = ?
+            ORDER BY platform_id
+            """,
+            (pid,),
+        ).fetchall()
+        return [
+            {
+                "id": str(r["platform_id"] or ""),
+                "ok": bool(r["ok"]),
+                "checked_at": str(r["checked_at"] or ""),
+            }
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
+def proxy_platform_check_ok(proxy_id: str, platform_id: str) -> bool | None:
+    """True/False si hay prueba guardada; None si nunca se testeó esa red."""
+    pid = (proxy_id or "").strip()
+    plat = (platform_id or "").strip()
+    if not pid or not plat:
+        return None
+    seed_admin_if_missing()
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT ok FROM proxy_platform_checks
+            WHERE proxy_id = ? AND platform_id = ?
+            """,
+            (pid, plat),
         ).fetchone()
         if not row:
-            return ""
-        data = {
-            "protocol": row["protocol"] or "http",
-            "host": row["host"] or "",
-            "port": int(row["port"] or 0),
-            "username": row["username"] or "",
-            "password": row["password"] or "",
-        }
-        stored = str(row["proxy_url"] or "").strip()
-        return stored or proxy_util.build_proxy_url(data)
+            return None
+        return bool(row["ok"])
     finally:
         conn.close()
 
 
 def get_active_proxy_url_for_account_name(name: str) -> str:
+    slotted = _proxy_url_from_publish_slot()
+    if slotted is not None:
+        return slotted
     label = (name or "").strip()
     if not label:
         return ""
@@ -10215,6 +10474,9 @@ def get_active_proxy_url_for_account_name(name: str) -> str:
 
 
 def get_active_proxy_url_for_source(source_kind: str, source_ref: str) -> str:
+    slotted = _proxy_url_from_publish_slot()
+    if slotted is not None:
+        return slotted
     kind = (source_kind or "").strip()
     ref = (source_ref or "").strip()
     if not kind or not ref:
@@ -10238,6 +10500,9 @@ def get_active_proxy_url_for_source(source_kind: str, source_ref: str) -> str:
 
 def get_active_proxy_url_for_chain(account_id: str = "", link_name: str = "") -> str:
     """Proxy de la cuenta de Servidores (KIRTH MELO, etc.), no solo el id interno de Odysee."""
+    slotted = _proxy_url_from_publish_slot()
+    if slotted is not None:
+        return slotted
     aid = (account_id or "").strip()
     if aid:
         url = get_active_proxy_url_for_source("chain", aid)

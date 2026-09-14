@@ -127,16 +127,19 @@ def test_platform(
         def _run():
             return testers[pid](lang)
 
-        with proxy_util.using_proxy(proxy_url):
-            try:
-                ok, message = proxy_util.run_slow_retry(_run)
-            except Exception as e:
-                nice = proxy_util.humanize_network_failure(e, lang)
-                ok, message = False, nice or t("api.err.proxy" if proxy_url else "api.err.network", lang)
-            if not ok:
-                nice = proxy_util.humanize_network_failure(message, lang)
-                if nice:
-                    message = nice
+        import platform_publish
+
+        with platform_publish.hold_named_proxy(proxy_url, timeout=60):
+            with proxy_util.using_proxy(proxy_url):
+                try:
+                    ok, message = proxy_util.run_slow_retry(_run)
+                except Exception as e:
+                    nice = proxy_util.humanize_network_failure(e, lang)
+                    ok, message = False, nice or t("api.err.proxy" if proxy_url else "api.err.network", lang)
+                if not ok:
+                    nice = proxy_util.humanize_network_failure(message, lang)
+                    if nice:
+                        message = nice
         if save_result:
             db.save_platform_test_result(pid, ok, message)
         return {"ok": ok, "message": message, **db.get_platform_credentials_public(pid)}
@@ -173,19 +176,22 @@ def _verify_account_platform_with_proxy(
         return _verify_account_platform_inner(platform_id, account_link_id, lang)
 
     proxy_url = db.get_active_proxy_url_for_account(account_link_id)
-    with proxy_util.using_proxy(proxy_url):
-        try:
-            return proxy_util.run_slow_retry(
-                lambda: _verify_account_platform_inner(platform_id, account_link_id, lang)
-            )
-        except Exception as e:
-            from i18n import t
+    import platform_publish
 
-            nice = proxy_util.humanize_network_failure(e, lang)
-            return {
-                "ok": False,
-                "message": nice or t("api.err.proxy" if proxy_url else "api.err.network", lang),
-            }
+    with platform_publish.hold_named_proxy(proxy_url, timeout=60):
+        with proxy_util.using_proxy(proxy_url):
+            try:
+                return proxy_util.run_slow_retry(
+                    lambda: _verify_account_platform_inner(platform_id, account_link_id, lang)
+                )
+            except Exception as e:
+                from i18n import t
+
+                nice = proxy_util.humanize_network_failure(e, lang)
+                return {
+                    "ok": False,
+                    "message": nice or t("api.err.proxy" if proxy_url else "api.err.network", lang),
+                }
 
 
 def _verify_account_platform_inner(

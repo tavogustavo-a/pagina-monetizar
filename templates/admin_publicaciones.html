@@ -8,6 +8,7 @@
     <div class="dashboard dashboard--pub">
       {% if success %}
       <div class="alert-ok">{{ success }}</div>
+      <script>window._pubStartLive = true;</script>
       {% endif %}
       {% if error %}
       <div class="alert-error">{{ error }}</div>
@@ -915,7 +916,11 @@
             var ok = !!(res.data && res.data.ok);
             var message = (res.data && res.data.message) || "";
             finishPubJob(job, ok, message);
-            if (window.refreshPubLogs) window.refreshPubLogs();
+            if (ok && res.data && res.data.live && window.startPubLogLive) {
+              window.startPubLogLive();
+            } else if (window.refreshPubLogs) {
+              window.refreshPubLogs();
+            }
           })
           .catch(function (err) {
             if (job.aborted || (err && err.name === "AbortError")) return;

@@ -458,10 +458,14 @@
             if (searchClear) searchClear.hidden = !hasQuery;
           }
 
-          function renderLogs(next) {
+          function groupsHavePending(list) {
+            return (list || []).some(function (g) { return (g.pending_n || 0) > 0; });
+          }
+
+          function renderLogs(next, resetPage) {
             groups = next || [];
             if (dataEl) dataEl.textContent = JSON.stringify(groups);
-            logState.page = 1;
+            if (resetPage) logState.page = 1;
             applyView();
           }
 
@@ -542,6 +546,17 @@
             if (e.key === "Escape" && modal.classList.contains("is-open")) closeLog();
           });
 
+          var liveTimer = null;
+          var liveIdle = 0;
+
+          function stopPubLogLive() {
+            if (liveTimer) {
+              clearInterval(liveTimer);
+              liveTimer = null;
+            }
+            liveIdle = 0;
+          }
+
           window.refreshPubLogs = function () {
             return fetch("/admin/api/publicaciones/logs", {
               credentials: "same-origin",
@@ -549,9 +564,29 @@
             })
               .then(function (r) { return r.json(); })
               .then(function (data) {
-                if (data && data.ok && Array.isArray(data.logs)) renderLogs(data.logs);
+                if (data && data.ok && Array.isArray(data.logs)) {
+                  renderLogs(data.logs, false);
+                  if (window.renderPendingRetry) window.renderPendingRetry(data.pending || []);
+                  var pendingN = (data.pending && data.pending.length) || 0;
+                  if (groupsHavePending(data.logs) || pendingN) {
+                    liveIdle = 0;
+                  } else if (liveTimer) {
+                    liveIdle += 1;
+                    if (liveIdle >= 2) stopPubLogLive();
+                  }
+                }
               })
               .catch(function () {});
+          };
+
+          window.startPubLogLive = function () {
+            liveIdle = 0;
+            if (window.refreshPubLogs) window.refreshPubLogs();
+            if (liveTimer) return;
+            liveTimer = setInterval(function () {
+              if (document.hidden) return;
+              if (window.refreshPubLogs) window.refreshPubLogs();
+            }, 2000);
           };
 
           var searchTimer = null;
@@ -597,5 +632,8 @@
             });
           }
           applyView();
+          if ((groupsHavePending(groups) || window._pubStartLive) && window.startPubLogLive) {
+            window.startPubLogLive();
+          }
         })();
       </script>

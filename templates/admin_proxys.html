@@ -125,6 +125,21 @@
   </div>
 </div>
 
+<div id="proxy-servers-modal" class="equipo-modal" aria-hidden="true">
+  <div class="equipo-modal__backdrop" data-close-proxy-servers></div>
+  <div class="equipo-modal__panel server-modal__panel" role="dialog" aria-modal="true" aria-labelledby="proxy-servers-modal-title">
+    <div class="equipo-modal__accent" aria-hidden="true"></div>
+    <div class="equipo-modal__head">
+      <div><h2 id="proxy-servers-modal-title">{{ t('proxys.test_servers_title') }}</h2></div>
+      <button type="button" class="equipo-modal__close" data-close-proxy-servers aria-label="{{ t('servers.modal_close') }}">×</button>
+    </div>
+    <div class="server-modal__body">
+      <p class="sub" id="proxy-servers-summary">{{ t('proxys.testing_servers') }}</p>
+      <ul id="proxy-servers-list" class="proxys-servers-list" hidden></ul>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   var list = document.getElementById("proxys-list");
@@ -144,6 +159,9 @@
   var linksSuggest = document.getElementById("proxy-links-suggest");
   var deleteModal = document.getElementById("proxy-delete-modal");
   var deleteConfirm = document.getElementById("proxy-delete-confirm");
+  var serversModal = document.getElementById("proxy-servers-modal");
+  var serversSummary = document.getElementById("proxy-servers-summary");
+  var serversList = document.getElementById("proxy-servers-list");
   var pendingDeleteId = "";
   var editingId = "";
   var searchTimer = null;
@@ -151,12 +169,16 @@
   var selectedLinks = [];
   var lastFormTrigger = null;
   var lastDeleteTrigger = null;
+  var lastServersTrigger = null;
 
   var i18n = {
     modalCreate: {{ t('proxys.modal_create') | tojson }},
     modalEdit: {{ t('proxys.modal_edit') | tojson }},
     test: {{ t('proxys.test') | tojson }},
     testing: {{ t('proxys.testing') | tojson }},
+    testServers: {{ t('proxys.test_servers') | tojson }},
+    testingServers: {{ t('proxys.testing_servers') | tojson }},
+    testServersTitle: {{ t('proxys.test_servers_title') | tojson }},
     edit: {{ t('proxys.edit') | tojson }},
     delete: {{ t('proxys.delete') | tojson }},
     checkOk: {{ t('proxys.check_ok') | tojson }},
@@ -178,6 +200,10 @@
   var ICON_TEST =
     '<svg class="icon-test" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
     '<path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 0 1 0 1.971l-11.54 6.347a1.125 1.125 0 0 1-1.667-.985V5.653Z" />' +
+    "</svg>";
+  var ICON_SERVERS =
+    '<svg class="icon-servers" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
+    '<path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 003-3m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />' +
     "</svg>";
 
   function escapeHtml(value) {
@@ -244,6 +270,7 @@
     if (!el) return;
     if (el === formModal) lastFormTrigger = trigger || lastFormTrigger;
     if (el === deleteModal) lastDeleteTrigger = trigger || lastDeleteTrigger;
+    if (el === serversModal) lastServersTrigger = trigger || lastServersTrigger;
     el.setAttribute("aria-hidden", "false");
     el.classList.add("is-open");
     document.body.style.overflow = "hidden";
@@ -253,7 +280,8 @@
     if (!el) return;
     var returnFocus =
       el === formModal ? lastFormTrigger :
-      el === deleteModal ? lastDeleteTrigger : null;
+      el === deleteModal ? lastDeleteTrigger :
+      el === serversModal ? lastServersTrigger : null;
     releaseModalFocus(el, returnFocus);
     blurModalFocus(el);
     el.classList.remove("is-open");
@@ -418,6 +446,14 @@
       testBtn.innerHTML = ICON_TEST;
       testBtn.addEventListener("click", function () { testProxy(p.id, testBtn); });
 
+      var serversBtn = document.createElement("button");
+      serversBtn.type = "button";
+      serversBtn.className = "btn btn-ghost btn-sm proxys-row__icon-btn proxys-row__test-servers";
+      serversBtn.setAttribute("aria-label", i18n.testServers);
+      serversBtn.setAttribute("title", i18n.testServers);
+      serversBtn.innerHTML = ICON_SERVERS;
+      serversBtn.addEventListener("click", function () { testProxyServers(p.id, serversBtn); });
+
       var editBtn = document.createElement("button");
       editBtn.type = "button";
       editBtn.className = "btn btn-ghost btn-sm proxys-row__icon-btn proxys-row__edit";
@@ -458,6 +494,7 @@
       toggleWrap.appendChild(toggleUi);
 
       actions.appendChild(testBtn);
+      actions.appendChild(serversBtn);
       actions.appendChild(editBtn);
       actions.appendChild(delBtn);
       actions.appendChild(toggleWrap);
@@ -466,6 +503,56 @@
       li.appendChild(actions);
       list.appendChild(li);
     });
+  }
+
+  function renderServers(platforms) {
+    if (!serversList) return;
+    serversList.innerHTML = "";
+    (platforms || []).forEach(function (item) {
+      var li = document.createElement("li");
+      li.className = "proxys-servers-list__item" + (item.ok ? " is-ok" : " is-fail");
+      var name = document.createElement("span");
+      name.className = "proxys-servers-list__name";
+      name.textContent = item.name || item.id || "";
+      var badge = document.createElement("span");
+      badge.className = "proxys-row__check " + (item.ok ? "proxys-row__check--ok" : "proxys-row__check--fail");
+      badge.textContent = item.ok ? i18n.checkOk : i18n.checkFail;
+      li.appendChild(name);
+      li.appendChild(badge);
+      serversList.appendChild(li);
+    });
+    serversList.hidden = !(platforms && platforms.length);
+  }
+
+  function testProxyServers(id, btn) {
+    if (!id) return;
+    var prev = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = "…";
+    if (serversSummary) serversSummary.textContent = i18n.testingServers;
+    renderServers([]);
+    if (serversList) serversList.hidden = true;
+    openModal(serversModal, btn);
+    fetch("/admin/api/proxys/" + encodeURIComponent(id) + "/test-servers", {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (serversSummary) {
+          serversSummary.textContent = (data && data.message) || i18n.checkFail;
+        }
+        renderServers((data && data.platforms) || []);
+        if (data && data.message) showMsg(data.message, !!(data && data.ok));
+      })
+      .catch(function () {
+        if (serversSummary) serversSummary.textContent = i18n.checkFail;
+        showMsg(i18n.checkFail, false);
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.innerHTML = prev;
+      });
   }
 
   function testProxy(id, btn) {
@@ -595,6 +682,9 @@
       closeModal(deleteModal);
     });
   });
+  document.querySelectorAll("[data-close-proxy-servers]").forEach(function (el) {
+    el.addEventListener("click", function () { closeModal(serversModal); });
+  });
 
   document.addEventListener("keydown", function (e) {
     if (e.key !== "Escape") return;
@@ -605,6 +695,10 @@
     if (deleteModal && deleteModal.classList.contains("is-open")) {
       pendingDeleteId = "";
       closeModal(deleteModal);
+      return;
+    }
+    if (serversModal && serversModal.classList.contains("is-open")) {
+      closeModal(serversModal);
     }
   });
 

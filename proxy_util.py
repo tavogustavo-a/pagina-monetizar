@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 import socket
+import time
 import urllib.error
 import urllib.request
 from contextlib import contextmanager
@@ -170,6 +171,7 @@ def _proxy_handler_url(data: dict) -> str:
 
 
 _active_proxy_url: ContextVar[str] = ContextVar("active_proxy_url", default="")
+_proxy_slot_bound: ContextVar[bool] = ContextVar("proxy_slot_bound", default=False)
 _orig_urlopen = urllib.request.urlopen
 _urlopen_patched = False
 
@@ -177,6 +179,11 @@ _urlopen_patched = False
 def active_proxy_url() -> str:
     """URL del proxy activo en el contexto de publicación actual ('' si no hay)."""
     return (_active_proxy_url.get() or "").strip()
+
+
+def bound_proxy_url() -> tuple[bool, str]:
+    """Si este hilo ya tomó un hueco de publicación, (True, url asignada)."""
+    return bool(_proxy_slot_bound.get()), active_proxy_url()
 
 
 def proxy_handler_for(proxy_url: str):
@@ -250,13 +257,21 @@ def resolve_urlopen_timeout(timeout, data=None) -> float:
 
 
 def is_retryable_proxy_code(code: str) -> bool:
-    return code in {"timeout", "reset", "refused", "unreachable"}
+    return code in {"timeout", "reset", "refused", "unreachable", "socks_fail"}
+
+
+def is_safe_upload_retry(raw: str | BaseException) -> bool:
+    """Reintenta cortes de conexión. No reintenta timeout (el video pudo haberse enviado)."""
+    return classify_proxy_error(raw) in {"reset", "refused", "unreachable", "socks_fail"}
+
+
+def is_slow_proxy_failure(raw: str | BaseException) -> bool:
+    """True si conviene reintentar la subida (proxy lento o cortó)."""
+    return is_safe_upload_retry(raw)
 
 
 def run_slow_retry(fn, *, attempts: int = 2, pause_s: float = 2.5):
     """Un reintento si el proxy se queda colgado (comprobaciones, no subidas)."""
-    import time
-
     last: BaseException | None = None
     tries = max(1, int(attempts))
     for i in range(tries):
@@ -269,6 +284,58 @@ def run_slow_retry(fn, *, attempts: int = 2, pause_s: float = 2.5):
             time.sleep(pause_s)
     assert last is not None
     raise last
+
+
+def run_upload_retry(fn, *, attempts: int = 2, pause_s: float = 3.0, before_retry=None):
+    """Segundo intento solo si el proxy cortó. Timeout no se reintenta (evitar doble post)."""
+    last: tuple[bool, str] | None = None
+    tries = max(2, int(attempts))
+    for i in range(tries):
+        try:
+            ok, message = fn()
+        except Exception as e:
+            last = (False, str(e))
+            if i + 1 < tries and is_safe_upload_retry(e):
+                time.sleep(pause_s)
+                if before_retry is not None and not before_retry():
+                    raise
+                continue
+            raise
+        last = (bool(ok), str(message or ""))
+        if ok:
+            return last
+        if i + 1 < tries and is_safe_upload_retry(message):
+            time.sleep(pause_s)
+            if before_retry is not None and not before_retry():
+                return last
+            continue
+        return last
+    assert last is not None
+    return last
+    last: tuple[bool, str] | None = None
+    tries = max(2, int(attempts))
+    for i in range(tries):
+        try:
+            ok, message = fn()
+        except Exception as e:
+            last = (False, str(e))
+            if i + 1 < tries and is_slow_proxy_failure(e):
+                time.sleep(pause_s)
+                if before_retry is not None and not before_retry():
+                    raise
+                continue
+            raise
+        last = (bool(ok), str(message or ""))
+        if ok:
+            return last
+        if i + 1 < tries and is_slow_proxy_failure(message):
+            time.sleep(pause_s)
+            if before_retry is not None and not before_retry():
+                return last
+            continue
+        return last
+    assert last is not None
+    return last
 
 
 def humanize_network_failure(raw: str | BaseException, lang: str) -> str:
@@ -297,6 +364,151 @@ def humanize_network_failure(raw: str | BaseException, lang: str) -> str:
     return ""
 
 
+# Host real de cada red (HTTP GET). Cualquier respuesta HTTP = el proxy sí llega.
+PLATFORM_PING_URLS: dict[str, str] = {
+    "tiktok": "https://open.tiktokapis.com/",
+    "youtube": "https://www.googleapis.com/",
+    "instagram": "https://graph.facebook.com/",
+    "facebook": "https://graph.facebook.com/",
+    "x": "https://api.x.com/",
+    "dailymotion": "https://api.dailymotion.com/",
+    "bilibili": "https://member.bilibili.com/",
+    "bilibili_tv": "https://www.bilibili.tv/",
+    "rumble": "https://rumble.com/",
+    "snapchat": "https://adsapi.snapchat.com/",
+    "odysee": "https://api.odysee.com/",
+    "dtube": "https://d.tube/",
+    "doodstream": "https://doodapi.com/",
+    "streamwish": "https://api.streamwish.com/",
+    "filemoon": "https://filemoon.sx/",
+    "mixdrop": "https://api.mixdrop.ag/",
+    "streamtape": "https://api.streamtape.com/",
+    "voe": "https://voe.sx/",
+}
+
+
+def ping_url(url: str, *, timeout: float = 8.0) -> bool:
+    """True si el destino responde por el proxy activo (aunque sea 401/403/404)."""
+    target = (url or "").strip()
+    if not target:
+        return True
+    req = urllib.request.Request(
+        target,
+        method="GET",
+        headers={
+            "User-Agent": "Mozilla/5.0 TuyahoPing/1.0",
+            "Accept": "*/*",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            resp.read(64)
+        return True
+    except urllib.error.HTTPError as e:
+        code = int(getattr(e, "code", 0) or 0)
+        if code == 407:
+            return False
+        return True
+    except (urllib.error.URLError, OSError, TimeoutError, ValueError):
+        return False
+
+
+def ping_platform(
+    platform_id: str,
+    *,
+    attempts: int = 2,
+    timeout: float = 8.0,
+    pause_s: float = 1.2,
+) -> bool:
+    """Ping rápido: intento al inicio y, si falla, otro al final. Sin URL conocida = OK."""
+    import platforms as _platforms
+
+    pid = _platforms.canonical_platform_id(str(platform_id or "").strip())
+    url = PLATFORM_PING_URLS.get(pid) or ""
+    if not url:
+        return True
+    tries = max(1, int(attempts))
+    for i in range(tries):
+        if ping_url(url, timeout=timeout):
+            return True
+        if i + 1 < tries:
+            time.sleep(pause_s)
+    return False
+
+
+def test_proxy_on_platforms(data: dict, *, lang: str = "es") -> dict:
+    """Comprueba si el proxy llega a cada servidor de publicación (ping HTTP)."""
+    import platforms as _platforms
+    from i18n import t
+
+    try:
+        proxy_url = (str(data.get("proxy_url") or "").strip() or build_proxy_url(data))
+    except Exception:
+        return {
+            "ok": False,
+            "error": "invalid_format",
+            "ok_n": 0,
+            "fail_n": 0,
+            "platforms": [],
+        }
+    if not proxy_url:
+        return {
+            "ok": False,
+            "error": "empty",
+            "ok_n": 0,
+            "fail_n": 0,
+            "platforms": [],
+        }
+    pids = [
+        pid
+        for pid in PLATFORM_PING_URLS
+        if _platforms.is_publish_enabled(pid)
+    ]
+    results: list[dict[str, object]] = []
+    import platform_publish
+
+    with platform_publish.hold_named_proxy(proxy_url, timeout=8) as held:
+        if not held:
+            return {
+                "ok": False,
+                "error": "busy",
+                "ok_n": 0,
+                "fail_n": 0,
+                "platforms": [],
+            }
+        with using_proxy(proxy_url):
+            for pid in pids:
+                ok = ping_platform(pid, attempts=1, timeout=6.0)
+                results.append(
+                    {
+                        "id": pid,
+                        "ok": ok,
+                        "name": t(f"platform.{pid}", lang),
+                    }
+                )
+            for item in results:
+                if item.get("ok"):
+                    continue
+                time.sleep(0.35)
+                item["ok"] = ping_platform(str(item.get("id") or ""), attempts=1, timeout=6.0)
+    proxy_id = str(data.get("id") or "").strip()
+    if proxy_id:
+        try:
+            import db as _db
+
+            _db.save_proxy_platform_checks(proxy_id, results)
+        except Exception:
+            pass
+    ok_n = sum(1 for row in results if row.get("ok"))
+    fail_n = len(results) - ok_n
+    return {
+        "ok": fail_n == 0 and ok_n > 0,
+        "ok_n": ok_n,
+        "fail_n": fail_n,
+        "platforms": results,
+    }
+
+
 def _proxied_urlopen(url, data=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, **kwargs):
     proxy_url = (_active_proxy_url.get() or "").strip()
     if timeout is not socket._GLOBAL_DEFAULT_TIMEOUT or proxy_url:
@@ -321,9 +533,11 @@ def using_proxy(proxy_url: str | None):
     install_urlopen_proxy_hook()
     url = (proxy_url or "").strip()
     token = _active_proxy_url.set(url)
+    bound = _proxy_slot_bound.set(True)
     try:
         yield url
     finally:
+        _proxy_slot_bound.reset(bound)
         _active_proxy_url.reset(token)
 
 

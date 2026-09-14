@@ -137,12 +137,45 @@ def execute_video_publish(
     sched_id = (retry_sched_id or "").strip() or None
 
     x_use_funding = not db.account_wants_own_x_api(account_link_id)
-    seen_pids: set[str] = set()
+    ordered: list[str] = []
     for raw_pid in selected_platforms:
         pid = platforms.canonical_platform_id(str(raw_pid or "").strip())
-        if not pid or pid in seen_pids:
+        if not pid or pid in ordered:
             continue
-        seen_pids.add(pid)
+        ordered.append(pid)
+
+    log_ids: dict[str, str] = {}
+    for pid in ordered:
+        log_ids[pid] = db.insert_publication_log(
+            user_id=user_id,
+            video_id=video.id,
+            platform_id=pid,
+            content_type=content_type,
+            status="pending",
+            message=i18n.t(
+                "pub.publishing_queued",
+                lang,
+                platform=i18n.t(f"platform.{pid}", lang),
+            ),
+            account_link_id=account_link_id,
+            batch_id=batch_id,
+        )
+
+    tally = threading.Lock()
+    workers = platform_publish.publish_parallelism(account_link_id)
+
+    def _run_one(pid: str) -> None:
+        nonlocal ok_n, fail_n, pending_n
+        log_id = log_ids.get(pid) or ""
+        db.update_publication_log_entry(
+            log_id,
+            status="pending",
+            message=i18n.t(
+                "pub.publishing_now",
+                lang,
+                platform=i18n.t(f"platform.{pid}", lang),
+            ),
+        )
         try:
             if not platforms.is_publish_enabled(pid):
                 status, message = (
@@ -154,17 +187,21 @@ def execute_video_publish(
                     ),
                 )
             else:
-                status, message = platform_publish.publish_to_platform(
-                    pid,
-                    file_path=path,
-                    content_type=content_type,
-                    title=video.title,
-                    description=video.description,
-                    lang=lang,
-                    tiktok_config_id=tiktoker_config_id if pid == "tiktok" else None,
-                    account_link_id=account_link_id,
-                    x_use_funding=bool(x_use_funding) if pid == "x" else False,
-                )
+                tokens = platform_publish.bind_publish_log(log_id, lang)
+                try:
+                    status, message = platform_publish.publish_to_platform(
+                        pid,
+                        file_path=path,
+                        content_type=content_type,
+                        title=video.title,
+                        description=video.description,
+                        lang=lang,
+                        tiktok_config_id=tiktoker_config_id if pid == "tiktok" else None,
+                        account_link_id=account_link_id,
+                        x_use_funding=bool(x_use_funding) if pid == "x" else False,
+                    )
+                finally:
+                    platform_publish.reset_publish_log(tokens)
         except Exception as e:
             status, message = (
                 "fail",
@@ -182,54 +219,58 @@ def execute_video_publish(
                 pass
         if status not in ("ok", "fail", "skipped", "pending"):
             status = "fail"
-        if status == "ok":
-            ok_n += 1
-            if pid == "x" and status == "ok":
-                try:
-                    if x_use_funding:
-                        db.record_x_funding_usage(
-                            account_link_id=account_link_id,
-                            video_title=video.title,
-                        )
-                    else:
-                        src = db.x_funding_source_for_account_link(account_link_id)
-                        if src:
+        with tally:
+            if status == "ok":
+                ok_n += 1
+                if pid == "x":
+                    try:
+                        if x_use_funding:
                             db.record_x_funding_usage(
                                 account_link_id=account_link_id,
                                 video_title=video.title,
-                                source_id=str(src.get("id") or ""),
                             )
-                except Exception:
-                    pass
-                try:
-                    import x_funding
+                        else:
+                            src = db.x_funding_source_for_account_link(account_link_id)
+                            if src:
+                                db.record_x_funding_usage(
+                                    account_link_id=account_link_id,
+                                    video_title=video.title,
+                                    source_id=str(src.get("id") or ""),
+                                )
+                    except Exception:
+                        pass
+                    try:
+                        import x_funding
 
-                    x_funding.maybe_check_on_publish(account_link_id)
-                except Exception:
-                    pass
-        elif status == "pending":
-            pending_n += 1
-        elif status == "fail":
-            fail_n += 1
-            failures_for_email.append(
-                {
-                    "platform_id": pid,
-                    "platform_name": i18n.t(f"platform.{pid}", lang),
-                    "message": message,
-                }
-            )
-        log_id = db.insert_publication_log(
-            user_id=user_id,
-            video_id=video.id,
-            platform_id=pid,
-            content_type=content_type,
-            status=status,
-            message=message,
-            account_link_id=account_link_id,
-            batch_id=batch_id,
-        )
-        if status == "pending":
-            publish_pending.attach(log_id)
+                        x_funding.maybe_check_on_publish(account_link_id)
+                    except Exception:
+                        pass
+            elif status == "pending":
+                pending_n += 1
+            elif status == "fail":
+                fail_n += 1
+                failures_for_email.append(
+                    {
+                        "platform_id": pid,
+                        "platform_name": i18n.t(f"platform.{pid}", lang),
+                        "message": message,
+                    }
+                )
+        if log_id:
+            db.update_publication_log_entry(log_id, status=status, message=message)
+            if status == "pending":
+                publish_pending.attach(log_id)
+
+    if workers <= 1 or len(ordered) <= 1:
+        for pid in ordered:
+            _run_one(pid)
+    else:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="pub-plat") as pool:
+            futs = [pool.submit(_run_one, pid) for pid in ordered]
+            for fut in as_completed(futs):
+                fut.result()
 
     if failures_for_email:
         persist_awaiting_retry(
@@ -332,6 +373,80 @@ def enqueue_retry(*, sched_id: str, leftover: list[str], upload_dir: Path) -> bo
         name=f"pub-retry-{sched_id[:8]}",
     ).start()
     return True
+
+
+def enqueue_now_publish(
+    *,
+    upload_dir: Path,
+    user_id: str,
+    video,
+    selected_platforms: list[str],
+    tiktoker_config_id: str,
+    content_type: str,
+    lang: str,
+    account_link_id: str,
+    x_use_funding: bool | None = None,
+) -> None:
+    """Publica en segundo plano, una red tras otra, y libera el candado del archivo al terminar."""
+    threading.Thread(
+        target=_run_now_publish,
+        kwargs={
+            "upload_dir": upload_dir,
+            "user_id": user_id,
+            "video": video,
+            "selected_platforms": selected_platforms,
+            "tiktoker_config_id": tiktoker_config_id,
+            "content_type": content_type,
+            "lang": lang,
+            "account_link_id": account_link_id,
+            "x_use_funding": x_use_funding,
+        },
+        daemon=True,
+        name=f"pub-now-{(getattr(video, 'id', '') or '')[:8]}",
+    ).start()
+
+
+def _run_now_publish(
+    *,
+    upload_dir: Path,
+    user_id: str,
+    video,
+    selected_platforms: list[str],
+    tiktoker_config_id: str,
+    content_type: str,
+    lang: str,
+    account_link_id: str,
+    x_use_funding: bool | None = None,
+) -> None:
+    try:
+        execute_video_publish(
+            upload_dir=upload_dir,
+            user_id=user_id,
+            video=video,
+            selected_platforms=selected_platforms,
+            tiktoker_config_id=tiktoker_config_id,
+            content_type=content_type,
+            lang=lang,
+            account_link_id=account_link_id,
+            x_use_funding=x_use_funding,
+        )
+    except (OSError, Exception) as e:
+        persist_awaiting_retry(
+            sched_id=None,
+            user_id=user_id,
+            video_id=getattr(video, "id", "") or "",
+            failures=[{"platform_id": p} for p in (selected_platforms or [])],
+            tiktoker_config_id=tiktoker_config_id,
+            content_type=content_type,
+            lang=lang,
+            account_link_id=account_link_id,
+            x_use_funding=not db.account_wants_own_x_api(account_link_id),
+            error_message=str(e),
+        )
+    finally:
+        db.release_publish_file_lock_if_idle(
+            user_id, getattr(video, "file_hash", "") or ""
+        )
 
 
 def process_due_scheduled_publications(*, upload_dir: Path) -> int:

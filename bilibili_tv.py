@@ -225,6 +225,9 @@ def run_daily_keep_alive_if_due() -> None:
     row = due[0]
     oid = str(row.get("id") or "")
     ok, code = keep_alive_account(row)
+    if code == "proxy_busy":
+        db.update_chain_next_keepalive(oid, pick_next_keepalive(except_id=oid, soon=True))
+        return
     soon = (not ok) and code in {"session_dead", "login_failed", "browser_error", "proxy_slow", "timeout"}
     next_at = pick_next_keepalive(except_id=oid, soon=soon)
     _record_session(oid, ok, code, row, next_keepalive_at=next_at)
@@ -241,7 +244,7 @@ def _record_session(
     now = datetime.now(timezone.utc).isoformat()
     last_ok = now if ok else str(row.get("last_ok_at") or "")
     alert_at: str | None = None
-    if not ok and code not in {"playwright_missing", "browser_busy"}:
+    if not ok and code not in {"playwright_missing", "browser_busy", "proxy_busy"}:
         last_alert = str(row.get("last_alert_at") or "").strip()
         today = publish_schedule.now_publish_tz().date().isoformat()
         if not last_alert.startswith(today):
@@ -264,13 +267,18 @@ def _record_session(
 
 def _with_browser(account_id: str, fn, *, lock_wait_s: int | None = None) -> tuple[bool, str]:
     proxy_url = db.get_active_proxy_url_for_source("chain", account_id)
-    kwargs: dict[str, Any] = {
-        "proxy_url": proxy_url,
-        "locale": "en-US",
-    }
-    if lock_wait_s is not None:
-        kwargs["lock_wait_s"] = lock_wait_s
-    return playwright_session.with_persistent_browser(profile_dir(account_id), fn, **kwargs)
+    import platform_publish
+
+    with platform_publish.hold_named_proxy(proxy_url, timeout=12) as held:
+        if not held:
+            return False, "proxy_busy"
+        kwargs: dict[str, Any] = {
+            "proxy_url": proxy_url,
+            "locale": "en-US",
+        }
+        if lock_wait_s is not None:
+            kwargs["lock_wait_s"] = lock_wait_s
+        return playwright_session.with_persistent_browser(profile_dir(account_id), fn, **kwargs)
 
 
 def _ensure_session(page, email: str, password: str) -> tuple[bool, str]:

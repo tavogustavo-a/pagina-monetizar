@@ -1,6 +1,7 @@
 """Odysee (LBRY), DTube (Hive), Bilibili.tv y sesión QR de Bilibili.com."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -32,17 +33,19 @@ def extra_field(platform_id: str) -> str:
     return "channel" if (platform_id or "").strip() == "odysee" else ""
 
 
+@contextmanager
 def _account_proxy(platform_id: str, account_id: str, link_name: str = ""):
-    """Contexto con el proxy vinculado a la cuenta (o sin proxy si no hay)."""
+    """Contexto con el proxy vinculado a la cuenta (hueco + using_proxy)."""
     import db
-    import proxy_util
+    import platform_publish
 
     proxy_url = ""
     try:
         proxy_url = db.get_active_proxy_url_for_chain(account_id, link_name)
     except Exception:
         proxy_url = ""
-    return proxy_util.using_proxy(proxy_url)
+    with platform_publish.using_held_proxy(proxy_url, timeout=20) as url:
+        yield url
 
 
 def probe_account(

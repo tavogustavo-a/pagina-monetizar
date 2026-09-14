@@ -402,33 +402,48 @@ def _publish_one(
             continue
 
         was_probing = bool(entry.get("probing"))
-        status, message = platform_publish.publish_to_platform(
-            pid,
-            file_path=file_path,
-            content_type=content_type,
-            title=video.title,
-            description=video.description,
-            lang=lang,
-            tiktok_config_id=db.resolve_tiktok_config_id(
-                account_link_id=job.get("account_link_id")
-            )
-            if pid == "tiktok"
-            else None,
-            account_link_id=job.get("account_link_id"),
-        )
-        if status not in ("ok", "fail", "skipped", "pending"):
-            status = "fail"
-        entry["cycle_sent"] = int(entry.get("cycle_sent") or 0) + 1
         log_id = db.insert_publication_log(
             user_id=job["owner_user_id"],
             video_id=video.id,
             platform_id=pid,
             content_type=content_type,
-            status=status,
-            message=message,
+            status="pending",
+            message=i18n.t(
+                "pub.publishing_now",
+                lang,
+                platform=i18n.t(f"platform.{pid}", lang),
+            ),
             account_link_id=job["account_link_id"],
             batch_id=batch_id,
         )
+        tokens = platform_publish.bind_publish_log(log_id, lang)
+        try:
+            try:
+                status, message = platform_publish.publish_to_platform(
+                    pid,
+                    file_path=file_path,
+                    content_type=content_type,
+                    title=video.title,
+                    description=video.description,
+                    lang=lang,
+                    tiktok_config_id=db.resolve_tiktok_config_id(
+                        account_link_id=job.get("account_link_id")
+                    )
+                    if pid == "tiktok"
+                    else None,
+                    account_link_id=job.get("account_link_id"),
+                )
+            except Exception as e:
+                status, message = (
+                    "fail",
+                    i18n.t("pub.publish_crash", lang, error=str(e)[:180]),
+                )
+        finally:
+            platform_publish.reset_publish_log(tokens)
+        if status not in ("ok", "fail", "skipped", "pending"):
+            status = "fail"
+        entry["cycle_sent"] = int(entry.get("cycle_sent") or 0) + 1
+        db.update_publication_log_entry(log_id, status=status, message=message)
         if status == "pending":
             publish_pending.attach(log_id)
         if status in ("ok", "pending"):

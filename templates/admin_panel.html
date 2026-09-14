@@ -2261,6 +2261,7 @@
     var apiClientSecret = document.getElementById("panel-api-client-secret");
     var apiClientIdLabel = document.getElementById("panel-api-client-id-label");
     var apiClientSecretLabel = document.getElementById("panel-api-client-secret-label");
+    var apiRedirect = document.getElementById("panel-api-redirect-wrap");
     var apiIntro = document.getElementById("panel-api-intro");
     var apiError = document.getElementById("panel-api-form-error");
     var apiTestMsg = document.getElementById("panel-api-test-msg");
@@ -2380,6 +2381,22 @@
         } else {
           apiIntro.textContent = "";
           apiIntro.hidden = true;
+        }
+      }
+      if (apiRedirect) {
+        var hint = btn.getAttribute("data-redirect-hint") || "";
+        var uri = btn.getAttribute("data-redirect-uri") || "";
+        apiRedirect.textContent = "";
+        if (hint || uri) {
+          if (hint) apiRedirect.appendChild(document.createTextNode(hint + " "));
+          if (uri) {
+            var code = document.createElement("code");
+            code.textContent = uri;
+            apiRedirect.appendChild(code);
+          }
+          apiRedirect.hidden = false;
+        } else {
+          apiRedirect.hidden = true;
         }
       }
       if (apiError) apiError.hidden = true;

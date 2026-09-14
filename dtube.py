@@ -458,13 +458,17 @@ def playwright_ready() -> tuple[bool, str]:
 
 def _with_browser(account_id: str, fn, *, lock_wait_s: int | None = None) -> tuple[bool, str]:
     import db
+    import platform_publish
     import playwright_session
 
     proxy_url = db.get_active_proxy_url_for_source("chain", account_id)
-    kwargs: dict[str, Any] = {"proxy_url": proxy_url, "locale": "en-US"}
-    if lock_wait_s is not None:
-        kwargs["lock_wait_s"] = lock_wait_s
-    return playwright_session.with_persistent_browser(profile_dir(account_id), fn, **kwargs)
+    with platform_publish.hold_named_proxy(proxy_url, timeout=12) as held:
+        if not held:
+            return False, "proxy_busy"
+        kwargs: dict[str, Any] = {"proxy_url": proxy_url, "locale": "en-US"}
+        if lock_wait_s is not None:
+            kwargs["lock_wait_s"] = lock_wait_s
+        return playwright_session.with_persistent_browser(profile_dir(account_id), fn, **kwargs)
 
 
 def _looks_logged_in(page) -> bool:
@@ -741,6 +745,9 @@ def run_daily_keep_alive_if_due() -> None:
     row = due[0]
     oid = str(row.get("id") or "")
     ok, code = keep_alive_account(row)
+    if code == "proxy_busy":
+        db.update_chain_next_keepalive(oid, pick_next_keepalive(except_id=oid, soon=True))
+        return
     soon = (not ok) and code in {"session_dead", "login_failed", "browser_error", "proxy_slow", "timeout"}
     db.update_chain_browser_session(
         oid,

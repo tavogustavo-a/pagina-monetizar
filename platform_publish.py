@@ -1,6 +1,10 @@
 """Publish uploaded content to selected platforms (when API credentials allow)."""
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
+import threading
+import time
 from pathlib import Path
 
 import db
@@ -10,6 +14,20 @@ import tiktok_publish
 import vmos
 import filehost
 import chain
+
+# Un envío por proxy (misma IP = un hueco). Redes de navegador usan proxy fijo.
+_PUBLISH_GATE_WAIT_S = 45 * 60
+_MAX_PROXY_PARALLEL = 8
+_DIRECT_SLOT = "__direct__"
+_slot_locks: dict[str, threading.RLock] = {}
+_slot_guard = threading.Lock()
+_slot_rr = 0
+_pub_log_id: ContextVar[str] = ContextVar("pub_log_id", default="")
+_pub_log_lang: ContextVar[str] = ContextVar("pub_log_lang", default="es")
+
+BROWSER_STICKY_PLATFORMS = frozenset(
+    {"bilibili", "bilibili_tv", "odysee", "dtube"}
+)
 
 # Título visible en la red. El resto (TikTok, IG, X, Snapchat, hosts) va solo con el archivo.
 TITLE_PLATFORMS = frozenset(
@@ -38,6 +56,167 @@ def texts_for_platform(platform_id: str, title: str, description: str) -> tuple[
     if pid in TITLE_PLATFORMS:
         return label, ""
     return "", ""
+
+
+def is_browser_sticky_platform(platform_id: str) -> bool:
+    pid = platforms.canonical_platform_id(str(platform_id or "").strip())
+    return pid in BROWSER_STICKY_PLATFORMS or str(platform_id or "").strip() == "bilibili_qr"
+
+
+def bind_publish_log(log_id: str, lang: str) -> tuple[object, object]:
+    return _pub_log_id.set(str(log_id or "")), _pub_log_lang.set(lang or "es")
+
+
+def reset_publish_log(tokens: tuple[object, object] | None) -> None:
+    if not tokens:
+        return
+    try:
+        _pub_log_id.reset(tokens[0])  # type: ignore[arg-type]
+        _pub_log_lang.reset(tokens[1])  # type: ignore[arg-type]
+    except Exception:
+        pass
+
+
+def note_waiting_browser() -> None:
+    lid = (_pub_log_id.get() or "").strip()
+    if not lid:
+        return
+    from i18n import t
+
+    db.update_publication_log_entry(
+        lid,
+        status="pending",
+        message=t("pub.waiting_browser", _pub_log_lang.get() or "es"),
+    )
+
+
+def _slot_key(proxy: dict) -> str:
+    ip = str(proxy.get("last_check_ip") or "").strip()
+    if ip:
+        return f"ip:{ip.lower()}"
+    return f"id:{str(proxy.get('id') or '').strip()}"
+
+
+def _unique_slots(proxies: list[dict]) -> list[tuple[str, str, str]]:
+    out: list[tuple[str, str, str]] = []
+    seen: set[str] = set()
+    for item in proxies:
+        key = _slot_key(item)
+        if not key or key in seen:
+            continue
+        url = str(item.get("url") or "").strip()
+        pid = str(item.get("id") or "").strip()
+        if not url or not pid:
+            continue
+        seen.add(key)
+        out.append((key, url, pid))
+    return out
+
+
+def publish_parallelism(account_link_id: str | None) -> int:
+    """Cuántas redes API a la vez: 1 por IP/proxy distinto (mínimo 1)."""
+    slots = _unique_slots(db.list_active_proxies_for_account(account_link_id))
+    return max(1, min(_MAX_PROXY_PARALLEL, len(slots) if slots else 1))
+
+
+def _lock_for_slot(key: str) -> threading.RLock:
+    with _slot_guard:
+        lock = _slot_locks.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            _slot_locks[key] = lock
+        return lock
+
+
+def _key_for_proxy_url(proxy_url: str) -> str:
+    """Misma clave que acquire_publish_slot (IP o id), no otra por URL."""
+    url = (proxy_url or "").strip()
+    if not url:
+        return _DIRECT_SLOT
+    try:
+        items = db.list_all_active_proxies()
+    except Exception:
+        items = []
+    for item in items:
+        if str(item.get("url") or "").strip() == url:
+            return _slot_key(item)
+    return f"url:{url}"
+
+
+def _candidates_for_platform(
+    account_link_id: str | None, platform_id: str
+) -> list[tuple[str, str]]:
+    proxies = db.list_active_proxies_for_account(account_link_id)
+    if not proxies:
+        return [(_DIRECT_SLOT, "")]
+    if is_browser_sticky_platform(platform_id):
+        sticky = db.ensure_sticky_proxy(account_link_id)
+        if sticky:
+            return [(_slot_key(sticky), str(sticky.get("url") or ""))]
+    slots = _unique_slots(proxies)[:_MAX_PROXY_PARALLEL]
+    pid = platforms.canonical_platform_id(str(platform_id or "").strip())
+    ranked: list[tuple[int, str, str]] = []
+    for key, url, proxy_id in slots:
+        check = db.proxy_platform_check_ok(proxy_id, pid) if pid else None
+        rank = 0 if check is True else (1 if check is None else 2)
+        ranked.append((rank, key, url))
+    ranked.sort(key=lambda row: row[0])
+    if any(row[0] < 2 for row in ranked):
+        ranked = [row for row in ranked if row[0] < 2]
+    return [(key, url) for _, key, url in ranked]
+
+
+def acquire_publish_slot(
+    account_link_id: str | None,
+    *,
+    platform_id: str = "",
+    timeout: float = _PUBLISH_GATE_WAIT_S,
+) -> tuple[str | None, threading.RLock | None]:
+    """Toma un proxy libre. Navegador = sticky; APIs = round-robin por IP."""
+    global _slot_rr
+    keys = _candidates_for_platform(account_link_id, platform_id)
+    with _slot_guard:
+        start = _slot_rr
+        _slot_rr += 1
+    n = len(keys)
+    deadline = time.monotonic() + max(0.1, float(timeout))
+    while True:
+        for i in range(n):
+            key, url = keys[(start + i) % n]
+            lock = _lock_for_slot(key)
+            if lock.acquire(blocking=False):
+                return url, lock
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return None, None
+        time.sleep(min(0.25, remaining))
+
+
+@contextmanager
+def hold_named_proxy(proxy_url: str, *, timeout: float = 15.0):
+    """Candado del mismo hueco que las subidas (keep-alive / test). Reentrante."""
+    url = (proxy_url or "").strip()
+    if not url:
+        yield True
+        return
+    lock = _lock_for_slot(_key_for_proxy_url(url))
+    if not lock.acquire(timeout=timeout):
+        yield False
+        return
+    try:
+        yield True
+    finally:
+        lock.release()
+
+
+@contextmanager
+def using_held_proxy(proxy_url: str, *, timeout: float = 15.0):
+    """Hueco + using_proxy. Si el hueco está ocupado, igual usa el proxy (tras esperar)."""
+    import proxy_util
+
+    with hold_named_proxy(proxy_url, timeout=timeout):
+        with proxy_util.using_proxy(proxy_url) as u:
+            yield u
 
 
 def _has_generic_creds(raw: dict) -> bool:
@@ -306,7 +485,6 @@ def publish_to_platform(
     account_link_id: str | None = None,
     x_use_funding: bool = False,
 ) -> tuple[str, str]:
-    import proxy_util
     import publish_pending
     from i18n import t
 
@@ -341,6 +519,50 @@ def publish_to_platform(
             from i18n import t as _t
 
             return "fail", _t("pub.x.need_funding_api", lang)
+    if pid in vmos.PLATFORM_IDS and db.resolve_vmos_account_for_publish(
+        pid, account_link_id
+    ):
+        return _publish_to_platform_locked(
+            pid,
+            lang=lang,
+            name=name,
+            x_mode=x_mode,
+            kwargs=kwargs,
+            account_link_id=account_link_id,
+            proxy_url="",
+        )
+    proxy_url, slot_lock = acquire_publish_slot(
+        account_link_id, platform_id=pid
+    )
+    if slot_lock is None:
+        return "fail", t("pub.publish_busy", lang)
+    try:
+        return _publish_to_platform_locked(
+            pid,
+            lang=lang,
+            name=name,
+            x_mode=x_mode,
+            kwargs=kwargs,
+            account_link_id=account_link_id,
+            proxy_url=proxy_url or "",
+        )
+    finally:
+        slot_lock.release()
+
+
+def _publish_to_platform_locked(
+    pid: str,
+    *,
+    lang: str,
+    name: str,
+    x_mode: str,
+    kwargs: dict,
+    account_link_id: str | None,
+    proxy_url: str = "",
+) -> tuple[str, str]:
+    import proxy_util
+    from i18n import t
+
     with db.using_credentials_account(name):
         with db.using_x_app_mode(x_mode):
             if pid in vmos.PLATFORM_IDS and db.resolve_vmos_account_for_publish(
@@ -349,17 +571,32 @@ def publish_to_platform(
                 ok, message = _publish_to_platform(**kwargs)
                 return _final_status(ok), message
 
-            proxy_url = db.get_active_proxy_url_for_account(account_link_id)
             with proxy_util.using_proxy(proxy_url):
+                ping_ok = True
+                if (proxy_url or "").strip():
+                    ping_ok = proxy_util.ping_platform(pid, attempts=2)
                 try:
-                    ok, message = _publish_to_platform(**kwargs)
+                    ok, message = proxy_util.run_upload_retry(
+                        lambda: _publish_to_platform(**kwargs),
+                        attempts=2,
+                    )
                 except Exception as e:
+                    if not ping_ok:
+                        return "fail", t(
+                            "pub.proxy.platform_unreachable",
+                            lang,
+                            platform=t(f"platform.{pid}", lang),
+                        )
                     nice = proxy_util.humanize_network_failure(e, lang)
                     return "fail", nice or t("pub.publish_crash", lang, error=str(e)[:180])
+                if not ok and not ping_ok:
+                    return "fail", t(
+                        "pub.proxy.platform_unreachable",
+                        lang,
+                        platform=t(f"platform.{pid}", lang),
+                    )
                 if not ok:
                     nice = proxy_util.humanize_network_failure(message, lang)
-                    # No pisar el mensaje de la plataforma (allowlist, sesión, etc.)
-                    # si no es un fallo claro de red/proxy.
                     if nice and proxy_util.classify_proxy_error(message) in {
                         "timeout",
                         "reset",

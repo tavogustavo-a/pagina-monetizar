@@ -10066,7 +10066,8 @@ ul.proxys-list .proxys-row__actions {
 }
 .proxys-row__icon-btn .icon-edit,
 .proxys-row__icon-btn .icon-trash,
-.proxys-row__icon-btn .icon-test {
+.proxys-row__icon-btn .icon-test,
+.proxys-row__icon-btn .icon-servers {
   width: 1rem;
   height: 1rem;
   display: block;
@@ -10079,6 +10080,45 @@ ul.proxys-list .proxys-row__actions {
   color: #a5f3fc;
   border-color: rgba(34, 211, 238, 0.45) !important;
   background: rgba(34, 211, 238, 0.1) !important;
+}
+.proxys-row__test-servers {
+  color: rgba(196, 181, 253, 0.95);
+  border-color: rgba(196, 181, 253, 0.32) !important;
+}
+.proxys-row__test-servers:hover:not(:disabled) {
+  color: #ede9fe;
+  border-color: rgba(196, 181, 253, 0.5) !important;
+  background: rgba(139, 92, 246, 0.12) !important;
+}
+.proxys-servers-list {
+  list-style: none;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: min(55vh, 22rem);
+  overflow: auto;
+}
+.proxys-servers-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.35);
+}
+.proxys-servers-list__item.is-ok {
+  border-color: rgba(110, 231, 183, 0.28);
+}
+.proxys-servers-list__item.is-fail {
+  border-color: rgba(252, 165, 165, 0.28);
+}
+.proxys-servers-list__name {
+  font-size: 0.88rem;
+  font-weight: 600;
 }
 .proxys-row__edit {
   color: rgba(251, 191, 36, 0.9);
@@ -10250,7 +10290,8 @@ ul.proxys-list .proxys-row__actions {
   }
   ul.proxys-list .proxys-row__icon-btn .icon-edit,
   ul.proxys-list .proxys-row__icon-btn .icon-trash,
-  ul.proxys-list .proxys-row__icon-btn .icon-test {
+  ul.proxys-list .proxys-row__icon-btn .icon-test,
+  ul.proxys-list .proxys-row__icon-btn .icon-servers {
     width: 1.1rem;
     height: 1.1rem;
   }
@@ -10351,6 +10392,22 @@ ul.proxys-list .proxys-row__actions {
   box-shadow: none;
   line-height: 1.2;
   white-space: nowrap;
+}
+.panel-account-card__connect:disabled,
+.panel-account-card__actions .btn-tiktok:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+  pointer-events: none;
+  box-shadow: none;
+  white-space: nowrap;
+}
+.panel-account-card__connect:disabled .badge-soon {
+  margin-left: 0.1rem;
+}
+.panel-account-card__connect:disabled:hover,
+.panel-account-card__actions .btn-tiktok:disabled:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
 }
 .panel-account-card__actions .btn-tiktok__icon,
 .panel-account-card__actions .btn-youtube__icon,

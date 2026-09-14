@@ -295,6 +295,9 @@ def run_keep_alive_if_due() -> None:
     row = due[0]
     oid = str(row.get("id") or "")
     ok, code = keep_alive_account(row)
+    if code == "proxy_busy":
+        db.update_chain_next_keepalive(oid, pick_next_keepalive(except_id=oid, soon=True))
+        return
     soon = (not ok) and code in {"session_dead", "browser_error", "proxy_slow", "timeout"}
     next_at = pick_next_keepalive(except_id=oid, soon=soon)
     _record_session(oid, ok, code, row, next_keepalive_at=next_at)
@@ -725,13 +728,18 @@ def _account_proxy_url(account_id: str, link_name: str = "") -> str:
 
 def _with_browser(account_id: str, fn, *, link_name: str = "") -> tuple[bool, str]:
     proxy_url = _account_proxy_url(account_id, link_name)
-    return playwright_session.with_persistent_browser(
-        profile_dir(account_id),
-        fn,
-        proxy_url=proxy_url,
-        locale="zh-CN",
-        lock_wait_s=240,
-    )
+    import platform_publish
+
+    with platform_publish.hold_named_proxy(proxy_url, timeout=12) as held:
+        if not held:
+            return False, "proxy_busy"
+        return playwright_session.with_persistent_browser(
+            profile_dir(account_id),
+            fn,
+            proxy_url=proxy_url,
+            locale="zh-CN",
+            lock_wait_s=240,
+        )
 
 
 def _job_cancelled(job_id: str) -> bool:
@@ -890,7 +898,7 @@ def _record_session(
     now = datetime.now(timezone.utc).isoformat()
     last_ok = now if ok else str(row.get("last_ok_at") or "")
     alert_at: str | None = None
-    if not ok and code not in {"playwright_missing", "browser_busy", "cancelled", "expired"}:
+    if not ok and code not in {"playwright_missing", "browser_busy", "cancelled", "expired", "proxy_busy"}:
         last_alert = str(row.get("last_alert_at") or "").strip()
         today = publish_schedule.now_publish_tz().date().isoformat()
         if not last_alert.startswith(today):
@@ -960,6 +968,7 @@ def publish_video(
     from i18n import t
 
     import bilibili_studio
+    import platform_publish
     from bilibili_publish import VIDEO_EXT
 
     if content_type == "photo" or Path(file_path).suffix.lower() in {
@@ -992,14 +1001,17 @@ def publish_video(
     oid = str(account.get("id") or "").strip()
     proxy_url = _account_proxy_url(oid, str(account.get("name") or ""))
     try:
-        with proxy_util.using_proxy(proxy_url):
-            resource_id = bilibili_studio.upload_archive(
-                path=path,
-                title=title,
-                description=description,
-                cookie=cookie,
-                csrf=csrf,
-            )
+        with platform_publish.hold_named_proxy(proxy_url, timeout=60) as held:
+            if not held:
+                return False, t("pub.publish_busy", lang)
+            with proxy_util.using_proxy(proxy_url):
+                resource_id = bilibili_studio.upload_archive(
+                    path=path,
+                    title=title,
+                    description=description,
+                    cookie=cookie,
+                    csrf=csrf,
+                )
     except ValueError as e:
         detail = str(e).strip() or "upload"
         if detail == "session_dead":

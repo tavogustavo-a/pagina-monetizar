@@ -7,7 +7,7 @@ import uuid
 import urllib.error
 import urllib.request
 from urllib.parse import quote, urlencode
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
@@ -1134,6 +1134,49 @@ async def api_proxys_test(request: Request, proxy_id: str):
         "ok": bool(result.get("ok")),
         "message": message,
         "proxy": _proxy_api_item(updated) if updated else None,
+    }
+
+
+@app.post("/admin/api/proxys/{proxy_id}/test-servers")
+async def api_proxys_test_servers(request: Request, proxy_id: str):
+    deny = _require_server_admin_json(request)
+    if deny:
+        return deny
+    lang = i18n.resolve_lang(request)
+    row = db.get_proxy(proxy_id)
+    if not row:
+        return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
+    result = await asyncio.to_thread(
+        proxy_util.test_proxy_on_platforms, row, lang=lang
+    )
+    if result.get("error"):
+        message = _proxy_error_message(str(result.get("error")), lang)
+        return {"ok": False, "message": message, "ok_n": 0, "fail_n": 0, "platforms": []}
+    ok_n = int(result.get("ok_n") or 0)
+    fail_n = int(result.get("fail_n") or 0)
+    failed_names = [
+        str(p.get("name") or p.get("id") or "")
+        for p in (result.get("platforms") or [])
+        if not p.get("ok")
+    ]
+    if fail_n == 0:
+        message = i18n.t("proxys.test_servers_ok", lang, n=ok_n)
+    elif ok_n == 0:
+        message = i18n.t("proxys.test_servers_fail", lang)
+    else:
+        message = i18n.t(
+            "proxys.test_servers_partial",
+            lang,
+            ok=ok_n,
+            n=ok_n + fail_n,
+            names=", ".join(failed_names),
+        )
+    return {
+        "ok": bool(result.get("ok")),
+        "message": message,
+        "ok_n": ok_n,
+        "fail_n": fail_n,
+        "platforms": result.get("platforms") or [],
     }
 
 
@@ -2373,7 +2416,27 @@ def api_publication_logs(request: Request):
         return auth
     u = auth
     lang = i18n.resolve_lang(request)
-    return {"ok": True, "logs": _publication_log_groups(lang, u)}
+    pending: list[dict] = []
+    if db.user_can_access_servers(u):
+        for row in db.list_awaiting_retry_publications(limit=50, viewer=u):
+            sid = str(row.get("id") or "")
+            pending.append(
+                {
+                    "id": sid,
+                    "video_title": str(row.get("video_title") or ""),
+                    "user_username": str(
+                        row.get("user_username")
+                        or row.get("uploader_username")
+                        or row.get("account_name")
+                        or ""
+                    ),
+                    "platforms_json": str(row.get("platforms_json") or "[]"),
+                    "status": str(row.get("status") or ""),
+                    "retry_url": f"/admin/publicaciones/pending/{sid}/retry",
+                    "cancel_url": f"/admin/publicaciones/pending/{sid}/cancel",
+                }
+            )
+    return {"ok": True, "logs": _publication_log_groups(lang, u), "pending": pending}
 
 
 @app.delete("/admin/api/publicaciones/logs")
@@ -2586,11 +2649,14 @@ def api_video_temp_discard(request: Request, token: str):
 
 
 def _publicaciones_result(
-    request: Request, *, ok: bool, message: str, status: int = 400
+    request: Request, *, ok: bool, message: str, status: int = 400, live: bool = False
 ):
     if "application/json" in (request.headers.get("accept") or "").lower():
+        payload = {"ok": ok, "message": message}
+        if live:
+            payload["live"] = True
         return JSONResponse(
-            {"ok": ok, "message": message},
+            payload,
             status_code=200 if ok else status,
         )
     if ok:
@@ -2921,8 +2987,7 @@ async def admin_upload_video(request: Request):
             request, ok=True, message=_msg(request, flash_key, when=when_local)
         )
 
-    ok_n, fail_n, pending_n, failures = await asyncio.to_thread(
-        publish_schedule.execute_video_publish,
+    publish_schedule.enqueue_now_publish(
         upload_dir=UPLOAD_DIR,
         user_id=u.id,
         video=video,
@@ -2932,43 +2997,11 @@ async def admin_upload_video(request: Request):
         lang=lang,
         account_link_id=account_link_id,
     )
-    db.release_publish_file_lock_if_idle(u.id, file_hash)
-
-    past_schedule_immediate = schedule_enabled and scheduled_utc and not schedule_for_later
-
-    if db.user_is_publisher_mode(u):
-        tiktok_fail_entry = next(
-            (f for f in (failures or []) if str(f.get("platform_id") or "") == "tiktok"),
-            None,
-        )
-        if tiktok_fail_entry:
-            msg = (tiktok_fail_entry.get("message") or "").strip() or _msg(
-                request, "pub.flash.partial", ok=0, fail=1
-            )
-            return _publicaciones_result(request, ok=False, message=msg)
-        ok_n = 1 if "tiktok" in selected_platforms else ok_n
-        fail_n = 0
-
-    if fail_n:
-        return _publicaciones_result(
-            request,
-            ok=bool(ok_n or pending_n),
-            message=_msg(
-                request, "pub.flash.partial", ok=ok_n + pending_n, fail=fail_n
-            ),
-        )
-    if pending_n:
-        return _publicaciones_result(
-            request,
-            ok=True,
-            message=_msg(request, "pub.flash.pending_review", n=pending_n),
-        )
-    if past_schedule_immediate:
-        return _publicaciones_result(
-            request, ok=True, message=_msg(request, "pub.flash.schedule_past_immediate")
-        )
     return _publicaciones_result(
-        request, ok=True, message=_msg(request, "pub.flash.all_ok", n=ok_n)
+        request,
+        ok=True,
+        live=True,
+        message=_msg(request, "pub.flash.publish_queued"),
     )
 
 
@@ -3999,6 +4032,22 @@ def _pop_oauth_link_target(request: Request) -> str:
     return str(request.session.pop("oauth_link_target_name", "") or "").strip()
 
 
+@contextmanager
+def _oauth_account_proxy(request: Request):
+    """El canje de tokens sale por el proxy sticky de la cuenta lógica."""
+    import platform_publish
+
+    name = str(request.session.get("oauth_link_target_name") or "").strip()
+    url = ""
+    if name:
+        try:
+            url = db.get_active_proxy_url_for_account_name(name)
+        except Exception:
+            url = ""
+    with platform_publish.using_held_proxy(url, timeout=45):
+        yield
+
+
 def _bind_oauth_link_target(request: Request, oauth_account_id: str) -> None:
     """Une la cuenta OAuth recién conectada a la cuenta lógica elegida en Servidores."""
     name = _pop_oauth_link_target(request)
@@ -4016,8 +4065,17 @@ def _revoke_oauth_remote(row: dict) -> None:
     access = str(row.get("access_token") or "").strip()
     refresh = str(row.get("refresh_token") or "").strip()
     name = str(row.get("account_name") or "").strip()
-    with db.using_credentials_account(name):
-        _revoke_oauth_remote_inner(pid, access, refresh, row)
+    import platform_publish
+
+    url = ""
+    if name:
+        try:
+            url = db.get_active_proxy_url_for_account_name(name)
+        except Exception:
+            url = ""
+    with platform_publish.using_held_proxy(url, timeout=20):
+        with db.using_credentials_account(name):
+            _revoke_oauth_remote_inner(pid, access, refresh, row)
 
 
 def _revoke_oauth_remote_inner(pid: str, access: str, refresh: str, row: dict) -> None:
@@ -4048,9 +4106,10 @@ def _oauth_redirect(request: Request, user: db.User) -> RedirectResponse:
 
 
 PANEL_API_PLATFORM_IDS = frozenset(
-    {"dailymotion", "facebook", "x", "youtube", "instagram", "bilibili"}
+    {"tiktok", "dailymotion", "facebook", "x", "youtube", "instagram", "bilibili"}
 )
 TIKTOK_USER_PANEL_PLATFORM_ORDER = (
+    "tiktok",
     "youtube",
     "dailymotion",
     "facebook",
@@ -4060,6 +4119,7 @@ TIKTOK_USER_PANEL_PLATFORM_ORDER = (
 )
 
 _PANEL_OAUTH_REDIRECT_MODS = {
+    "tiktok": tiktok_oauth,
     "facebook": facebook_oauth,
     "x": x_oauth,
     "dailymotion": dailymotion_oauth,
@@ -4069,6 +4129,7 @@ _PANEL_OAUTH_REDIRECT_MODS = {
 }
 
 _PANEL_OAUTH_REDIRECT_HINT_KEYS: dict[str, str] = {
+    "tiktok": "servers.tiktok_redirect_hint",
     "facebook": "servers.facebook_redirect_hint",
     "x": "servers.x_redirect_hint",
     "dailymotion": "servers.dailymotion_redirect_hint",
@@ -4131,6 +4192,15 @@ def _build_panel_account_platforms(
     meta_by_id = {p["id"]: p for p in platforms.platform_list(lang)}
     defs: tuple[tuple[str, Any, str, str, str, str, str], ...] = (
         (
+            "tiktok",
+            tiktok_oauth,
+            "servers.connect_with_tiktok",
+            "panel.tiktok_oauth_missing",
+            "btn-tiktok",
+            "♪",
+            "tiktok",
+        ),
+        (
             "youtube",
             youtube_oauth,
             "servers.connect_with_youtube",
@@ -4188,7 +4258,10 @@ def _build_panel_account_platforms(
     out: list[dict[str, Any]] = []
     for pid, oauth_mod, connect_key, missing_key, btn_class, icon, kind in defs:
         configured = oauth_mod.oauth_configured()
-        accounts = db.list_oauth_accounts_for_user(user, pid)
+        if pid == "tiktok":
+            accounts = db.list_tiktok_accounts_for_user(user)
+        else:
+            accounts = db.list_oauth_accounts_for_user(user, pid)
         display_name = i18n.t(f"panel.platform.{pid}", lang)
         if display_name == f"panel.platform.{pid}":
             display_name = names.get(pid, pid)
@@ -4268,36 +4341,39 @@ def tiktok_oauth_callback(request: Request):
         request.session["tiktok_error"] = "TikTok did not return an authorization code."
         return RedirectResponse(url=nxt, status_code=303)
     try:
-        ru = _pop_oauth_redirect(request, "tiktok_oauth_redirect_uri", tiktok_oauth)
-        token_data = tiktok_oauth.exchange_code_for_tokens(
-            code, redirect_uri_value=ru
-        )
-        access = token_data.get("access_token") or ""
-        refresh = token_data.get("refresh_token")
-        expires_in = token_data.get("expires_in")
-        if not access:
-            raise ValueError("No access token in TikTok response.")
-        profile = tiktok_oauth.fetch_user_profile(access)
-        open_id = profile.get("open_id") or token_data.get("open_id") or ""
-        cid = db.save_tiktok_oauth_connection(
-            open_id=str(open_id),
-            tiktok_username=profile.get("username"),
-            display_name=profile.get("display_name"),
-            access_token=access,
-            refresh_token=refresh,
-            expires_in=int(expires_in) if expires_in is not None else None,
-            scopes=tiktok_oauth.oauth_scopes(),
-            client_key=tiktok_oauth.client_key(),
-            client_secret=tiktok_oauth.client_secret(),
-            redirect_uri=ru,
-            linked_by_user_id=str(linked_by) if linked_by else None,
-        )
-        db.attach_tiktok_config_to_user(cid, str(linked_by))
-        link_name = _pop_oauth_link_target(request)
-        if link_name:
-            db.bind_tiktok_config_name(cid, link_name)
-        uname = profile.get("username") or "account"
-        request.session["tiktok_ok"] = f"Connected @{uname} successfully."
+        with _oauth_account_proxy(request):
+            ru = _pop_oauth_redirect(request, "tiktok_oauth_redirect_uri", tiktok_oauth)
+            token_data = tiktok_oauth.exchange_code_for_tokens(
+                code, redirect_uri_value=ru
+            )
+            access = token_data.get("access_token") or ""
+            refresh = token_data.get("refresh_token")
+            expires_in = token_data.get("expires_in")
+            if not access:
+                raise ValueError("No access token in TikTok response.")
+            profile = tiktok_oauth.fetch_user_profile(access)
+            open_id = profile.get("open_id") or token_data.get("open_id") or ""
+            cid = db.save_tiktok_oauth_connection(
+                open_id=str(open_id),
+                tiktok_username=profile.get("username"),
+                display_name=profile.get("display_name"),
+                access_token=access,
+                refresh_token=refresh,
+                expires_in=int(expires_in) if expires_in is not None else None,
+                scopes=tiktok_oauth.oauth_scopes(),
+                client_key=tiktok_oauth.client_key(),
+                client_secret=tiktok_oauth.client_secret(),
+                redirect_uri=ru,
+                linked_by_user_id=str(linked_by) if linked_by else None,
+            )
+            db.attach_tiktok_config_to_user(cid, str(linked_by))
+            link_name = _pop_oauth_link_target(request)
+            if link_name:
+                db.bind_tiktok_config_name(cid, link_name)
+            uname = profile.get("username") or "account"
+            request.session["tiktok_ok"] = i18n.t(
+                "servers.tiktok_connected", i18n.resolve_lang(request), name=uname
+            )
     except (ValueError, urllib.error.URLError, OSError) as e:
         request.session["tiktok_error"] = str(e)
     return RedirectResponse(url=nxt, status_code=303)
@@ -4320,7 +4396,12 @@ def api_tiktok_delete(request: Request, config_id: str):
     if row:
         tok = (row.get("access_token") or "").strip()
         if tok:
-            tiktok_oauth.revoke_access_token(tok)
+            import platform_publish
+
+            name = str(row.get("name") or "").strip()
+            url = db.get_active_proxy_url_for_account_name(name) if name else ""
+            with platform_publish.using_held_proxy(url, timeout=20):
+                tiktok_oauth.revoke_access_token(tok)
     try:
         db.delete_tiktok_api_config(config_id)
     except ValueError as e:
@@ -4370,34 +4451,35 @@ def youtube_oauth_callback(request: Request):
         request.session["tiktok_error"] = i18n.t("servers.youtube_no_code", lang)
         return _oauth_redirect(request, admin)
     try:
-        ru = _pop_oauth_redirect(request, "youtube_oauth_redirect_uri", youtube_oauth)
-        token_data = youtube_oauth.exchange_code_for_tokens(code, redirect_uri_value=ru)
-        access = token_data.get("access_token") or ""
-        refresh = token_data.get("refresh_token")
-        expires_in = token_data.get("expires_in")
-        if not access:
-            raise ValueError("No access token in Google response.")
-        profile = youtube_oauth.fetch_channel_profile(access)
-        open_id = profile.get("open_id") or ""
-        if not open_id:
-            raise ValueError("YouTube did not return a channel id.")
-        cid = db.save_oauth_connection(
-            platform_id="youtube",
-            open_id=str(open_id),
-            username=profile.get("username"),
-            display_name=profile.get("display_name"),
-            access_token=access,
-            refresh_token=refresh,
-            expires_in=int(expires_in) if expires_in is not None else None,
-            scopes=youtube_oauth.oauth_scopes(),
-            client_id=youtube_oauth.client_id(),
-            client_secret=youtube_oauth.client_secret(),
-            redirect_uri=ru,
-            linked_by_user_id=str(linked_by) if linked_by else None,
-        )
-        _bind_oauth_link_target(request, cid)
-        label = profile.get("display_name") or profile.get("username") or "YouTube"
-        request.session["tiktok_ok"] = i18n.t("servers.youtube_connected", lang, name=label)
+        with _oauth_account_proxy(request):
+            ru = _pop_oauth_redirect(request, "youtube_oauth_redirect_uri", youtube_oauth)
+            token_data = youtube_oauth.exchange_code_for_tokens(code, redirect_uri_value=ru)
+            access = token_data.get("access_token") or ""
+            refresh = token_data.get("refresh_token")
+            expires_in = token_data.get("expires_in")
+            if not access:
+                raise ValueError("No access token in Google response.")
+            profile = youtube_oauth.fetch_channel_profile(access)
+            open_id = profile.get("open_id") or ""
+            if not open_id:
+                raise ValueError("YouTube did not return a channel id.")
+            cid = db.save_oauth_connection(
+                platform_id="youtube",
+                open_id=str(open_id),
+                username=profile.get("username"),
+                display_name=profile.get("display_name"),
+                access_token=access,
+                refresh_token=refresh,
+                expires_in=int(expires_in) if expires_in is not None else None,
+                scopes=youtube_oauth.oauth_scopes(),
+                client_id=youtube_oauth.client_id(),
+                client_secret=youtube_oauth.client_secret(),
+                redirect_uri=ru,
+                linked_by_user_id=str(linked_by) if linked_by else None,
+            )
+            _bind_oauth_link_target(request, cid)
+            label = profile.get("display_name") or profile.get("username") or "YouTube"
+            request.session["tiktok_ok"] = i18n.t("servers.youtube_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
         request.session["tiktok_error"] = str(e)
     return _oauth_redirect(request, admin)
@@ -4445,41 +4527,42 @@ def instagram_oauth_callback(request: Request):
         request.session["tiktok_error"] = i18n.t("servers.instagram_no_code", lang)
         return _oauth_redirect(request, admin)
     try:
-        ru = _pop_oauth_redirect(request, "instagram_oauth_redirect_uri", instagram_oauth)
-        token_data = instagram_oauth.exchange_code_for_tokens(code, redirect_uri_value=ru)
-        access = str(token_data.get("access_token") or "").strip()
-        if not access:
-            raise ValueError("No access token in Instagram response.")
-        expires_in = token_data.get("expires_in")
-        try:
-            long_lived = instagram_oauth.exchange_long_lived(access)
-            access = str(long_lived.get("access_token") or access).strip()
-            if long_lived.get("expires_in") is not None:
-                expires_in = long_lived.get("expires_in")
-        except ValueError:
-            if expires_in is None:
-                expires_in = 3600
-        profile = instagram_oauth.fetch_profile(access)
-        open_id = profile.get("open_id") or token_data.get("user_id") or ""
-        if not open_id:
-            raise ValueError("Instagram did not return a user id.")
-        cid = db.save_oauth_connection(
-            platform_id="instagram",
-            open_id=str(open_id),
-            username=profile.get("username"),
-            display_name=profile.get("display_name"),
-            access_token=access,
-            refresh_token=access,
-            expires_in=int(expires_in) if expires_in is not None else None,
-            scopes=instagram_oauth.oauth_scopes(),
-            client_id=instagram_oauth.client_id(),
-            client_secret=instagram_oauth.client_secret(),
-            redirect_uri=ru,
-            linked_by_user_id=str(linked_by) if linked_by else None,
-        )
-        _bind_oauth_link_target(request, cid)
-        label = profile.get("username") or profile.get("display_name") or "Instagram"
-        request.session["tiktok_ok"] = i18n.t("servers.instagram_connected", lang, name=label)
+        with _oauth_account_proxy(request):
+            ru = _pop_oauth_redirect(request, "instagram_oauth_redirect_uri", instagram_oauth)
+            token_data = instagram_oauth.exchange_code_for_tokens(code, redirect_uri_value=ru)
+            access = str(token_data.get("access_token") or "").strip()
+            if not access:
+                raise ValueError("No access token in Instagram response.")
+            expires_in = token_data.get("expires_in")
+            try:
+                long_lived = instagram_oauth.exchange_long_lived(access)
+                access = str(long_lived.get("access_token") or access).strip()
+                if long_lived.get("expires_in") is not None:
+                    expires_in = long_lived.get("expires_in")
+            except ValueError:
+                if expires_in is None:
+                    expires_in = 3600
+            profile = instagram_oauth.fetch_profile(access)
+            open_id = profile.get("open_id") or token_data.get("user_id") or ""
+            if not open_id:
+                raise ValueError("Instagram did not return a user id.")
+            cid = db.save_oauth_connection(
+                platform_id="instagram",
+                open_id=str(open_id),
+                username=profile.get("username"),
+                display_name=profile.get("display_name"),
+                access_token=access,
+                refresh_token=access,
+                expires_in=int(expires_in) if expires_in is not None else None,
+                scopes=instagram_oauth.oauth_scopes(),
+                client_id=instagram_oauth.client_id(),
+                client_secret=instagram_oauth.client_secret(),
+                redirect_uri=ru,
+                linked_by_user_id=str(linked_by) if linked_by else None,
+            )
+            _bind_oauth_link_target(request, cid)
+            label = profile.get("username") or profile.get("display_name") or "Instagram"
+            request.session["tiktok_ok"] = i18n.t("servers.instagram_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
         request.session["tiktok_error"] = str(e)
     return _oauth_redirect(request, admin)
@@ -4527,47 +4610,48 @@ def facebook_oauth_callback(request: Request):
         request.session["tiktok_error"] = i18n.t("servers.facebook_no_code", lang)
         return _oauth_redirect(request, admin)
     try:
-        ru = _pop_oauth_redirect(request, "facebook_oauth_redirect_uri", facebook_oauth)
-        token_data = facebook_oauth.exchange_code_for_tokens(code, redirect_uri_value=ru)
-        access = str(token_data.get("access_token") or "").strip()
-        if not access:
-            raise ValueError("No access token in Facebook response.")
-        expires_in = token_data.get("expires_in")
-        try:
-            long_lived = facebook_oauth.exchange_long_lived(access)
-            access = str(long_lived.get("access_token") or access).strip()
-            if long_lived.get("expires_in") is not None:
-                expires_in = long_lived.get("expires_in")
-        except ValueError:
-            if expires_in is None:
-                expires_in = 3600
-        pages = facebook_oauth.list_pages(access)
-        if not pages:
-            raise ValueError(i18n.t("servers.facebook_no_pages", lang))
-        saved_ids: list[str] = []
-        for page in pages:
-            cid = db.save_oauth_connection(
-                platform_id="facebook",
-                open_id=page["open_id"],
-                username=page.get("username"),
-                display_name=page.get("display_name"),
-                access_token=page["access_token"],
-                refresh_token=access,
-                expires_in=int(expires_in) if expires_in is not None else None,
-                scopes=facebook_oauth.oauth_scopes(),
-                client_id=facebook_oauth.client_id(),
-                client_secret=facebook_oauth.client_secret(),
-                redirect_uri=ru,
-                linked_by_user_id=str(linked_by) if linked_by else None,
+        with _oauth_account_proxy(request):
+            ru = _pop_oauth_redirect(request, "facebook_oauth_redirect_uri", facebook_oauth)
+            token_data = facebook_oauth.exchange_code_for_tokens(code, redirect_uri_value=ru)
+            access = str(token_data.get("access_token") or "").strip()
+            if not access:
+                raise ValueError("No access token in Facebook response.")
+            expires_in = token_data.get("expires_in")
+            try:
+                long_lived = facebook_oauth.exchange_long_lived(access)
+                access = str(long_lived.get("access_token") or access).strip()
+                if long_lived.get("expires_in") is not None:
+                    expires_in = long_lived.get("expires_in")
+            except ValueError:
+                if expires_in is None:
+                    expires_in = 3600
+            pages = facebook_oauth.list_pages(access)
+            if not pages:
+                raise ValueError(i18n.t("servers.facebook_no_pages", lang))
+            saved_ids: list[str] = []
+            for page in pages:
+                cid = db.save_oauth_connection(
+                    platform_id="facebook",
+                    open_id=page["open_id"],
+                    username=page.get("username"),
+                    display_name=page.get("display_name"),
+                    access_token=page["access_token"],
+                    refresh_token=access,
+                    expires_in=int(expires_in) if expires_in is not None else None,
+                    scopes=facebook_oauth.oauth_scopes(),
+                    client_id=facebook_oauth.client_id(),
+                    client_secret=facebook_oauth.client_secret(),
+                    redirect_uri=ru,
+                    linked_by_user_id=str(linked_by) if linked_by else None,
+                )
+                saved_ids.append(cid)
+            if len(saved_ids) == 1:
+                _bind_oauth_link_target(request, saved_ids[0])
+            else:
+                _pop_oauth_link_target(request)
+            request.session["tiktok_ok"] = i18n.t(
+                "servers.facebook_connected", lang, n=len(pages)
             )
-            saved_ids.append(cid)
-        if len(saved_ids) == 1:
-            _bind_oauth_link_target(request, saved_ids[0])
-        else:
-            _pop_oauth_link_target(request)
-        request.session["tiktok_ok"] = i18n.t(
-            "servers.facebook_connected", lang, n=len(pages)
-        )
     except (ValueError, urllib.error.URLError, OSError) as e:
         request.session["tiktok_error"] = str(e)
     return _oauth_redirect(request, admin)
@@ -4627,42 +4711,43 @@ def x_oauth_callback(request: Request):
         request.session["tiktok_error"] = i18n.t("servers.x_no_code", lang)
         return _oauth_redirect(request, admin)
     try:
-        link_name = str(request.session.get("oauth_link_target_name") or "").strip()
-        x_mode = str(request.session.pop("x_oauth_app_mode", "") or "").strip()
-        if x_mode not in ("own", "funding"):
-            x_mode = "own" if db.account_name_wants_own_x_api(link_name) else "funding"
-        with db.using_credentials_account(link_name):
-            with db.using_x_app_mode(x_mode):
-                ru = _pop_oauth_redirect(request, "x_oauth_redirect_uri", x_oauth)
-                token_data = x_oauth.exchange_code_for_tokens(
-                    code, code_verifier=str(verifier), redirect_uri_value=ru
-                )
-                access = str(token_data.get("access_token") or "").strip()
-                refresh = str(token_data.get("refresh_token") or "").strip() or None
-                expires_in = token_data.get("expires_in")
-                if not access:
-                    raise ValueError("No access token in X response.")
-                profile = x_oauth.fetch_profile(access)
-                open_id = profile.get("open_id") or ""
-                if not open_id:
-                    raise ValueError("X did not return a user id.")
-                cid = db.save_oauth_connection(
-                    platform_id="x",
-                    open_id=str(open_id),
-                    username=profile.get("username"),
-                    display_name=profile.get("display_name"),
-                    access_token=access,
-                    refresh_token=refresh,
-                    expires_in=int(expires_in) if expires_in is not None else 7200,
-                    scopes=x_oauth.oauth_scopes(),
-                    client_id=x_oauth.client_id(),
-                    client_secret=x_oauth.client_secret(),
-                    redirect_uri=ru,
-                    linked_by_user_id=str(linked_by) if linked_by else None,
-                )
-        _bind_oauth_link_target(request, cid)
-        label = profile.get("username") or profile.get("display_name") or "X"
-        request.session["tiktok_ok"] = i18n.t("servers.x_connected", lang, name=label)
+        with _oauth_account_proxy(request):
+            link_name = str(request.session.get("oauth_link_target_name") or "").strip()
+            x_mode = str(request.session.pop("x_oauth_app_mode", "") or "").strip()
+            if x_mode not in ("own", "funding"):
+                x_mode = "own" if db.account_name_wants_own_x_api(link_name) else "funding"
+            with db.using_credentials_account(link_name):
+                with db.using_x_app_mode(x_mode):
+                    ru = _pop_oauth_redirect(request, "x_oauth_redirect_uri", x_oauth)
+                    token_data = x_oauth.exchange_code_for_tokens(
+                        code, code_verifier=str(verifier), redirect_uri_value=ru
+                    )
+                    access = str(token_data.get("access_token") or "").strip()
+                    refresh = str(token_data.get("refresh_token") or "").strip() or None
+                    expires_in = token_data.get("expires_in")
+                    if not access:
+                        raise ValueError("No access token in X response.")
+                    profile = x_oauth.fetch_profile(access)
+                    open_id = profile.get("open_id") or ""
+                    if not open_id:
+                        raise ValueError("X did not return a user id.")
+                    cid = db.save_oauth_connection(
+                        platform_id="x",
+                        open_id=str(open_id),
+                        username=profile.get("username"),
+                        display_name=profile.get("display_name"),
+                        access_token=access,
+                        refresh_token=refresh,
+                        expires_in=int(expires_in) if expires_in is not None else 7200,
+                        scopes=x_oauth.oauth_scopes(),
+                        client_id=x_oauth.client_id(),
+                        client_secret=x_oauth.client_secret(),
+                        redirect_uri=ru,
+                        linked_by_user_id=str(linked_by) if linked_by else None,
+                    )
+            _bind_oauth_link_target(request, cid)
+            label = profile.get("username") or profile.get("display_name") or "X"
+            request.session["tiktok_ok"] = i18n.t("servers.x_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
         request.session["tiktok_error"] = str(e)
     return _oauth_redirect(request, admin)
@@ -4710,38 +4795,39 @@ def dailymotion_oauth_callback(request: Request):
         request.session["tiktok_error"] = i18n.t("servers.dailymotion_no_code", lang)
         return _oauth_redirect(request, admin)
     try:
-        ru = _pop_oauth_redirect(
-            request, "dailymotion_oauth_redirect_uri", dailymotion_oauth
-        )
-        token_data = dailymotion_oauth.exchange_code_for_tokens(
-            code, redirect_uri_value=ru
-        )
-        access = str(token_data.get("access_token") or "").strip()
-        refresh = str(token_data.get("refresh_token") or "").strip() or None
-        expires_in = token_data.get("expires_in")
-        if not access:
-            raise ValueError("No access token in Dailymotion response.")
-        profile = dailymotion_oauth.fetch_profile(access)
-        open_id = profile.get("open_id") or ""
-        if not open_id:
-            raise ValueError("Dailymotion did not return a user id.")
-        cid = db.save_oauth_connection(
-            platform_id="dailymotion",
-            open_id=str(open_id),
-            username=profile.get("username"),
-            display_name=profile.get("display_name"),
-            access_token=access,
-            refresh_token=refresh,
-            expires_in=int(expires_in) if expires_in is not None else None,
-            scopes=dailymotion_oauth.oauth_scopes(),
-            client_id=dailymotion_oauth.client_id(),
-            client_secret=dailymotion_oauth.client_secret(),
-            redirect_uri=ru,
-            linked_by_user_id=str(linked_by) if linked_by else None,
-        )
-        _bind_oauth_link_target(request, cid)
-        label = profile.get("username") or profile.get("display_name") or "Dailymotion"
-        request.session["tiktok_ok"] = i18n.t("servers.dailymotion_connected", lang, name=label)
+        with _oauth_account_proxy(request):
+            ru = _pop_oauth_redirect(
+                request, "dailymotion_oauth_redirect_uri", dailymotion_oauth
+            )
+            token_data = dailymotion_oauth.exchange_code_for_tokens(
+                code, redirect_uri_value=ru
+            )
+            access = str(token_data.get("access_token") or "").strip()
+            refresh = str(token_data.get("refresh_token") or "").strip() or None
+            expires_in = token_data.get("expires_in")
+            if not access:
+                raise ValueError("No access token in Dailymotion response.")
+            profile = dailymotion_oauth.fetch_profile(access)
+            open_id = profile.get("open_id") or ""
+            if not open_id:
+                raise ValueError("Dailymotion did not return a user id.")
+            cid = db.save_oauth_connection(
+                platform_id="dailymotion",
+                open_id=str(open_id),
+                username=profile.get("username"),
+                display_name=profile.get("display_name"),
+                access_token=access,
+                refresh_token=refresh,
+                expires_in=int(expires_in) if expires_in is not None else None,
+                scopes=dailymotion_oauth.oauth_scopes(),
+                client_id=dailymotion_oauth.client_id(),
+                client_secret=dailymotion_oauth.client_secret(),
+                redirect_uri=ru,
+                linked_by_user_id=str(linked_by) if linked_by else None,
+            )
+            _bind_oauth_link_target(request, cid)
+            label = profile.get("username") or profile.get("display_name") or "Dailymotion"
+            request.session["tiktok_ok"] = i18n.t("servers.dailymotion_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
         request.session["tiktok_error"] = str(e)
     return _oauth_redirect(request, admin)
@@ -4789,38 +4875,39 @@ def bilibili_oauth_callback(request: Request):
         request.session["tiktok_error"] = i18n.t("servers.bilibili_no_code", lang)
         return _oauth_redirect(request, admin)
     try:
-        ru = _pop_oauth_redirect(request, "bilibili_oauth_redirect_uri", bilibili_oauth)
-        token_data = bilibili_oauth.exchange_code_for_tokens(code)
-        access = str(token_data.get("access_token") or "").strip()
-        refresh = str(token_data.get("refresh_token") or "").strip() or None
-        if not access:
-            raise ValueError("No access token in Bilibili response.")
-        profile = bilibili_oauth.fetch_profile(access)
-        open_id = (
-            profile.get("open_id")
-            or token_data.get("openid")
-            or token_data.get("open_id")
-            or ""
-        )
-        if not open_id:
-            raise ValueError("Bilibili did not return an openid.")
-        cid = db.save_oauth_connection(
-            platform_id="bilibili",
-            open_id=str(open_id),
-            username=profile.get("username"),
-            display_name=profile.get("display_name"),
-            access_token=access,
-            refresh_token=refresh,
-            expires_in=bilibili_oauth.expires_seconds(token_data.get("expires_in")),
-            scopes=bilibili_oauth.oauth_scopes(),
-            client_id=bilibili_oauth.client_id(),
-            client_secret=bilibili_oauth.client_secret(),
-            redirect_uri=ru,
-            linked_by_user_id=str(linked_by) if linked_by else None,
-        )
-        _bind_oauth_link_target(request, cid)
-        label = profile.get("username") or profile.get("display_name") or "Bilibili"
-        request.session["tiktok_ok"] = i18n.t("servers.bilibili_connected", lang, name=label)
+        with _oauth_account_proxy(request):
+            ru = _pop_oauth_redirect(request, "bilibili_oauth_redirect_uri", bilibili_oauth)
+            token_data = bilibili_oauth.exchange_code_for_tokens(code)
+            access = str(token_data.get("access_token") or "").strip()
+            refresh = str(token_data.get("refresh_token") or "").strip() or None
+            if not access:
+                raise ValueError("No access token in Bilibili response.")
+            profile = bilibili_oauth.fetch_profile(access)
+            open_id = (
+                profile.get("open_id")
+                or token_data.get("openid")
+                or token_data.get("open_id")
+                or ""
+            )
+            if not open_id:
+                raise ValueError("Bilibili did not return an openid.")
+            cid = db.save_oauth_connection(
+                platform_id="bilibili",
+                open_id=str(open_id),
+                username=profile.get("username"),
+                display_name=profile.get("display_name"),
+                access_token=access,
+                refresh_token=refresh,
+                expires_in=bilibili_oauth.expires_seconds(token_data.get("expires_in")),
+                scopes=bilibili_oauth.oauth_scopes(),
+                client_id=bilibili_oauth.client_id(),
+                client_secret=bilibili_oauth.client_secret(),
+                redirect_uri=ru,
+                linked_by_user_id=str(linked_by) if linked_by else None,
+            )
+            _bind_oauth_link_target(request, cid)
+            label = profile.get("username") or profile.get("display_name") or "Bilibili"
+            request.session["tiktok_ok"] = i18n.t("servers.bilibili_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
         request.session["tiktok_error"] = str(e)
     return _oauth_redirect(request, admin)
@@ -4926,56 +5013,57 @@ async def snapchat_oauth_callback(request: Request):
         request, "snapchat_oauth_redirect_uri", snapchat_oauth
     )
     try:
-        with db.using_credentials_account(link_name):
-            token_data = snapchat_oauth.exchange_code_for_tokens(
-                code, redirect_uri_value=ru
-            )
-            access = str(token_data.get("access_token") or "").strip()
-            refresh = str(token_data.get("refresh_token") or "").strip() or None
-            expires_in = token_data.get("expires_in")
-            if not access:
-                raise ValueError("No access token in Snapchat response.")
+        with _oauth_account_proxy(request):
+            with db.using_credentials_account(link_name):
+                token_data = snapchat_oauth.exchange_code_for_tokens(
+                    code, redirect_uri_value=ru
+                )
+                access = str(token_data.get("access_token") or "").strip()
+                refresh = str(token_data.get("refresh_token") or "").strip() or None
+                expires_in = token_data.get("expires_in")
+                if not access:
+                    raise ValueError("No access token in Snapchat response.")
+                _oauth_debug_log(
+                    "snapchat",
+                    "tokens OK (refresh=%s); consultando perfil publico..."
+                    % ("si" if refresh else "no"),
+                )
+                profile = snapchat_oauth.fetch_profile(access)
+                client_id_val = snapchat_oauth.client_id()
+                client_secret_val = snapchat_oauth.client_secret()
+            open_id = profile.get("open_id") or ""
+            if not open_id:
+                raise ValueError("snapchat_no_profile")
             _oauth_debug_log(
                 "snapchat",
-                "tokens OK (refresh=%s); consultando perfil publico..."
-                % ("si" if refresh else "no"),
+                f"perfil OK: {profile.get('username') or profile.get('display_name') or open_id}",
             )
-            profile = snapchat_oauth.fetch_profile(access)
-            client_id_val = snapchat_oauth.client_id()
-            client_secret_val = snapchat_oauth.client_secret()
-        open_id = profile.get("open_id") or ""
-        if not open_id:
-            raise ValueError("snapchat_no_profile")
-        _oauth_debug_log(
-            "snapchat",
-            f"perfil OK: {profile.get('username') or profile.get('display_name') or open_id}",
-        )
-        cid = db.save_oauth_connection(
-            platform_id="snapchat",
-            open_id=str(open_id),
-            username=profile.get("username"),
-            display_name=profile.get("display_name"),
-            access_token=access,
-            refresh_token=refresh,
-            expires_in=int(expires_in) if expires_in is not None else 3600,
-            scopes=snapchat_oauth.oauth_scopes(),
-            client_id=client_id_val,
-            client_secret=client_secret_val,
-            redirect_uri=ru,
-            linked_by_user_id=str(linked_by) if linked_by else None,
-        )
-        if link_name:
-            db.bind_oauth_account_name(cid, link_name)
-        else:
-            _bind_oauth_link_target(request, cid)
-        request.session.pop("snapchat_oauth_state", None)
-        request.session.pop("snapchat_oauth_user_id", None)
-        request.session.pop("oauth_link_target_name", None)
-        label = profile.get("username") or profile.get("display_name") or "Snapchat"
-        _oauth_debug_log(
-            "snapchat", f"conexion guardada: cuenta='{link_name or '-'}' perfil='{label}'"
-        )
-        request.session["tiktok_ok"] = i18n.t("servers.snapchat_connected", lang, name=label)
+            cid = db.save_oauth_connection(
+                platform_id="snapchat",
+                open_id=str(open_id),
+                username=profile.get("username"),
+                display_name=profile.get("display_name"),
+                access_token=access,
+                refresh_token=refresh,
+                expires_in=int(expires_in) if expires_in is not None else 3600,
+                scopes=snapchat_oauth.oauth_scopes(),
+                client_id=client_id_val,
+                client_secret=client_secret_val,
+                redirect_uri=ru,
+                linked_by_user_id=str(linked_by) if linked_by else None,
+            )
+            if link_name:
+                db.bind_oauth_account_name(cid, link_name)
+            else:
+                _bind_oauth_link_target(request, cid)
+            request.session.pop("snapchat_oauth_state", None)
+            request.session.pop("snapchat_oauth_user_id", None)
+            request.session.pop("oauth_link_target_name", None)
+            label = profile.get("username") or profile.get("display_name") or "Snapchat"
+            _oauth_debug_log(
+                "snapchat", f"conexion guardada: cuenta='{link_name or '-'}' perfil='{label}'"
+            )
+            request.session["tiktok_ok"] = i18n.t("servers.snapchat_connected", lang, name=label)
     except (ValueError, urllib.error.URLError, OSError) as e:
         code_err = str(e)
         _oauth_debug_log("snapchat", f"FALLO: {code_err[:300]}")

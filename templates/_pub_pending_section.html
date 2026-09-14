@@ -1,5 +1,5 @@
-{% if can_manage_publish_retry and pending_retry_publications | length > 0 %}
-      <section class="section dashboard-section pub-pending-section">
+{% if can_manage_publish_retry %}
+      <section class="section dashboard-section pub-pending-section" id="pub-pending-section"{% if pending_retry_publications | length == 0 %} hidden{% endif %}>
         <div class="pub-pending-section__head">
           <h2>{{ t('pub.pending_section') }}</h2>
           <button
@@ -26,7 +26,7 @@
                 <th>{{ t('pub.pending_col_actions') }}</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody id="pub-pending-tbody">
               {% for row in pending_retry_publications %}
               {% set busy = row.status == 'retrying' %}
               <tr>
@@ -298,23 +298,111 @@
             if (addApply) addApply.hidden = n < 1;
           }
 
-          document.querySelectorAll(".js-pub-retry-open").forEach(function (btn) {
-            btn.addEventListener("click", function () {
-              lastTrigger = btn;
-              currentSchedId = btn.getAttribute("data-sched-id") || "";
-              var ids = [];
-              try { ids = JSON.parse(btn.getAttribute("data-platforms") || "[]"); } catch (e) { ids = []; }
-              if (!Array.isArray(ids)) ids = [];
-              form.setAttribute("action", btn.getAttribute("data-action") || "");
-              if (nextEl) nextEl.value = btn.getAttribute("data-next") || "";
-              if (addBox) addBox.hidden = true;
-              render(ids.map(function (p) {
-                var id = String(p || "").trim();
-                return id === "bilibili_qr" ? "bilibili" : id;
-              }).filter(Boolean));
-              modal.classList.add("is-open");
-              modal.setAttribute("aria-hidden", "false");
+          var retryBtnLabel = {{ t('pub.retry_btn') | tojson }};
+          var cancelBtnLabel = {{ t('pub.cancel_pending_btn') | tojson }};
+          var retryingLabel = {{ t('pub.retry_in_progress') | tojson }};
+          var viewLabel = {{ t('pub.log_view') | tojson }};
+          var cancelConfirm = {{ t('pub.cancel_pending_confirm') | tojson }};
+          var retryNext = {{ (pub_retry_next or '') | tojson }};
+          var eyeSvg = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>';
+
+          window.renderPendingRetry = function (rows) {
+            var section = document.getElementById("pub-pending-section");
+            var tbody = document.getElementById("pub-pending-tbody");
+            if (!section || !tbody) return;
+            rows = rows || [];
+            section.hidden = rows.length === 0;
+            tbody.innerHTML = "";
+            rows.forEach(function (row) {
+              var busy = String(row.status || "") === "retrying";
+              var tr = document.createElement("tr");
+              var tdTitle = document.createElement("td");
+              tdTitle.textContent = row.video_title || "—";
+              var tdUser = document.createElement("td");
+              tdUser.textContent = row.user_username || "—";
+              var tdPlat = document.createElement("td");
+              if (busy) {
+                var badge = document.createElement("span");
+                badge.className = "badge";
+                badge.textContent = retryingLabel;
+                tdPlat.appendChild(badge);
+              } else {
+                var viewBtn = document.createElement("button");
+                viewBtn.type = "button";
+                viewBtn.className = "pub-log-view js-pub-retry-open";
+                viewBtn.setAttribute("data-action", row.retry_url || "");
+                viewBtn.setAttribute("data-sched-id", row.id || "");
+                viewBtn.setAttribute("data-next", retryNext);
+                viewBtn.setAttribute("data-platforms", row.platforms_json || "[]");
+                viewBtn.setAttribute("aria-label", viewLabel);
+                viewBtn.innerHTML = eyeSvg + "<span>" + viewLabel + "</span>";
+                tdPlat.appendChild(viewBtn);
+              }
+              var tdAct = document.createElement("td");
+              tdAct.className = "pub-pending-actions";
+              if (busy) {
+                var sub = document.createElement("span");
+                sub.className = "sub";
+                sub.textContent = retryingLabel;
+                tdAct.appendChild(sub);
+              } else {
+                var retryBtn = document.createElement("button");
+                retryBtn.type = "button";
+                retryBtn.className = "btn btn-accent btn-sm js-pub-retry-open";
+                retryBtn.setAttribute("data-action", row.retry_url || "");
+                retryBtn.setAttribute("data-sched-id", row.id || "");
+                retryBtn.setAttribute("data-next", retryNext);
+                retryBtn.setAttribute("data-platforms", row.platforms_json || "[]");
+                retryBtn.textContent = retryBtnLabel;
+                var formEl = document.createElement("form");
+                formEl.method = "post";
+                formEl.action = row.cancel_url || "";
+                formEl.className = "pub-pending-form";
+                formEl.addEventListener("submit", function (ev) {
+                  if (!confirm(cancelConfirm)) ev.preventDefault();
+                });
+                if (retryNext) {
+                  var nextIn = document.createElement("input");
+                  nextIn.type = "hidden";
+                  nextIn.name = "next";
+                  nextIn.value = retryNext;
+                  formEl.appendChild(nextIn);
+                }
+                var cancelBtn = document.createElement("button");
+                cancelBtn.type = "submit";
+                cancelBtn.className = "btn btn-ghost btn-sm btn-user-delete";
+                cancelBtn.textContent = cancelBtnLabel;
+                formEl.appendChild(cancelBtn);
+                tdAct.appendChild(retryBtn);
+                tdAct.appendChild(formEl);
+              }
+              tr.appendChild(tdTitle);
+              tr.appendChild(tdUser);
+              tr.appendChild(tdPlat);
+              tr.appendChild(tdAct);
+              tbody.appendChild(tr);
             });
+          };
+
+          document.addEventListener("click", function (e) {
+            var btn = e.target.closest(".js-pub-retry-open");
+            if (!btn) return;
+            var section = document.getElementById("pub-pending-section");
+            if (section && !section.contains(btn) && modal && !modal.contains(btn)) return;
+            lastTrigger = btn;
+            currentSchedId = btn.getAttribute("data-sched-id") || "";
+            var ids = [];
+            try { ids = JSON.parse(btn.getAttribute("data-platforms") || "[]"); } catch (err) { ids = []; }
+            if (!Array.isArray(ids)) ids = [];
+            form.setAttribute("action", btn.getAttribute("data-action") || "");
+            if (nextEl) nextEl.value = btn.getAttribute("data-next") || "";
+            if (addBox) addBox.hidden = true;
+            render(ids.map(function (p) {
+              var id = String(p || "").trim();
+              return id === "bilibili_qr" ? "bilibili" : id;
+            }).filter(Boolean));
+            modal.classList.add("is-open");
+            modal.setAttribute("aria-hidden", "false");
           });
 
           if (addOpen) {

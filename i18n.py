@@ -35,6 +35,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Correo de notificaciones: se usa para cambiar contraseña y alertas si falla una publicación. Los administradores reciben todos los fallos. El usuario TikTok solo recibe fallos de su cuenta vinculada. Al resto no les llega un correo si el único problema es TikTok. Contraseña: enviamos el enlace de restablecimiento a ese correo.",
     },
     "panel.tiktok_title": {"en": "TikTok account", "es": "Cuenta TikTok"},
+    "panel.in_development": {"en": "In development", "es": "En desarrollo"},
     "panel.accounts_title": {"en": "Accounts", "es": "Cuenta"},
     "panel.accounts_intro": {
         "en": "Connect your social accounts with official OAuth to publish from the panel. You can renew login or revoke access at any time.",
@@ -85,8 +86,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Conecta tu TikTok con el flujo oficial OAuth para publicar desde el panel. Puedes revocar la conexión cuando quieras.",
     },
     "panel.tiktok_oauth_missing": {
-        "en": "TikTok is not configured on the server yet. Ask the site administrator to save the Client Key and Secret in Servers.",
-        "es": "TikTok aún no está configurado en el servidor. Pide al administrador que guarde el Client Key y el Secret en Servidores.",
+        "en": "Save the TikTok Client Key and Client Secret first (Configure API), then tap Connect with TikTok.",
+        "es": "Guarda primero el Client Key y el Client Secret de TikTok (Configurar API) y luego pulsa Conectar con TikTok.",
     },
     "panel.tiktok_none": {
         "en": "No TikTok account connected yet.",
@@ -317,6 +318,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Pega esta Redirect URI exacta en el portal de desarrolladores de TikTok (SITE_URL/oauth/tiktok/callback).",
     },
     "servers.connect_with_tiktok": {"en": "Connect with TikTok", "es": "Conectar con TikTok"},
+    "servers.tiktok_connected": {
+        "en": "Connected @{name} successfully.",
+        "es": "Cuenta @{name} conectada.",
+    },
     "servers.connect_with_vmos": {
         "en": "Connect with VMOS {short}",
         "es": "Conectar con VMOS {short}",
@@ -1362,6 +1367,26 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Publishing “{title}”…",
         "es": "Publicando «{title}»…",
     },
+    "pub.publishing_queued": {
+        "en": "Queued for {platform} (one network per linked proxy).",
+        "es": "En cola para {platform} (una red por cada proxy vinculado).",
+    },
+    "pub.publishing_now": {
+        "en": "Publishing to {platform} now…",
+        "es": "Publicando ahora en {platform}…",
+    },
+    "pub.publish_busy": {
+        "en": "Waiting for a free proxy. Each linked proxy handles one upload at a time.",
+        "es": "Esperando un proxy libre. Cada proxy vinculado atiende una subida a la vez.",
+    },
+    "pub.waiting_browser": {
+        "en": "Waiting for the browser on this server (one Chromium at a time)…",
+        "es": "Esperando el navegador de este servidor (un Chromium a la vez)…",
+    },
+    "pub.flash.publish_queued": {
+        "en": "Publish started. One network per linked proxy at a time (two proxies → two in parallel). The log below updates live.",
+        "es": "Publicación en segundo plano. Una red por cada proxy vinculado (2 proxies → 2 en paralelo). El registro de abajo se actualiza al momento.",
+    },
     "pub.captions_upload_fail": {
         "en": "Could not upload the video. Try again.",
         "es": "No se pudo subir el video. Inténtalo de nuevo.",
@@ -2220,6 +2245,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The linked proxy denied access to this destination.",
         "es": "El proxy vinculado denegó el acceso a este destino.",
     },
+    "pub.proxy.platform_unreachable": {
+        "en": "This proxy cannot reach {platform}. The video was not uploaded. The proxy does not work for that network — try another proxy.",
+        "es": "Este proxy no llega a {platform}. El video no se subió. El proxy no sirve para esa red; prueba con otro.",
+    },
     "pub.proxy.ssl": {
         "en": "Secure connection through the linked proxy failed.",
         "es": "Falló la conexión segura a través del proxy vinculado.",
@@ -2305,8 +2334,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Publicación restante cancelada por un administrador.",
     },
     "pub.flash.retry_queued": {
-        "en": "Republish started in the background. You can leave this page; the log will update when each platform finishes.",
-        "es": "Republicación en segundo plano. Puedes salir de esta página; el registro se actualiza cuando termine cada plataforma.",
+        "en": "Republish started. One network per linked proxy at a time. The log below updates live.",
+        "es": "Republicación en segundo plano. Una red por cada proxy vinculado. El registro de abajo se actualiza al momento.",
     },
     "pub.flash.pending_cancelled": {
         "en": "Remaining publications cancelled. The video is no longer queued.",
@@ -3597,8 +3626,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     # ------------------------------------------------------------------
     "proxys.title": {"en": "Proxies", "es": "Proxys"},
     "proxys.intro": {
-        "en": "Add proxies in any common format. Test each one to detect its country. OAuth, PPV host, Odysee, DTube, Bilibili.tv and Bilibili.com QR sessions use the linked proxy. VMOS accounts do not: the cloud phone’s own network is used.",
-        "es": "Añade proxys en cualquier formato habitual. Prueba cada uno para detectar su país. Las cuentas OAuth, las de hosts PPV, Odysee, DTube, Bilibili.tv y la sesión QR de Bilibili.com sí usan el proxy vinculado. Las de VMOS no: sale la red del móvil en la nube.",
+        "en": "Add proxies in any common format. Test each one to detect its country. Test on servers checks whether that proxy can reach TikTok, YouTube and the rest. OAuth, PPV host, Odysee, DTube, Bilibili.tv and Bilibili.com QR sessions use the linked proxy. VMOS accounts do not: the cloud phone’s own network is used.",
+        "es": "Añade proxys en cualquier formato habitual. Prueba cada uno para detectar su país. «Probar en servidores» comprueba si ese proxy llega a TikTok, YouTube y el resto de redes. Las cuentas OAuth, las de hosts PPV, Odysee, DTube, Bilibili.tv y la sesión QR de Bilibili.com sí usan el proxy vinculado. Las de VMOS no: sale la red del móvil en la nube.",
     },
     "proxys.info_btn": {"en": "About proxies", "es": "Información sobre proxys"},
     "proxys.add": {"en": "Add proxy", "es": "Añadir proxy"},
@@ -3637,6 +3666,30 @@ MESSAGES: dict[str, dict[str, str]] = {
     "proxys.inactive": {"en": "Inactive", "es": "Inactivo"},
     "proxys.test": {"en": "Test", "es": "Probar"},
     "proxys.testing": {"en": "Testing…", "es": "Probando…"},
+    "proxys.test_servers": {
+        "en": "Test on servers",
+        "es": "Probar en servidores",
+    },
+    "proxys.testing_servers": {
+        "en": "Checking each server through this proxy…",
+        "es": "Comprobando cada servidor a través de este proxy…",
+    },
+    "proxys.test_servers_title": {
+        "en": "Servers with this proxy",
+        "es": "Proxy en servidores",
+    },
+    "proxys.test_servers_ok": {
+        "en": "This proxy reaches all {n} servers.",
+        "es": "Este proxy llega a los {n} servidores.",
+    },
+    "proxys.test_servers_partial": {
+        "en": "Reaches {ok} of {n} servers. Does not work for: {names}.",
+        "es": "Llega a {ok} de {n} servidores. No sirve para: {names}.",
+    },
+    "proxys.test_servers_fail": {
+        "en": "This proxy did not reach any server.",
+        "es": "Este proxy no llegó a ningún servidor.",
+    },
     "proxys.edit": {"en": "Edit", "es": "Editar"},
     "proxys.delete": {"en": "Delete", "es": "Eliminar"},
     "proxys.save": {"en": "Save", "es": "Guardar"},
@@ -3707,6 +3760,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "proxys.err.test_failed": {
         "en": "The proxy did not work. Check host, port and credentials.",
         "es": "El proxy no funcionó. Revisa host, puerto y credenciales.",
+    },
+    "proxys.err.busy": {
+        "en": "This proxy is busy uploading. Try the server test again in a minute.",
+        "es": "Este proxy está ocupado subiendo. Vuelve a probar en servidores en un minuto.",
     },
     # ------------------------------------------------------------------
     # Membresías

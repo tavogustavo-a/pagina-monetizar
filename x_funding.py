@@ -101,7 +101,9 @@ def check_account(row: dict[str, Any], threshold: int) -> dict[str, Any]:
                     pass
             return _fetch_metrics(local_token)
 
-        with proxy_util.using_proxy(proxy_url):
+        import platform_publish
+
+        with platform_publish.using_held_proxy(proxy_url, timeout=20):
             metrics = proxy_util.run_slow_retry(_run)
     except ValueError as e:
         result["detail"] = str(e)[:200]
@@ -179,16 +181,16 @@ def check_due_for_oauth(oauth_account_id: str) -> bool:
 
 def maybe_check_on_publish(account_link_id: str | None) -> None:
     """Si esa cuenta X no se revisó en 7 días, usa esta publicación para consultar seguidores."""
-    import proxy_util
-
     oid = db.resolve_oauth_account_id("x", account_link_id=account_link_id)
     if not oid or not check_due_for_oauth(oid):
         return
     raw = db.get_oauth_account_row(oid)
     if not raw:
         return
+    import platform_publish
+
     proxy_url = db.get_active_proxy_url_for_account(account_link_id)
-    with proxy_util.using_proxy(proxy_url):
+    with platform_publish.using_held_proxy(proxy_url, timeout=20):
         res = check_account(raw, min_followers())
     db.save_x_monetize_check(
         oauth_account_id=oid,
