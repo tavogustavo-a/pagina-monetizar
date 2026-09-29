@@ -391,6 +391,7 @@ def probe_account(email: str, secret: str, extra: str = "") -> tuple[bool, str]:
         email_ok = str(me.get("primary_email") or "").strip()
         if not email_ok and not me.get("has_verified_email"):
             raise OdyseeError("signin_not_logged_in")
+        _TLS.last_auth_token = token
         shown = str(me.get("name") or me.get("primary_email") or name or login).strip()
         return True, shown
     except OdyseeError as e:
@@ -398,6 +399,12 @@ def probe_account(email: str, secret: str, extra: str = "") -> tuple[bool, str]:
         return False, str(e)
     except Exception as e:
         return False, str(e)[:280]
+
+
+def take_last_auth_token() -> str:
+    token = str(getattr(_TLS, "last_auth_token", "") or "").strip()
+    _TLS.last_auth_token = ""
+    return token
 
 
 def resolve_account_auth_token(account: dict[str, Any]) -> str:

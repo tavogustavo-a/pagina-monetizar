@@ -4645,10 +4645,11 @@ def facebook_oauth_callback(request: Request):
                     linked_by_user_id=str(linked_by) if linked_by else None,
                 )
                 saved_ids.append(cid)
-            if len(saved_ids) == 1:
-                _bind_oauth_link_target(request, saved_ids[0])
-            else:
-                _pop_oauth_link_target(request)
+            link_name = str(request.session.get("oauth_link_target_name") or "").strip()
+            for cid in saved_ids:
+                if link_name:
+                    db.bind_oauth_account_name(cid, link_name)
+            _pop_oauth_link_target(request)
             request.session["tiktok_ok"] = i18n.t(
                 "servers.facebook_connected", lang, n=len(pages)
             )
@@ -5455,7 +5456,7 @@ def api_chain_save(request: Request, body: ChainAccountBody):
         row = db.upsert_chain_account(
             account_id=body.id,
             platform_id=pid,
-            name=body.name or (detail if ok else login),
+            name=body.name or login,
             login=login,
             secret=body.secret,
             extra=extra,

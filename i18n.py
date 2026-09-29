@@ -1174,8 +1174,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Odysee también rechazó el login por el proxy vinculado a esta cuenta. Deja el proxy activo, vuelve a Guardar cuenta y luego republica.",
     },
     "odysee.err_auth": {
-        "en": "Odysee rejected the login from this server (same message as a wrong password). If you can sign in at odysee.com, the VPS IP is blocked: assign a residential proxy to this account in Proxies, Save account again, then republish.",
-        "es": "Odysee rechazó el login desde este servidor (el mismo aviso que si la contraseña fallara). Si en odysee.com sí entra, la IP del VPS está bloqueada: en Proxys vincula un proxy residencial a esta cuenta, vuelve a Guardar cuenta y luego republica.",
+        "en": "Odysee rejected the login (same message as a wrong password). A green proxy ping only means the host is reachable, not that login works. Connect Odysee from the same Servers account that has the residential proxy, Save account, then republish. Rotating proxies can also change IP between ping and login.",
+        "es": "Odysee rechazó el login (el mismo aviso que si la contraseña fallara). El ping verde del proxy solo dice que llega al servidor, no que el login funcione. Conecta Odysee desde la misma cuenta de Servidores que tiene el proxy residencial, pulsa Guardar cuenta y republica. Un proxy rotativo también puede cambiar de IP entre el ping y el login.",
     },
     "odysee.err_app_id": {
         "en": "Odysee blocked the test before checking your password (invalid install ID). Reload Servers and try again.",
@@ -1384,8 +1384,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Esperando el navegador de este servidor (un Chromium a la vez)…",
     },
     "pub.flash.publish_queued": {
-        "en": "Publish started. One network per linked proxy at a time (two proxies → two in parallel). The log below updates live.",
-        "es": "Publicación en segundo plano. Una red por cada proxy vinculado (2 proxies → 2 en paralelo). El registro de abajo se actualiza al momento.",
+        "en": "",
+        "es": "",
     },
     "pub.captions_upload_fail": {
         "en": "Could not upload the video. Try again.",
@@ -2334,8 +2334,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Publicación restante cancelada por un administrador.",
     },
     "pub.flash.retry_queued": {
-        "en": "Republish started. One network per linked proxy at a time. The log below updates live.",
-        "es": "Republicación en segundo plano. Una red por cada proxy vinculado. El registro de abajo se actualiza al momento.",
+        "en": "",
+        "es": "",
     },
     "pub.flash.pending_cancelled": {
         "en": "Remaining publications cancelled. The video is no longer queued.",
@@ -3679,8 +3679,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Proxy en servidores",
     },
     "proxys.test_servers_ok": {
-        "en": "This proxy reaches all {n} servers.",
-        "es": "Este proxy llega a los {n} servidores.",
+        "en": "This proxy reaches all {n} servers (HTTP ping, not a login).",
+        "es": "Este proxy llega a los {n} servidores (ping HTTP; no es un login).",
     },
     "proxys.test_servers_partial": {
         "en": "Reaches {ok} of {n} servers. Does not work for: {names}.",

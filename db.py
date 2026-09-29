@@ -5156,7 +5156,11 @@ def save_tiktok_oauth_connection(
             conn.execute(
                 """
                 UPDATE tiktok_api_configs SET
-                  name = ?, tiktok_username = ?, access_token = ?, refresh_token = ?,
+                  name = CASE
+                    WHEN TRIM(COALESCE(name, '')) = '' THEN ?
+                    ELSE name
+                  END,
+                  tiktok_username = ?, access_token = ?, refresh_token = ?,
                   token_expires_at = ?, oauth_scopes = ?, client_key = ?, client_secret = ?,
                   redirect_uri = ?, internal_user_id = COALESCE(?, internal_user_id),
                   active = 1, updated_at = ?
@@ -5190,7 +5194,7 @@ def save_tiktok_oauth_connection(
                 """,
                 (
                     cid,
-                    label,
+                    "",
                     client_key,
                     client_secret,
                     redirect_uri,
@@ -5976,16 +5980,23 @@ def upsert_chain_account(
         secret_val = chain_mod.persist_secret(pid, login_val, incoming_secret, secret_val)
         if not secret_val:
             raise ValueError("missing_fields")
+        logical = (link_name or "").strip()
+        if not logical:
+            candidate = (name or "").strip()
+            if candidate and _account_link_name_taken(conn, candidate):
+                logical = candidate
+        if not logical and existing:
+            logical = str(existing["name"] or "").strip()
         if pid == "odysee":
             try:
-                with chain_mod._account_proxy(pid, oid, link_name):
+                with chain_mod._account_proxy(pid, oid, logical):
                     auth_token_val = chain_mod.odysee_auth_token_for_save(
                         login_val, secret_val, auth_token_val
                     )
             except Exception:
                 pass
-        label = (name or "").strip() or (link_name or "").strip() or login_val or pid
-        account_label = (link_name or "").strip() or label
+        label = logical or login_val or pid
+        account_label = logical
         sa_pid = chain_mod.server_platform_id(pid)
         created = existing["created_at"] if existing else now
         conn.execute(
@@ -6018,21 +6029,22 @@ def upsert_chain_account(
             ),
         )
         try:
-            _release_other_links_for_platform(
-                conn,
-                source_kind="chain",
-                platform_id=sa_pid,
-                link_name=account_label,
-                keep_ref=oid,
-            )
-            _upsert_linked_server_account(
-                conn,
-                source_kind="chain",
-                source_ref=oid,
-                name=account_label,
-                platform_id=sa_pid,
-                active=True,
-            )
+            if account_label:
+                _release_other_links_for_platform(
+                    conn,
+                    source_kind="chain",
+                    platform_id=sa_pid,
+                    link_name=account_label,
+                    keep_ref=oid,
+                )
+                _upsert_linked_server_account(
+                    conn,
+                    source_kind="chain",
+                    source_ref=oid,
+                    name=account_label,
+                    platform_id=sa_pid,
+                    active=True,
+                )
         except ValueError as e:
             if str(e) != "name_taken":
                 raise
@@ -7749,8 +7761,10 @@ def sync_server_accounts_from_links() -> None:
         live_tiktok: set[str] = set()
         for row in tiktok_rows:
             cid = str(row["id"])
+            label = str(row["name"] or "").strip()
+            if not label:
+                continue
             live_tiktok.add(cid)
-            label = _config_display_label(row)
             _upsert_linked_server_account(
                 conn,
                 source_kind="tiktok",
@@ -7771,19 +7785,15 @@ def sync_server_accounts_from_links() -> None:
         for row in oauth_rows:
             oid = str(row["id"])
             pid = str(row["platform_id"] or "")
-            live_oauth.add(oid)
-            uname = str(row["username"] or "").strip()
             alias = str(row["account_name"] or "").strip()
-            label = (
-                alias
-                or str(row["display_name"] or "").strip()
-                or (f"@{uname}" if uname else pid)
-            )
+            if not alias:
+                continue
+            live_oauth.add(oid)
             _upsert_linked_server_account(
                 conn,
                 source_kind="oauth",
                 source_ref=oid,
-                name=label,
+                name=alias,
                 platform_id=pid,
                 active=bool(row["active"]),
             )
@@ -7888,8 +7898,10 @@ def sync_server_accounts_from_links() -> None:
                 if not session_ok and pid in chain_mod.QR_PLATFORM_IDS and not last_ok:
                     phantom_qr.append(cid)
                     continue
+            label = str(row["name"] or "").strip()
+            if not label:
+                continue
             live_chain.add(cid)
-            label = str(row["name"] or "").strip() or str(row["login"] or "").strip() or "chain"
             sa_pid = chain_mod.server_platform_id(str(row["platform_id"] or ""))
             _upsert_linked_server_account(
                 conn,
@@ -7963,14 +7975,12 @@ def _build_server_account_groups(
             continue
         by_name.setdefault(key, []).append(account)
     groups: list[dict[str, Any]] = []
-    seen_keys: set[str] = set()
     if links:
         for link in links:
             name = str(link["name"] or "").strip()
             key = name.casefold()
             if not key:
                 continue
-            seen_keys.add(key)
             members_sorted = sorted(
                 by_name.get(key, []),
                 key=lambda item: (item.get("platform") or "").casefold(),
@@ -7985,23 +7995,6 @@ def _build_server_account_groups(
                     "active": bool(link["active"]),
                 }
             )
-    for key, members in by_name.items():
-        if key in seen_keys:
-            continue
-        members_sorted = sorted(
-            members,
-            key=lambda item: (item.get("platform") or "").casefold(),
-        )
-        groups.append(
-            {
-                "key": key,
-                "name": members_sorted[0]["name"],
-                "link_id": "",
-                "accounts": members_sorted,
-                "linked_count": len(members_sorted),
-                "active": all(item.get("active") for item in members_sorted),
-            }
-        )
     groups.sort(key=lambda item: item["name"].casefold())
     return groups
 

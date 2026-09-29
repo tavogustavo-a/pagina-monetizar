@@ -93,6 +93,9 @@ def odysee_auth_token_for_save(login: str, secret: str, previous_token: str = ""
     em = (login or "").strip()
     pw = (secret or "").strip()
     prev = (previous_token or "").strip()
+    hit = odysee.take_last_auth_token()
+    if hit:
+        return hit
     if em and pw and "@" in em:
         try:
             token, _ = odysee.signin(em, pw)
