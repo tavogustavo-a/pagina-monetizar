@@ -120,9 +120,8 @@ def refresh_access_token(
     return data.get("data") or data
 
 
-def fetch_user_profile(access_token: str) -> dict[str, Any]:
-    fields = "open_id,union_id,avatar_url,display_name,username"
-    url = TIKTOK_USERINFO_URL + "?" + urllib.parse.urlencode({"fields": fields})
+def _fetch_user_fields(access_token: str, fields: list[str]) -> dict[str, Any]:
+    url = TIKTOK_USERINFO_URL + "?" + urllib.parse.urlencode({"fields": ",".join(fields)})
     req = urllib.request.Request(
         url,
         headers={"Authorization": f"Bearer {access_token}"},
@@ -137,18 +136,45 @@ def fetch_user_profile(access_token: str) -> dict[str, Any]:
     data = json.loads(raw)
     user = (data.get("data") or {}).get("user") or {}
     if not user:
-        raise ValueError("TikTok did not return user profile data.")
+        err = data.get("error") if isinstance(data.get("error"), dict) else {}
+        raise ValueError(
+            str(err.get("message") or "TikTok did not return user profile data.")
+        )
     return user
 
 
-def revoke_access_token(token: str) -> None:
+def fetch_user_profile(access_token: str, granted_scopes: str = "") -> dict[str, Any]:
+    """user.info.basic da open_id/avatar/display_name; username exige user.info.profile."""
+    granted = {
+        s.strip().lower()
+        for s in (granted_scopes or "").replace(";", ",").split(",")
+        if s.strip()
+    }
+    fields = ["open_id", "union_id", "avatar_url", "display_name"]
+    want_username = not granted or "user.info.profile" in granted
+    if want_username:
+        try:
+            return _fetch_user_fields(access_token, fields + ["username"])
+        except ValueError as e:
+            low = str(e).lower()
+            if "scope" not in low and "permission" not in low and "field" not in low:
+                raise
+    return _fetch_user_fields(access_token, fields)
+
+
+def revoke_access_token(
+    token: str,
+    *,
+    client_key_value: str | None = None,
+    client_secret_value: str | None = None,
+) -> None:
     """Revoca el token en TikTok (Login Kit). Si falla, el caller igual puede borrar en local."""
     tok = (token or "").strip()
     if not tok:
         return
     payload = {
-        "client_key": client_key(),
-        "client_secret": client_secret(),
+        "client_key": (client_key_value or "").strip() or client_key(),
+        "client_secret": (client_secret_value or "").strip() or client_secret(),
         "token": tok,
     }
     if not payload["client_key"] or not payload["client_secret"]:

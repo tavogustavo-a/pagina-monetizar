@@ -4351,7 +4351,8 @@ def tiktok_oauth_callback(request: Request):
             expires_in = token_data.get("expires_in")
             if not access:
                 raise ValueError("No access token in TikTok response.")
-            profile = tiktok_oauth.fetch_user_profile(access)
+            granted_scopes = str(token_data.get("scope") or "").strip()
+            profile = tiktok_oauth.fetch_user_profile(access, granted_scopes)
             open_id = profile.get("open_id") or token_data.get("open_id") or ""
             cid = db.save_tiktok_oauth_connection(
                 open_id=str(open_id),
@@ -4360,7 +4361,7 @@ def tiktok_oauth_callback(request: Request):
                 access_token=access,
                 refresh_token=refresh,
                 expires_in=int(expires_in) if expires_in is not None else None,
-                scopes=tiktok_oauth.oauth_scopes(),
+                scopes=granted_scopes or tiktok_oauth.oauth_scopes(),
                 client_key=tiktok_oauth.client_key(),
                 client_secret=tiktok_oauth.client_secret(),
                 redirect_uri=ru,
@@ -4401,7 +4402,11 @@ def api_tiktok_delete(request: Request, config_id: str):
             name = str(row.get("name") or "").strip()
             url = db.get_active_proxy_url_for_account_name(name) if name else ""
             with platform_publish.using_held_proxy(url, timeout=20):
-                tiktok_oauth.revoke_access_token(tok)
+                tiktok_oauth.revoke_access_token(
+                    tok,
+                    client_key_value=str(row.get("client_key") or ""),
+                    client_secret_value=str(row.get("client_secret") or ""),
+                )
     try:
         db.delete_tiktok_api_config(config_id)
     except ValueError as e:
