@@ -1,88 +1,122 @@
 {% extends "legal_page.html" %}
 {% block legal_body %}
-{% if lang == 'es' %}
-<p class="legal-prose">
-  Al usar {{ site_name }} operado por {{ company_name }}, aceptas estos Términos de servicio.
-</p>
-<h2>1. Descripción del servicio</h2>
-<p class="legal-prose">
-  {{ site_name }} es un panel privado, por invitación, para personas y equipos que quieren crecer en redes sociales:
-  programar y publicar contenido, consultar métricas y gestionar comentarios en las cuentas que conecten
-  mediante el inicio de sesión oficial de cada plataforma. Entre las plataformas compatibles están
-  TikTok, YouTube, Instagram, Facebook, X y Dailymotion, entre otras.
-</p>
-<h2>2. Elegibilidad</h2>
-<p class="legal-prose">
-  Debes estar invitado por un administrador, tener al menos 13 años (y la edad mínima de cada red que conectes)
-  y conectar solo cuentas que te pertenezcan o que estés autorizado a gestionar.
-</p>
-<h2>3. Uso aceptable</h2>
-<ul class="legal-list">
-  <li>Cumplir los términos, normas de comunidad y políticas para desarrolladores de cada plataforma conectada
-    (por ejemplo, los Términos de Servicio, Normas de la comunidad y Términos para Desarrolladores de TikTok cuando conectes TikTok).</li>
-  <li>Sin spam, acoso, contenido ilegal ni abuso de las APIs.</li>
-  <li>Publicar solo contenido sobre el que tengas derechos.</li>
-  <li>No presentar {{ site_name }} como si fuera una red social o un producto oficial de esas plataformas.</li>
-</ul>
-<h2>4. Conexiones oficiales</h2>
-<p class="legal-prose">
-  Solicitamos únicamente los permisos necesarios para las funciones descritas (perfil básico, publicación,
-  comentarios y analíticas, según lo que actives). Puedes revocar el acceso en cualquier momento desde el panel
-  o desde los ajustes de la plataforma.
-</p>
-<h2>5. Membresías y pagos</h2>
-<p class="legal-prose">
-  Los planes de pago son mensuales. Puedes cancelar tu suscripción cuando quieras; consulta la
-  <a href="/cancellation-policy">{{ t('footer.cancellation') }}</a> para el procedimiento, acceso tras la cancelación y reembolsos.
-</p>
-<h2>6. Limitación de responsabilidad</h2>
-<p class="legal-prose">
-  El servicio se ofrece «tal cual». No somos responsables de daños indirectos ni de interrupciones, cambios de
-  política o errores de las redes sociales de terceros.
-</p>
-<h2>7. Contacto</h2>
-<p class="legal-prose"><a href="mailto:{{ support_email }}">{{ support_email }}</a> · <a href="/support">{{ t('footer.support') }}</a></p>
-{% else %}
-<p class="legal-prose">
-  By using {{ site_name }} operated by {{ company_name }}, you agree to these Terms of Service.
-</p>
-<h2>1. Service description</h2>
-<p class="legal-prose">
-  {{ site_name }} is a private, invite-only dashboard for people and teams who want to grow on social media:
-  schedule and publish content, view metrics, and manage comments on the accounts they connect through
-  each platform's official login. Supported platforms include TikTok, YouTube, Instagram, Facebook, X,
-  and Dailymotion, among others.
-</p>
-<h2>2. Eligibility</h2>
-<p class="legal-prose">
-  You must be invited by an administrator, be at least 13 years old (and meet the minimum age of each
-  network you connect), and connect only accounts you own or are authorized to manage.
-</p>
-<h2>3. Acceptable use</h2>
-<ul class="legal-list">
-  <li>Comply with the terms, community guidelines, and developer policies of each connected platform
-    (for example, TikTok's Terms of Service, Community Guidelines, and Developer Terms when you connect TikTok).</li>
-  <li>No spam, harassment, illegal content, or API abuse.</li>
-  <li>Publish only content you have rights to use.</li>
-  <li>Do not present {{ site_name }} as a social network or as an official product of those platforms.</li>
-</ul>
-<h2>4. Official connections</h2>
-<p class="legal-prose">
-  We request only the permissions needed for the features described (basic profile, publishing, comments,
-  and analytics, depending on what you enable). You may revoke access at any time from the panel or from
-  the platform's settings.
-</p>
-<h2>5. Memberships and billing</h2>
-<p class="legal-prose">
-  Paid plans are billed monthly. You may cancel your subscription anytime; see our
-  <a href="/cancellation-policy">{{ t('footer.cancellation') }}</a> for the process, access after cancellation, and refunds.
-</p>
-<h2>6. Limitation of liability</h2>
-<p class="legal-prose">
-  The service is provided «as is». We are not liable for indirect damages or for outages, policy changes,
-  or errors of third-party social networks.
-</p>
-<h2>7. Contact</h2>
-<p class="legal-prose"><a href="mailto:{{ support_email }}">{{ support_email }}</a> · <a href="/support">{{ t('footer.support') }}</a></p>
-{% endif %}
+<article class="legal-prose">
+  {% if lang == 'es' %}
+  <p>Estos Términos de servicio regulan el uso de {{ site_name }}, operado por {{ company_name }} en <a href="{{ site_url }}">{{ site_url }}</a>. Al crear una cuenta, iniciar sesión o usar el panel aceptas estos términos y la <a href="/privacy-policy">Política de privacidad</a>. Si no estás de acuerdo, no uses el servicio.</p>
+
+  <h2>1. El servicio</h2>
+  <p>{{ site_name }} es un panel para creadores y equipos. Permite conectar cuentas propias de redes, preparar un video y enviarlo a las redes que eliges, de forma inmediata o programada. El sitio público describe el producto. El panel es de acceso por invitación.</p>
+  <p>Cada red se conecta con su inicio de sesión oficial. Tú autorizas los permisos en la pantalla de esa plataforma. Nosotros no pedimos ni almacenamos la contraseña de TikTok ni de las demás redes.</p>
+
+  <h2>2. Elegibilidad y cuenta</h2>
+  <ul>
+    <li>Debes tener al menos 18 años, o la mayoría de edad de tu país, y capacidad para aceptar un contrato.</li>
+    <li>Debes ser el titular de las cuentas que conectas, o tener autorización del titular.</li>
+    <li>Eres responsable de la actividad que ocurra con tu usuario y de mantener la contraseña en secreto.</li>
+    <li>Debes darnos un correo donde podamos escribirte sobre la cuenta, la seguridad y estos términos.</li>
+  </ul>
+
+  <h2>3. Uso aceptable</h2>
+  <p>Te comprometes a no usar el servicio para:</p>
+  <ul>
+    <li>Publicar contenido que no tienes derecho a usar, o que infrinja derechos de autor, marca, imagen o privacidad.</li>
+    <li>Suplantar a otra persona, conectar cuentas ajenas sin permiso o eludir los límites de una plataforma.</li>
+    <li>Enviar spam, malware, contenido ilegal o contenido que incite al daño.</li>
+    <li>Atacar, sobrecargar o intentar acceder sin autorización al panel, a otras cuentas o a las APIs conectadas.</li>
+  </ul>
+  <p>Podemos suspender o cerrar el acceso cuando haya un incumplimiento, un riesgo de seguridad o una exigencia legal.</p>
+
+  <h2>4. TikTok y otras plataformas</h2>
+  <p>TikTok, YouTube, Instagram, Facebook, X y el resto de redes son servicios de terceros. Su uso sigue las condiciones de cada una, además de estos términos. En TikTok eso incluye los TikTok Developer Terms y las normas de comunidad de TikTok.</p>
+  <p>Con los permisos actuales, el envío a TikTok usa la carga a la bandeja del creador. El video no queda publicado en el perfil de TikTok hasta que el creador lo confirma dentro de TikTok, salvo un permiso distinto que el creador acepte después en la pantalla de TikTok.</p>
+  <p>No controlamos caídas, cambios de API, revisiones de aplicaciones ni rechazos de contenido de esas plataformas. Un fallo de una red no es un fallo de publicación simulado: si el envío no llega, el panel lo muestra como error.</p>
+
+  <h2>5. Tu contenido</h2>
+  <p>Conservas los derechos sobre los videos y textos que subes. Nos concedes una licencia limitada, mundial y revocable solo para alojar, transformar en el formato que exija la red y transmitir ese contenido a las cuentas que tú indicas, durante el tiempo necesario para cumplir esa orden.</p>
+  <p>Declaras que tienes los derechos y las autorizaciones (incluida la música y la imagen de terceros) para ese envío. Eres el único responsable del contenido frente a tu audiencia y frente a cada plataforma.</p>
+
+  <h2>6. Propiedad del servicio</h2>
+  <p>El software, el diseño, las marcas y la documentación de {{ site_name }} pertenecen a {{ company_name }} o a sus licenciantes. Estos términos no te transfieren esa propiedad. Puedes usar el panel solo para tu actividad como creador o equipo invitado.</p>
+
+  <h2>7. Planes y cancelación</h2>
+  <p>Si hay una tarifa, se informa antes del pago. La baja y el reembolso, cuando existan, se rigen por la <a href="/cancellation-policy">Política de cancelación</a>. Dejar de usar una red no borra por sí solo los datos: usa Desconectar o la página de <a href="/data-deletion">eliminación de datos</a>.</p>
+
+  <h2>8. Terminación</h2>
+  <p>Puedes dejar de usar el servicio y pedir el cierre de la cuenta en cualquier momento. Nosotros podemos suspender o cerrar una cuenta que incumpla estos términos, ponga en riesgo a otros usuarios o a una plataforma, o cuando debamos hacerlo por ley. Tras el cierre, dejamos de usar los tokens de las redes conectadas y los eliminamos según la <a href="/privacy-policy">Política de privacidad</a>.</p>
+
+  <h2>9. Disponibilidad y garantía</h2>
+  <p>El servicio se ofrece tal cual está disponible. No garantizamos que esté libre de interrupciones, que una API de terceros acepte cada video ni que una publicación produzca visitas, ingresos o resultados concretos. En la medida que permita la ley, excluimos las garantías implícitas de comerciabilidad, idoneidad para un fin concreto y no infracción.</p>
+
+  <h2>10. Límite de responsabilidad</h2>
+  <p>En la medida que permita la ley, {{ company_name }} no responde por lucro cesante, pérdida de datos, daño reputacional o daño indirecto derivado del uso del panel o de una red conectada. La responsabilidad total por cualquier reclamación relacionada con el servicio se limita a la cantidad que nos hayas pagado por el servicio en los tres meses anteriores al hecho, o a cien dólares estadounidenses si no hubo pago, lo que sea mayor. Nada en estos términos limita la responsabilidad que la ley no permita limitar, incluida la derivada de dolo.</p>
+
+  <h2>11. Indemnización</h2>
+  <p>Defenderás y mantendrás indemne a {{ company_name }} frente a reclamaciones de terceros causadas por tu contenido, por conectar una cuenta sin autorización o por incumplir estos términos o las normas de una plataforma, incluidos los costes razonables de defensa.</p>
+
+  <h2>12. Cambios de los términos</h2>
+  <p>Podemos actualizar estos términos. Publicaremos la nueva versión en esta página con una fecha nueva. Si el cambio es sustancial, lo avisaremos por el correo de la cuenta o mediante un aviso en el panel antes de que siga en vigor. Si sigues usando el servicio después de esa fecha, aceptas la versión nueva. Si no la aceptas, deja de usar el servicio y pide el cierre de la cuenta.</p>
+
+  <h2>13. Ley aplicable y contacto</h2>
+  <p>Estos términos se interpretan según la ley aplicable al operador del servicio, sin perjuicio de las normas imperativas de protección al consumidor de tu país de residencia. El uso de TikTok también queda sujeto a las condiciones de TikTok.</p>
+  <p>Consultas sobre estos términos: <a href="mailto:{{ support_email }}">{{ support_email }}</a> · <a href="{{ site_url }}">{{ site_url }}</a> · <a href="/support">Soporte</a>.</p>
+  {% else %}
+  <p>These Terms of Service govern your use of {{ site_name }}, operated by {{ company_name }} at <a href="{{ site_url }}">{{ site_url }}</a>. By creating an account, signing in, or using the panel you accept these terms and the <a href="/privacy-policy">Privacy Policy</a>. If you do not agree, do not use the service.</p>
+
+  <h2>1. The service</h2>
+  <p>{{ site_name }} is a panel for creators and teams. It lets you connect your own social accounts, prepare a video, and send it to the networks you choose, immediately or on a schedule. The public website describes the product. The panel is invite-only.</p>
+  <p>Each network connects through its official login. You authorize the permissions on that platform's screen. We do not ask for or store your TikTok password or the password of any other network.</p>
+
+  <h2>2. Eligibility and account</h2>
+  <ul>
+    <li>You must be at least 18, or the age of majority in your country, and able to enter a contract.</li>
+    <li>You must own the accounts you connect, or have the owner's authorization.</li>
+    <li>You are responsible for activity under your user and for keeping the password secret.</li>
+    <li>You must give us an email address where we can write to you about the account, security, and these terms.</li>
+  </ul>
+
+  <h2>3. Acceptable use</h2>
+  <p>You agree not to use the service to:</p>
+  <ul>
+    <li>Post content you have no right to use, or that infringes copyright, trademark, publicity, or privacy rights.</li>
+    <li>Impersonate another person, connect someone else's account without permission, or bypass a platform's limits.</li>
+    <li>Send spam, malware, illegal content, or content that incites harm.</li>
+    <li>Attack, overload, or attempt unauthorized access to the panel, to other accounts, or to connected APIs.</li>
+  </ul>
+  <p>We may suspend or close access when there is a breach, a security risk, or a legal requirement.</p>
+
+  <h2>4. TikTok and other platforms</h2>
+  <p>TikTok, YouTube, Instagram, Facebook, X, and the other networks are third-party services. Your use of them follows each platform's terms as well as these terms. For TikTok that includes the TikTok Developer Terms and TikTok's community guidelines.</p>
+  <p>With the current permissions, a send to TikTok uses the creator inbox upload. The video is not posted to the TikTok profile until the creator confirms it inside TikTok, unless the creator later accepts a different permission on TikTok's screen.</p>
+  <p>We do not control outages, API changes, app reviews, or content rejections by those platforms. A network failure is not a simulated publish: if the send does not arrive, the panel shows it as an error.</p>
+
+  <h2>5. Your content</h2>
+  <p>You keep the rights to the videos and text you upload. You grant us a limited, worldwide, revocable license only to host, transcode into the format a network requires, and transmit that content to the accounts you specify, for as long as needed to carry out that instruction.</p>
+  <p>You represent that you have the rights and permissions (including music and third-party likeness) for that send. You are solely responsible for the content toward your audience and toward each platform.</p>
+
+  <h2>6. Ownership of the service</h2>
+  <p>The software, design, marks, and documentation of {{ site_name }} belong to {{ company_name }} or its licensors. These terms do not transfer that ownership. You may use the panel only for your activity as an invited creator or team.</p>
+
+  <h2>7. Plans and cancellation</h2>
+  <p>If a fee applies, it is shown before payment. Closure and any refund are covered by the <a href="/cancellation-policy">Cancellation Policy</a>. Stopping use of a network does not by itself delete data: use Disconnect or the <a href="/data-deletion">data deletion</a> page.</p>
+
+  <h2>8. Termination</h2>
+  <p>You may stop using the service and ask us to close the account at any time. We may suspend or close an account that breaks these terms, puts other users or a platform at risk, or when we must do so by law. After closure we stop using connected network tokens and delete them as described in the <a href="/privacy-policy">Privacy Policy</a>.</p>
+
+  <h2>9. Availability and warranty</h2>
+  <p>The service is provided as available. We do not warrant that it will be uninterrupted, that a third-party API will accept every video, or that a post will produce views, revenue, or any particular result. To the extent the law allows, we disclaim implied warranties of merchantability, fitness for a particular purpose, and non-infringement.</p>
+
+  <h2>10. Limitation of liability</h2>
+  <p>To the extent the law allows, {{ company_name }} is not liable for lost profits, lost data, reputational harm, or indirect damages arising from use of the panel or a connected network. Our total liability for any claim related to the service is limited to the amount you paid us for the service in the three months before the event, or one hundred US dollars if there was no payment, whichever is greater. Nothing in these terms limits liability that the law does not allow to be limited, including liability for willful misconduct.</p>
+
+  <h2>11. Indemnity</h2>
+  <p>You will defend and hold harmless {{ company_name }} against third-party claims caused by your content, by connecting an account without authorization, or by breaking these terms or a platform's rules, including reasonable defense costs.</p>
+
+  <h2>12. Changes to the terms</h2>
+  <p>We may update these terms. We will post the new version on this page with a new date. If a change is material, we will notify you at the account email or with a notice in the panel before it takes effect. If you keep using the service after that date, you accept the new version. If you do not accept it, stop using the service and ask us to close the account.</p>
+
+  <h2>13. Governing law and contact</h2>
+  <p>These terms are interpreted under the law applicable to the operator of the service, without prejudice to mandatory consumer-protection rules in your country of residence. Use of TikTok is also subject to TikTok's terms.</p>
+  <p>Questions about these terms: <a href="mailto:{{ support_email }}">{{ support_email }}</a> · <a href="{{ site_url }}">{{ site_url }}</a> · <a href="/support">Support</a>.</p>
+  {% endif %}
+</article>
 {% endblock %}

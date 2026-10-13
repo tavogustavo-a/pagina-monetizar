@@ -9,6 +9,7 @@
       <a href="/login" class="btn btn-accent">{{ t('nav.sign_in') }}</a>
       <a href="/about" class="btn btn-ghost">{{ t('landing.learn_more') }}</a>
     </div>
+    <p class="landing-url"><a href="{{ site_url }}">{{ site_url }}</a></p>
   </div>
 </section>
 
@@ -34,6 +35,39 @@
       <span class="feature-card__scope">{{ t('landing.feature3.scope') }}</span>
     </article>
   </div>
+</section>
+
+<section class="landing-section">
+  <h2 class="landing-section__heading">{% if lang == 'es' %}Cómo funciona{% else %}How it works{% endif %}</h2>
+  <div class="feature-grid">
+    <article class="feature-card">
+      <h3>{% if lang == 'es' %}1. Entras al panel{% else %}1. Sign in{% endif %}</h3>
+      <p>{% if lang == 'es' %}El sitio público explica el producto. El panel es por invitación: inicias sesión y conectas solo las cuentas que te pertenecen.{% else %}The public site explains the product. The panel is invite-only: you sign in and connect only accounts you own.{% endif %}</p>
+    </article>
+    <article class="feature-card">
+      <h3>{% if lang == 'es' %}2. Conectas con el login oficial{% else %}2. Connect with official login{% endif %}</h3>
+      <p>{% if lang == 'es' %}TikTok, YouTube, Instagram, Facebook, X y otras redes se conectan con su propio inicio de sesión. Tú apruebas los permisos en la pantalla de cada plataforma.{% else %}TikTok, YouTube, Instagram, Facebook, X, and other networks connect through their own login. You approve the permissions on each platform's screen.{% endif %}</p>
+    </article>
+    <article class="feature-card">
+      <h3>{% if lang == 'es' %}3. Publicas cuando tú lo pides{% else %}3. Publish when you ask{% endif %}</h3>
+      <p>{% if lang == 'es' %}Subes un video, eliges las redes y el panel lo envía. No publicamos nada sin tu instrucción. Puedes desconectar y pedir la eliminación de datos cuando quieras.{% else %}You upload a video, choose the networks, and the panel sends it. We never post without your instruction. You can disconnect and request data deletion at any time.{% endif %}</p>
+    </article>
+  </div>
+  <p class="legal-prose" style="margin-top: 1.25rem;">
+    {% if lang == 'es' %}
+    <a href="/about">Nosotros</a> ·
+    <a href="/privacy-policy">Política de privacidad</a> ·
+    <a href="/terms-of-service">Términos de servicio</a> ·
+    <a href="/data-deletion">Eliminación de datos</a> ·
+    <a href="/support">Soporte</a>
+    {% else %}
+    <a href="/about">About</a> ·
+    <a href="/privacy-policy">Privacy Policy</a> ·
+    <a href="/terms-of-service">Terms of Service</a> ·
+    <a href="/data-deletion">Data deletion</a> ·
+    <a href="/support">Support</a>
+    {% endif %}
+  </p>
 </section>
 
 <section class="landing-section landing-section--muted">

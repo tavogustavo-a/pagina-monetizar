@@ -288,7 +288,7 @@ def _msg(request: Request, key: str, **kwargs: object) -> str:
 
 def _render_legal(request: Request, template: str, page_title_key: str):
     lang = i18n.resolve_lang(request)
-    page_updated = "5 de septiembre de 2026" if lang == "es" else "September 5, 2026"
+    page_updated = "13 de octubre de 2026" if lang == "es" else "October 13, 2026"
     return _render(
         request,
         template,
