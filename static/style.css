@@ -6921,6 +6921,7 @@ form.server-modal__body.api-form .panel-api-test-msg {
   display: flex;
   align-items: center;
   gap: 0.65rem;
+  margin-right: auto;
   font-weight: 600;
   color: var(--text);
 }
@@ -6928,25 +6929,6 @@ form.server-modal__body.api-form .panel-api-test-msg {
 .public-header__title {
   font-size: 1rem;
   letter-spacing: -0.02em;
-}
-
-.public-site-url {
-  display: inline-flex;
-  align-items: center;
-  margin-right: auto;
-  padding: 0.35rem 0.7rem;
-  border-radius: 999px;
-  border: 1px solid rgba(37, 244, 238, 0.45);
-  color: #fff;
-  font-size: 0.95rem;
-  font-weight: 650;
-  letter-spacing: 0.01em;
-  text-decoration: none;
-  background: rgba(0, 0, 0, 0.35);
-}
-.public-site-url:hover {
-  border-color: var(--accent);
-  color: #fff;
 }
 .auth-legal-links {
   display: flex;
@@ -6958,11 +6940,6 @@ form.server-modal__body.api-form .panel-api-test-msg {
 }
 .auth-legal-links a {
   color: rgba(255, 255, 255, 0.82);
-}
-.auth-legal-links .public-site-url {
-  margin-right: 0;
-  width: 100%;
-  justify-content: center;
 }
 
 .public-header__nav {
@@ -7062,24 +7039,23 @@ form.server-modal__body.api-form .panel-api-test-msg {
   color: var(--muted);
 }
 
+.landing-hero__more {
+  color: #fff;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+.landing-hero__more:hover {
+  color: var(--accent);
+}
+
 .landing-hero__actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.75rem;
   margin-top: 1.75rem;
-}
-
-.landing-url {
-  margin: 1.25rem 0 0;
-  font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
-.landing-url a {
-  color: #fff;
-  text-decoration: underline;
-  text-underline-offset: 0.18em;
 }
 
 .landing-section {
@@ -7369,6 +7345,18 @@ form.server-modal__body.api-form .panel-api-test-msg {
   text-align: center;
   margin-bottom: 1.75rem;
   font-size: 1.35rem;
+}
+
+.landing-legal-links {
+  margin: 1.25rem 0 0;
+  text-align: center;
+  line-height: 1.7;
+}
+.landing-legal-links a {
+  color: var(--accent2);
+}
+.landing-legal-links a:hover {
+  text-decoration: underline;
 }
 
 .feature-grid {

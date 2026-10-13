@@ -4,12 +4,10 @@
 <section class="landing-hero">
   <div class="landing-hero__inner">
     <h1>{{ hero_title }}</h1>
-    <p class="landing-hero__lead">{{ hero_subtitle }}</p>
+    <p class="landing-hero__lead">{{ hero_subtitle }} <a class="landing-hero__more" href="/about">{{ t('landing.learn_more') }}</a></p>
     <div class="landing-hero__actions">
       <a href="/login" class="btn btn-accent">{{ t('nav.sign_in') }}</a>
-      <a href="/about" class="btn btn-ghost">{{ t('landing.learn_more') }}</a>
     </div>
-    <p class="landing-url"><a href="{{ site_url }}">{{ site_url }}</a></p>
   </div>
 </section>
 
@@ -53,7 +51,7 @@
       <p>{% if lang == 'es' %}Subes un video, eliges las redes y el panel lo envía. No publicamos nada sin tu instrucción. Puedes desconectar y pedir la eliminación de datos cuando quieras.{% else %}You upload a video, choose the networks, and the panel sends it. We never post without your instruction. You can disconnect and request data deletion at any time.{% endif %}</p>
     </article>
   </div>
-  <p class="legal-prose" style="margin-top: 1.25rem;">
+  <p class="landing-legal-links">
     {% if lang == 'es' %}
     <a href="/about">Nosotros</a> ·
     <a href="/privacy-policy">Política de privacidad</a> ·
